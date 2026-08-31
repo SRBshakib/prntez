@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - PrintShare</title>
+    <title>Sign In – Printez</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -19,7 +19,7 @@
             <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
                 <i data-lucide="printer" class="w-6 h-6 text-white"></i>
             </div>
-            <span class="font-bold text-2xl tracking-tight text-slate-900">PrintShare</span>
+            <span class="font-bold text-2xl tracking-tight text-slate-900">Printez</span>
         </a>
         <h2 class="text-center text-3xl font-extrabold text-slate-900">Sign in to your account</h2>
         <p class="mt-2 text-center text-sm text-slate-600">
@@ -97,7 +97,7 @@
                         body.append('email', this.email);
                         body.append('password', this.password);
 
-                        const res = await fetch('/printshare/api/auth.php?action=customer_login', {
+                        const res = await fetch('../api/auth.php?action=customer_login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: body.toString()

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register Shop - PrintShare</title>
+    <title>Register Your Shop – Printez</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -18,10 +18,10 @@
             <div>
                 <a href="../index.html" class="flex items-center gap-2 text-2xl font-bold mb-12">
                     <i data-lucide="printer" class="w-8 h-8"></i>
-                    PrintShare
+                    Printez
                 </a>
                 
-                <h1 class="text-3xl font-bold mb-6">Join the PrintShare Network</h1>
+                <h1 class="text-3xl font-bold mb-6">Join the Printez Network</h1>
                 <p class="text-blue-100 mb-8 text-lg">Receive print jobs directly from customers' phones. No more USB drives, WhatsApp, or email attachments.</p>
 
                 <div class="space-y-6">
@@ -50,7 +50,7 @@
             </div>
             
             <div class="mt-12 text-sm text-blue-200">
-                &copy; 2026 PrintShare Bangladesh
+                &copy; 2026 Printez Bangladesh
             </div>
         </div>
 
@@ -221,7 +221,7 @@
                         body.append('city', this.form.city);
                         body.append('operating_hours', this.form.operating_hours);
 
-                        const res = await fetch('/printshare/api/auth.php?action=shop_register', {
+                        const res = await fetch('../api/auth.php?action=shop_register', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: body.toString()

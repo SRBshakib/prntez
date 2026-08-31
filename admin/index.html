@@ -3,28 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - PrintShare</title>
+    <title>Admin Panel – Printez</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
 <body class="bg-slate-100 font-sans antialiased text-slate-800 flex h-screen overflow-hidden" x-data="adminPanel()">
 
     <!-- Login Screen (Shown when not authenticated) -->
-    <div x-show="!isAuthenticated" class="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center p-4">
+    <div x-show="!isAuthenticated" class="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center p-4" x-cloak>
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full">
             <div class="text-center mb-6">
-                <i data-lucide="shield-check" class="w-12 h-12 text-slate-800 mx-auto mb-2"></i>
-                <h2 class="text-2xl font-bold text-slate-900">Admin Login</h2>
+                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="shield-check" class="w-6 h-6"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-900">Printez Admin</h2>
+                <p class="text-xs text-slate-500 mt-1">Sign in to control center</p>
             </div>
+            
+            <div x-show="loginError" class="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-xs border border-red-200" x-text="loginError" x-cloak></div>
+
             <form @submit.prevent="login">
                 <div class="mb-4">
-                    <input type="password" x-model="loginPassword" placeholder="Admin Password" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-800 outline-none">
+                    <input type="password" x-model="loginPassword" required placeholder="Admin Password" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none text-sm">
                 </div>
-                <button type="submit" class="w-full bg-slate-900 text-white py-2 rounded-lg font-medium hover:bg-slate-800 transition">Enter Panel</button>
+                <button type="submit" :disabled="loggingIn" class="w-full bg-slate-900 text-white py-2.5 rounded-lg font-medium hover:bg-slate-800 transition text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                    <span x-show="!loggingIn">Enter Panel</span>
+                    <span x-show="loggingIn">Verifying...</span>
+                </button>
             </form>
         </div>
     </div>
@@ -32,26 +44,26 @@
     <!-- Sidebar -->
     <aside class="w-64 bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col transition-transform duration-300" :class="{'translate-x-0': sidebarOpen, '-translate-x-full md:translate-x-0 absolute md:relative z-40 h-full': !sidebarOpen}">
         <div class="h-16 flex items-center px-6 bg-slate-950 text-white font-bold text-xl gap-2">
-            <i data-lucide="printer"></i> PrintShare <span class="text-xs bg-blue-600 px-2 py-0.5 rounded text-white font-medium ml-1">ADMIN</span>
+            <i data-lucide="printer" class="text-blue-500"></i> Printez <span class="text-xs bg-blue-600 px-2 py-0.5 rounded text-white font-medium ml-1">ADMIN</span>
         </div>
         
         <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            <a href="#" @click.prevent="activeTab = 'overview'; isMobile ? sidebarOpen = false : null" :class="{'bg-slate-800 text-white': activeTab === 'overview', 'hover:bg-slate-800 hover:text-white': activeTab !== 'overview'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
+            <a href="#" @click.prevent="activeTab = 'overview'; if (isMobile) sidebarOpen = false" :class="{'bg-slate-800 text-white': activeTab === 'overview', 'hover:bg-slate-800 hover:text-white': activeTab !== 'overview'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
                 <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Overview
             </a>
-            <a href="#" @click.prevent="activeTab = 'shops'; isMobile ? sidebarOpen = false : null" :class="{'bg-slate-800 text-white': activeTab === 'shops', 'hover:bg-slate-800 hover:text-white': activeTab !== 'shops'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
+            <a href="#" @click.prevent="activeTab = 'shops'; if (isMobile) sidebarOpen = false" :class="{'bg-slate-800 text-white': activeTab === 'shops', 'hover:bg-slate-800 hover:text-white': activeTab !== 'shops'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
                 <i data-lucide="store" class="w-5 h-5"></i> Shops
             </a>
-            <a href="#" @click.prevent="activeTab = 'jobs'; isMobile ? sidebarOpen = false : null" :class="{'bg-slate-800 text-white': activeTab === 'jobs', 'hover:bg-slate-800 hover:text-white': activeTab !== 'jobs'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
+            <a href="#" @click.prevent="activeTab = 'jobs'; if (isMobile) sidebarOpen = false" :class="{'bg-slate-800 text-white': activeTab === 'jobs', 'hover:bg-slate-800 hover:text-white': activeTab !== 'jobs'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
                 <i data-lucide="layers" class="w-5 h-5"></i> All Jobs
             </a>
-            <a href="#" @click.prevent="activeTab = 'settings'; isMobile ? sidebarOpen = false : null" :class="{'bg-slate-800 text-white': activeTab === 'settings', 'hover:bg-slate-800 hover:text-white': activeTab !== 'settings'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
+            <a href="#" @click.prevent="activeTab = 'settings'; if (isMobile) sidebarOpen = false" :class="{'bg-slate-800 text-white': activeTab === 'settings', 'hover:bg-slate-800 hover:text-white': activeTab !== 'settings'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition font-medium">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings
             </a>
         </nav>
         
         <div class="p-4 bg-slate-950">
-            <button @click="logout" class="flex items-center gap-3 px-3 py-2 w-full text-left rounded-lg hover:bg-slate-800 hover:text-white transition font-medium">
+            <button @click="logout" class="flex items-center gap-3 px-3 py-2 w-full text-left rounded-lg hover:bg-slate-800 hover:text-white transition font-medium text-sm">
                 <i data-lucide="log-out" class="w-5 h-5"></i> Sign Out
             </button>
         </div>
@@ -67,8 +79,11 @@
                 </button>
                 <h1 class="text-xl font-bold text-slate-800 capitalize" x-text="activeTab"></h1>
             </div>
-            <div class="text-sm text-slate-500">
-                Server Time: <span x-text="new Date().toLocaleTimeString()"></span>
+            <div class="flex items-center gap-4 text-sm text-slate-500">
+                <button @click="refreshActiveTab" class="p-2 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition" title="Refresh data">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+                <span>Server Time: <span class="font-medium text-slate-700" x-text="currentTime"></span></span>
             </div>
         </header>
 
@@ -76,35 +91,35 @@
         <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
             
             <!-- OVERVIEW TAB -->
-            <div x-show="activeTab === 'overview'" style="display: none;">
+            <div x-show="activeTab === 'overview'" x-cloak>
                 <!-- Stats Row -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                         <p class="text-sm font-medium text-slate-500 mb-1">Active Shops</p>
                         <div class="flex items-end justify-between">
-                            <h3 class="text-3xl font-bold text-slate-900">124</h3>
-                            <span class="text-green-500 text-sm font-medium flex items-center"><i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +3 this week</span>
+                            <h3 class="text-3xl font-bold text-slate-900" x-text="adminStats ? adminStats.shops.active : '0'">0</h3>
+                            <span class="text-xs text-slate-400 font-medium" x-text="(adminStats ? adminStats.shops.pending : 0) + ' pending'"></span>
                         </div>
                     </div>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                         <p class="text-sm font-medium text-slate-500 mb-1">Jobs Today</p>
                         <div class="flex items-end justify-between">
-                            <h3 class="text-3xl font-bold text-slate-900">892</h3>
-                            <span class="text-slate-400 text-sm font-medium">Across all shops</span>
+                            <h3 class="text-3xl font-bold text-blue-600" x-text="adminStats ? adminStats.jobs.today : '0'">0</h3>
+                            <span class="text-xs text-slate-400 font-medium" x-text="(adminStats ? adminStats.jobs.week : 0) + ' this week'"></span>
                         </div>
                     </div>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                        <p class="text-sm font-medium text-slate-500 mb-1">Files Stored</p>
+                        <p class="text-sm font-medium text-slate-500 mb-1">Active Files Stored</p>
                         <div class="flex items-end justify-between">
-                            <h3 class="text-3xl font-bold text-slate-900">2,450</h3>
-                            <span class="text-slate-400 text-sm font-medium">Auto-deletes in 30m</span>
+                            <h3 class="text-3xl font-bold text-slate-900" x-text="adminStats ? adminStats.storage.files_count : '0'">0</h3>
+                            <span class="text-xs text-slate-400 font-medium">Auto-deletes in 30m</span>
                         </div>
                     </div>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                        <p class="text-sm font-medium text-slate-500 mb-1">Storage Used</p>
+                        <p class="text-sm font-medium text-slate-500 mb-1">Total Storage Used</p>
                         <div class="flex items-end justify-between">
-                            <h3 class="text-3xl font-bold text-slate-900">4.2 GB</h3>
-                            <span class="text-slate-400 text-sm font-medium">/ 50 GB Limit</span>
+                            <h3 class="text-3xl font-bold text-slate-900" x-text="formatBytes(adminStats?.storage?.total_bytes || 0)">0 B</h3>
+                            <span class="text-xs text-slate-400 font-medium">Across all files</span>
                         </div>
                     </div>
                 </div>
@@ -112,7 +127,10 @@
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <!-- Chart -->
                     <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                        <h3 class="text-lg font-bold text-slate-800 mb-4">Jobs (Last 7 Days)</h3>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-slate-800">Jobs Activity (24 Hours)</h3>
+                            <span class="text-xs text-slate-400">Live hourly breakdown</span>
+                        </div>
                         <div class="relative h-64 w-full">
                             <canvas id="jobsChart"></canvas>
                         </div>
@@ -124,28 +142,20 @@
                             <h3 class="text-lg font-bold text-slate-800">Top Shops Today</h3>
                         </div>
                         <div class="flex-1 overflow-y-auto">
+                            <template x-if="!adminStats || !adminStats.top_shops || adminStats.top_shops.length === 0">
+                                <div class="p-8 text-center text-slate-400 text-sm">
+                                    No job activity recorded today yet.
+                                </div>
+                            </template>
                             <ul class="divide-y divide-slate-100">
-                                <li class="p-4 hover:bg-slate-50 flex items-center justify-between">
-                                    <div>
-                                        <p class="font-medium text-slate-900">Dhaka Color Print</p>
-                                        <p class="text-xs text-slate-500">Dhanmondi</p>
-                                    </div>
-                                    <span class="bg-blue-100 text-blue-700 py-1 px-2.5 rounded-full text-sm font-medium">142 jobs</span>
-                                </li>
-                                <li class="p-4 hover:bg-slate-50 flex items-center justify-between">
-                                    <div>
-                                        <p class="font-medium text-slate-900">Student Copy Center</p>
-                                        <p class="text-xs text-slate-500">Mirpur</p>
-                                    </div>
-                                    <span class="bg-blue-100 text-blue-700 py-1 px-2.5 rounded-full text-sm font-medium">98 jobs</span>
-                                </li>
-                                <li class="p-4 hover:bg-slate-50 flex items-center justify-between">
-                                    <div>
-                                        <p class="font-medium text-slate-900">Quick Print</p>
-                                        <p class="text-xs text-slate-500">Uttara</p>
-                                    </div>
-                                    <span class="bg-blue-100 text-blue-700 py-1 px-2.5 rounded-full text-sm font-medium">85 jobs</span>
-                                </li>
+                                <template x-for="ts in (adminStats?.top_shops || [])" :key="ts.name">
+                                    <li class="p-4 hover:bg-slate-50 flex items-center justify-between">
+                                        <div>
+                                            <p class="font-medium text-slate-900" x-text="ts.name"></p>
+                                        </div>
+                                        <span class="bg-blue-100 text-blue-700 py-1 px-2.5 rounded-full text-xs font-bold" x-text="ts.job_count + ' jobs'"></span>
+                                    </li>
+                                </template>
                             </ul>
                         </div>
                     </div>
@@ -153,47 +163,127 @@
             </div>
 
             <!-- SHOPS TAB -->
-            <div x-show="activeTab === 'shops'" style="display: none;">
+            <div x-show="activeTab === 'shops'" x-cloak>
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div class="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <h3 class="text-lg font-bold text-slate-800">Manage Print Shops</h3>
+                        <h3 class="text-lg font-bold text-slate-800">Manage Print Shops (<span x-text="shopsList.length"></span>)</h3>
                         <div class="relative w-full sm:w-72">
-                            <i data-lucide="search" class="absolute left-3 top-2.5 text-slate-400 w-5 h-5"></i>
-                            <input type="text" placeholder="Search shops..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-800 outline-none text-sm">
+                            <i data-lucide="search" class="absolute left-3 top-2.5 text-slate-400 w-4 h-4"></i>
+                            <input type="text" x-model="shopsSearch" @input.debounce.300ms="loadShops()" placeholder="Search shops by name, email, area..." class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm">
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
+                    
+                    <template x-if="shopsLoading">
+                        <div class="p-12 text-center text-slate-400 flex items-center justify-center gap-2">
+                            <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-blue-600"></i> Loading shops...
+                        </div>
+                    </template>
+
+                    <template x-if="!shopsLoading && shopsList.length === 0">
+                        <div class="p-12 text-center text-slate-400">
+                            <i data-lucide="store" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+                            <p>No shops found.</p>
+                        </div>
+                    </template>
+
+                    <div class="overflow-x-auto" x-show="!shopsLoading && shopsList.length > 0">
                         <table class="w-full text-left text-sm text-slate-600">
                             <thead class="bg-slate-50 text-slate-700 text-xs uppercase font-semibold border-b border-slate-200">
                                 <tr>
-                                    <th class="px-6 py-4">Shop Name</th>
-                                    <th class="px-6 py-4">Area</th>
+                                    <th class="px-6 py-4">Shop Details</th>
+                                    <th class="px-6 py-4">Location</th>
                                     <th class="px-6 py-4">Total Jobs</th>
                                     <th class="px-6 py-4">Status</th>
                                     <th class="px-6 py-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
-                                <tr class="hover:bg-slate-50">
-                                    <td class="px-6 py-4 font-medium text-slate-900">Dhaka Color Print<br><span class="text-xs text-slate-500 font-normal">dhaka@example.com</span></td>
-                                    <td class="px-6 py-4">Dhanmondi</td>
-                                    <td class="px-6 py-4">4,521</td>
-                                    <td class="px-6 py-4"><span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">ACTIVE</span></td>
-                                    <td class="px-6 py-4 text-right">
-                                        <button class="text-amber-600 hover:text-amber-800 text-xs font-medium mr-3">Suspend</button>
-                                        <button class="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
-                                    </td>
+                                <template x-for="shop in shopsList" :key="shop.id">
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="px-6 py-4 font-medium text-slate-900">
+                                            <span x-text="shop.name" class="font-bold"></span><br>
+                                            <span class="text-xs text-slate-500 font-normal" x-text="shop.email + (shop.phone ? ' • ' + shop.phone : '')"></span>
+                                        </td>
+                                        <td class="px-6 py-4" x-text="shop.area || '—'"></td>
+                                        <td class="px-6 py-4 font-semibold text-slate-800" x-text="shop.total_jobs || '0'"></td>
+                                        <td class="px-6 py-4">
+                                            <span x-show="shop.status === 'active'" class="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">ACTIVE</span>
+                                            <span x-show="shop.status === 'pending'" class="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-xs font-bold">PENDING</span>
+                                            <span x-show="shop.status === 'suspended'" class="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-bold">SUSPENDED</span>
+                                        </td>
+                                        <td class="px-6 py-4 text-right">
+                                            <button x-show="shop.status !== 'active'" @click="updateShopStatus(shop.id, 'active')" class="text-green-600 hover:text-green-800 text-xs font-semibold mr-3">Approve</button>
+                                            <button x-show="shop.status === 'active'" @click="updateShopStatus(shop.id, 'suspended')" class="text-amber-600 hover:text-amber-800 text-xs font-semibold mr-3">Suspend</button>
+                                            <button @click="deleteShop(shop.id, shop.name)" class="text-red-600 hover:text-red-800 text-xs font-semibold">Delete</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JOBS TAB -->
+            <div x-show="activeTab === 'jobs'" x-cloak>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Recent Print Jobs</h3>
+                            <p class="text-xs text-slate-500">Live feed across all partner print shops</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="jobsFilter = ''; loadJobs()" :class="jobsFilter === '' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="px-3 py-1.5 rounded-lg text-xs font-medium transition">All</button>
+                            <button @click="jobsFilter = 'pending'; loadJobs()" :class="jobsFilter === 'pending' ? 'bg-yellow-500 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="px-3 py-1.5 rounded-lg text-xs font-medium transition">Pending</button>
+                            <button @click="jobsFilter = 'printing'; loadJobs()" :class="jobsFilter === 'printing' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="px-3 py-1.5 rounded-lg text-xs font-medium transition">Printing</button>
+                            <button @click="jobsFilter = 'done'; loadJobs()" :class="jobsFilter === 'done' ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="px-3 py-1.5 rounded-lg text-xs font-medium transition">Done</button>
+                        </div>
+                    </div>
+
+                    <template x-if="jobsLoading">
+                        <div class="p-12 text-center text-slate-400 flex items-center justify-center gap-2">
+                            <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-blue-600"></i> Loading jobs...
+                        </div>
+                    </template>
+
+                    <template x-if="!jobsLoading && jobsList.length === 0">
+                        <div class="p-12 text-center text-slate-400">
+                            <i data-lucide="layers" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+                            <p>No jobs found.</p>
+                        </div>
+                    </template>
+
+                    <div class="overflow-x-auto" x-show="!jobsLoading && jobsList.length > 0">
+                        <table class="w-full text-left text-sm text-slate-600">
+                            <thead class="bg-slate-50 text-slate-700 text-xs uppercase font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="px-6 py-4">Job Code</th>
+                                    <th class="px-6 py-4">Print Shop</th>
+                                    <th class="px-6 py-4">Customer</th>
+                                    <th class="px-6 py-4">Files</th>
+                                    <th class="px-6 py-4">Status</th>
+                                    <th class="px-6 py-4">Created</th>
                                 </tr>
-                                <tr class="hover:bg-slate-50">
-                                    <td class="px-6 py-4 font-medium text-slate-900">Campus Print<br><span class="text-xs text-slate-500 font-normal">campus@example.com</span></td>
-                                    <td class="px-6 py-4">Mirpur</td>
-                                    <td class="px-6 py-4">0</td>
-                                    <td class="px-6 py-4"><span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-full text-xs font-bold">PENDING</span></td>
-                                    <td class="px-6 py-4 text-right">
-                                        <button class="text-green-600 hover:text-green-800 text-xs font-medium mr-3">Approve</button>
-                                        <button class="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>
-                                    </td>
-                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template x-for="job in jobsList" :key="job.id">
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="px-6 py-4 font-black text-slate-900 text-base tracking-wider" x-text="job.job_code"></td>
+                                        <td class="px-6 py-4 font-medium text-slate-800" x-text="job.shop_name"></td>
+                                        <td class="px-6 py-4">
+                                            <span class="font-medium text-slate-900" x-text="job.customer_name || 'Guest'"></span>
+                                            <span class="text-xs text-slate-400 block" x-text="job.customer_phone || ''"></span>
+                                        </td>
+                                        <td class="px-6 py-4 font-semibold text-slate-700" x-text="job.total_files + ' file(s)'"></td>
+                                        <td class="px-6 py-4">
+                                            <span x-show="job.status === 'pending'" class="bg-yellow-100 text-yellow-800 px-2.5 py-1 rounded-full text-xs font-semibold">Waiting</span>
+                                            <span x-show="job.status === 'printing'" class="bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full text-xs font-semibold">Printing</span>
+                                            <span x-show="job.status === 'done'" class="bg-green-100 text-green-800 px-2.5 py-1 rounded-full text-xs font-semibold">Done ✓</span>
+                                            <span x-show="job.status === 'cancelled'" class="bg-red-100 text-red-800 px-2.5 py-1 rounded-full text-xs font-semibold">Cancelled</span>
+                                        </td>
+                                        <td class="px-6 py-4 text-xs text-slate-500" x-text="formatDate(job.created_at)"></td>
+                                    </tr>
+                                </template>
                             </tbody>
                         </table>
                     </div>
@@ -201,9 +291,15 @@
             </div>
 
             <!-- SETTINGS TAB -->
-            <div x-show="activeTab === 'settings'" style="display: none;" class="max-w-3xl">
+            <div x-show="activeTab === 'settings'" x-cloak class="max-w-3xl">
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sm:p-8">
-                    <h3 class="text-lg font-bold text-slate-800 mb-6">Platform Settings</h3>
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-bold text-slate-800">Platform Settings</h3>
+                        <button @click="forceCleanup" :disabled="cleanupRunning" class="text-xs font-medium text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200 transition flex items-center gap-1.5">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            <span x-text="cleanupRunning ? 'Cleaning...' : 'Force Auto-Cleanup Now'"></span>
+                        </button>
+                    </div>
 
                     <!-- Success / Error banner -->
                     <div x-show="settingsSaved" x-transition class="mb-5 bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center gap-2 text-green-700 text-sm font-medium">
@@ -217,11 +313,11 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Platform Name</label>
-                                <input type="text" x-model="settings.platform_name" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-800 outline-none">
+                                <input type="text" x-model="settings.platform_name" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">File Expiry (Minutes)</label>
-                                <input type="number" x-model="settings.file_expiry_minutes" min="5" max="1440" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-800 outline-none">
+                                <input type="number" x-model="settings.file_expiry_minutes" min="5" max="1440" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none">
                                 <p class="text-xs text-slate-400 mt-1">Files auto-delete after this many minutes regardless of print status.</p>
                             </div>
                         </div>
@@ -229,20 +325,11 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Max File Size (MB)</label>
-                                <input type="number" x-model="settings.max_file_size_mb" min="1" max="200" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-800 outline-none">
+                                <input type="number" x-model="settings.max_file_size_mb" min="1" max="200" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Max Files Per Job</label>
-                                <input type="number" x-model="settings.max_files_per_job" min="1" max="50" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-800 outline-none">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Allowed File Types</label>
-                            <div class="flex gap-4">
-                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="rounded"> PDF</label>
-                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="rounded"> JPG/PNG</label>
-                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked class="rounded"> DOCX</label>
+                                <input type="number" x-model="settings.max_files_per_job" min="1" max="50" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none">
                             </div>
                         </div>
 
@@ -254,11 +341,7 @@
                                         <i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i>
                                         Delete Files After Successful Print
                                     </h4>
-                                    <p class="text-sm text-slate-500 mt-1">When a print shop marks a job as <strong>Done</strong>, all uploaded files are immediately deleted from the server. Job history (file names, instructions, settings) is always kept.</p>
-                                    <p class="text-xs text-amber-600 mt-2 flex items-center gap-1">
-                                        <i data-lucide="info" class="w-3 h-3"></i>
-                                        Files also auto-delete after the expiry time, even if not printed.
-                                    </p>
+                                    <p class="text-sm text-slate-500 mt-1">When a print shop marks a job as <strong>Done</strong>, all uploaded files are immediately deleted from the server.</p>
                                 </div>
                                 <button type="button"
                                     @click="settings.delete_on_print = settings.delete_on_print === '1' ? '0' : '1'"
@@ -267,17 +350,6 @@
                                     <span :class="settings.delete_on_print === '1' ? 'translate-x-5' : 'translate-x-0'"
                                           class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
                                 </button>
-                            </div>
-                            <!-- Status label -->
-                            <div class="mt-3">
-                                <span x-show="settings.delete_on_print === '1'" class="inline-flex items-center gap-1.5 bg-red-50 text-red-700 text-xs font-medium px-3 py-1 rounded-full border border-red-200">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
-                                    ON — Files deleted immediately after print
-                                </span>
-                                <span x-show="settings.delete_on_print === '0'" class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-600 text-xs font-medium px-3 py-1 rounded-full border border-slate-200">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block"></span>
-                                    OFF — Files only deleted after expiry timer
-                                </span>
                             </div>
                         </div>
 
@@ -310,8 +382,8 @@
                         </div>
 
                         <div class="pt-4 border-t border-slate-100">
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Google AdSense Code</label>
-                            <textarea x-model="settings.adsense_code" rows="3" placeholder="Paste your AdSense script tag here..." class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-800 outline-none font-mono text-xs"></textarea>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Google AdSense / Banner Code</label>
+                            <textarea x-model="settings.adsense_code" rows="3" placeholder="Paste your ad code here..." class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none font-mono text-xs"></textarea>
                         </div>
 
                         <div class="pt-6 flex items-center gap-4">
@@ -321,23 +393,8 @@
                                 <i data-lucide="loader-2" class="w-4 h-4 animate-spin" x-show="settingsSaving" x-cloak></i>
                                 <span x-text="settingsSaving ? 'Saving...' : 'Save Settings'"></span>
                             </button>
-                            <span class="text-sm text-slate-400">Changes apply immediately</span>
                         </div>
                     </form>
-                </div>
-            </div>
-
-
-            <!-- JOBS TAB -->
-            <div x-show="activeTab === 'jobs'" style="display: none;">
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div class="p-5 border-b border-slate-200">
-                        <h3 class="text-lg font-bold text-slate-800">All Jobs Overview</h3>
-                    </div>
-                    <div class="p-8 text-center text-slate-500">
-                        <i data-lucide="table" class="w-12 h-12 mx-auto mb-3 text-slate-300"></i>
-                        <p>Job list view functionality here.</p>
-                    </div>
                 </div>
             </div>
 
@@ -350,13 +407,24 @@
             Alpine.data('adminPanel', () => ({
                 isAuthenticated: false,
                 loginPassword: '',
+                loginError: '',
+                loggingIn: false,
                 activeTab: 'overview',
                 sidebarOpen: false,
                 isMobile: window.innerWidth < 768,
+                currentTime: new Date().toLocaleTimeString(),
 
-                // Settings state
+                adminStats: null,
+                shopsList: [],
+                shopsLoading: false,
+                shopsSearch: '',
+                jobsList: [],
+                jobsLoading: false,
+                jobsFilter: '',
+                cleanupRunning: false,
+
                 settings: {
-                    platform_name: 'PrintShare',
+                    platform_name: 'Printez',
                     file_expiry_minutes: '30',
                     max_file_size_mb: '50',
                     max_files_per_job: '10',
@@ -373,13 +441,17 @@
                 init() {
                     lucide.createIcons();
 
-                    // Check if already logged in
-                    fetch('/printshare/api/auth.php?action=admin_me')
+                    setInterval(() => {
+                        this.currentTime = new Date().toLocaleTimeString();
+                    }, 1000);
+
+                    // Check if already authenticated
+                    fetch('../api/auth.php?action=admin_me')
                         .then(r => r.json())
                         .then(d => {
                             if (d.success) {
                                 this.isAuthenticated = true;
-                                setTimeout(() => this.renderChart(), 100);
+                                this.refreshActiveTab();
                             }
                         }).catch(() => {});
 
@@ -389,49 +461,124 @@
                     });
 
                     this.$watch('activeTab', (val) => {
-                        setTimeout(() => lucide.createIcons(), 50);
-                        if (val === 'overview') setTimeout(() => this.renderChart(), 100);
-                        if (val === 'settings') this.loadSettings();
+                        this.refreshActiveTab();
                     });
+                },
 
-                    if (this.isAuthenticated && this.activeTab === 'overview') {
-                        setTimeout(() => this.renderChart(), 100);
+                refreshActiveTab() {
+                    setTimeout(() => lucide.createIcons(), 50);
+                    if (this.activeTab === 'overview') {
+                        this.loadStats();
+                    } else if (this.activeTab === 'shops') {
+                        this.loadShops();
+                    } else if (this.activeTab === 'jobs') {
+                        this.loadJobs();
+                    } else if (this.activeTab === 'settings') {
+                        this.loadSettings();
                     }
                 },
 
                 async login() {
-                    const res = await fetch('/printshare/api/auth.php?action=admin_login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: 'password=' + encodeURIComponent(this.loginPassword)
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        this.isAuthenticated = true;
-                        setTimeout(() => { lucide.createIcons(); this.renderChart(); }, 100);
-                    } else {
-                        alert('Incorrect password');
-                        this.loginPassword = '';
+                    this.loggingIn = true;
+                    this.loginError = '';
+                    try {
+                        const res = await fetch('../api/auth.php?action=admin_login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'password=' + encodeURIComponent(this.loginPassword)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.isAuthenticated = true;
+                            this.loginPassword = '';
+                            this.refreshActiveTab();
+                        } else {
+                            this.loginError = data.error || 'Incorrect password.';
+                        }
+                    } catch (e) {
+                        this.loginError = 'Network connection failed.';
+                    } finally {
+                        this.loggingIn = false;
+                        setTimeout(() => lucide.createIcons(), 50);
                     }
                 },
 
-                logout() {
-                    fetch('/printshare/api/auth.php?action=admin_logout', { method: 'POST' });
+                async logout() {
+                    await fetch('../api/auth.php?action=admin_logout', { method: 'POST' }).catch(() => {});
                     this.isAuthenticated = false;
                     this.loginPassword = '';
                 },
 
+                async loadStats() {
+                    try {
+                        const res = await fetch('../api/admin.php?action=stats');
+                        const d = await res.json();
+                        if (d.success && d.data) {
+                            this.adminStats = d.data;
+                            this.renderChartFromData(d.data.hourly || {});
+                        }
+                    } catch (e) { console.warn('Stats failed', e); }
+                    setTimeout(() => lucide.createIcons(), 50);
+                },
+
+                async loadShops() {
+                    this.shopsLoading = true;
+                    try {
+                        const url = `../api/admin.php?action=shops${this.shopsSearch ? '&search=' + encodeURIComponent(this.shopsSearch) : ''}`;
+                        const res = await fetch(url);
+                        const d = await res.json();
+                        if (d.success) this.shopsList = d.data || [];
+                    } catch (e) { console.warn('Shops failed', e); }
+                    this.shopsLoading = false;
+                    setTimeout(() => lucide.createIcons(), 50);
+                },
+
+                async loadJobs() {
+                    this.jobsLoading = true;
+                    try {
+                        const url = `../api/admin.php?action=jobs${this.jobsFilter ? '&status=' + this.jobsFilter : ''}`;
+                        const res = await fetch(url);
+                        const d = await res.json();
+                        if (d.success) this.jobsList = d.data || [];
+                    } catch (e) { console.warn('Jobs failed', e); }
+                    this.jobsLoading = false;
+                    setTimeout(() => lucide.createIcons(), 50);
+                },
+
+                async updateShopStatus(shopId, status) {
+                    try {
+                        const body = new URLSearchParams({ shop_id: shopId, status });
+                        const res = await fetch('../api/admin.php?action=update_shop', { method: 'POST', body });
+                        const d = await res.json();
+                        if (d.success) {
+                            const shop = this.shopsList.find(s => s.id == shopId);
+                            if (shop) shop.status = status;
+                        }
+                    } catch (e) { alert('Failed to update shop'); }
+                },
+
+                async deleteShop(shopId, name) {
+                    if (!confirm(`Are you sure you want to permanently delete "${name}" and all its records?`)) return;
+                    try {
+                        const body = new URLSearchParams({ shop_id: shopId });
+                        const res = await fetch('../api/admin.php?action=delete_shop', { method: 'POST', body });
+                        const d = await res.json();
+                        if (d.success) {
+                            this.shopsList = this.shopsList.filter(s => s.id != shopId);
+                        } else {
+                            alert(d.error || 'Failed to delete shop');
+                        }
+                    } catch (e) { alert('Network error'); }
+                },
+
                 async loadSettings() {
                     try {
-                        const res = await fetch('/printshare/api/admin.php?action=settings');
+                        const res = await fetch('../api/admin.php?action=settings');
                         const data = await res.json();
                         if (data.success && data.data) {
-                            // Merge fetched settings into local state
                             Object.assign(this.settings, data.data);
                         }
-                    } catch (e) {
-                        console.error('Failed to load settings', e);
-                    }
+                    } catch (e) { console.error('Failed to load settings', e); }
                     setTimeout(() => lucide.createIcons(), 50);
                 },
 
@@ -442,12 +589,11 @@
 
                     try {
                         const body = new URLSearchParams();
-                        // Send each setting as a key-value pair
                         for (const [key, value] of Object.entries(this.settings)) {
-                            body.append('settings[' + key + ']', value);
+                            body.append(key, value);
                         }
 
-                        const res = await fetch('/printshare/api/admin.php?action=update_settings', {
+                        const res = await fetch('../api/admin.php?action=update_settings', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: body.toString()
@@ -456,42 +602,55 @@
 
                         if (data.success) {
                             this.settingsSaved = true;
-                            setTimeout(() => { this.settingsSaved = false; lucide.createIcons(); }, 3000);
+                            setTimeout(() => { this.settingsSaved = false; }, 3000);
                         } else {
                             this.settingsError = true;
-                            setTimeout(() => this.settingsError = false, 3000);
+                            setTimeout(() => { this.settingsError = false; }, 3000);
                         }
                     } catch (e) {
                         this.settingsError = true;
-                        setTimeout(() => this.settingsError = false, 3000);
+                        setTimeout(() => { this.settingsError = false; }, 3000);
                     } finally {
                         this.settingsSaving = false;
                         setTimeout(() => lucide.createIcons(), 50);
                     }
                 },
 
-                renderChart() {
+                async forceCleanup() {
+                    if (!confirm('Run manual garbage collection on expired files now?')) return;
+                    this.cleanupRunning = true;
+                    try {
+                        const res = await fetch('../api/admin.php?action=force_cleanup');
+                        const d = await res.json();
+                        if (d.success) {
+                            alert(`Cleanup complete!\nDeleted files: ${d.data?.deleted_files || 0}\nFreed bytes: ${this.formatBytes(d.data?.freed_bytes || 0)}`);
+                            this.loadStats();
+                        }
+                    } catch (e) { alert('Cleanup failed'); }
+                    finally { this.cleanupRunning = false; }
+                },
+
+                renderChartFromData(hourlyData) {
                     const ctx = document.getElementById('jobsChart');
                     if (!ctx) return;
                     const existing = Chart.getChart('jobsChart');
                     if (existing) existing.destroy();
+                    const labels = Array.from({length: 24}, (_, i) => i === 0 ? '12am' : i === 12 ? '12pm' : i < 12 ? i + 'am' : (i-12) + 'pm');
+                    const vals = labels.map((_, i) => hourlyData[i] || 0);
                     new Chart(ctx, {
-                        type: 'line',
+                        type: 'bar',
                         data: {
-                            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                            labels,
                             datasets: [{
                                 label: 'Jobs Processed',
-                                data: [450, 520, 480, 610, 750, 892, 400],
-                                borderColor: '#2563eb',
-                                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4
+                                data: vals,
+                                backgroundColor: 'rgba(37, 99, 235, 0.7)',
+                                hoverBackgroundColor: '#2563eb',
+                                borderRadius: 4
                             }]
                         },
                         options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
+                            responsive: true, maintainAspectRatio: false,
                             plugins: { legend: { display: false } },
                             scales: {
                                 y: { beginAtZero: true, grid: { borderDash: [2, 4] } },
@@ -499,6 +658,22 @@
                             }
                         }
                     });
+                },
+
+                formatBytes(bytes) {
+                    if (!bytes || bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+                },
+
+                formatDate(dateStr) {
+                    if (!dateStr) return '—';
+                    try {
+                        const d = new Date(dateStr.replace(' ', 'T'));
+                        return d.toLocaleString('en-BD', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    } catch (e) { return dateStr; }
                 }
             }));
         });

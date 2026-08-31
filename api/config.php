@@ -3,7 +3,7 @@ error_reporting(0);
 session_start();
 
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'printshare');
+define('DB_NAME', 'printez');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 

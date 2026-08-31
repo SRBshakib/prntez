@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shop Login - PrintShare</title>
+    <title>Shop Login – Printez</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -16,7 +16,7 @@
         <div class="text-center mb-8">
             <a href="../index.html" class="inline-flex items-center gap-2 text-2xl font-bold text-blue-600">
                 <i data-lucide="printer" class="w-8 h-8"></i>
-                PrintShare
+                Printez
             </a>
             <h1 class="text-2xl font-bold text-slate-900 mt-4">Welcome back</h1>
             <p class="text-slate-500 mt-1">Sign in to your shop dashboard</p>
@@ -89,7 +89,7 @@
                         body.append('email', this.email);
                         body.append('password', this.password);
 
-                        const res = await fetch('/printshare/api/auth.php?action=shop_login', {
+                        const res = await fetch('../api/auth.php?action=shop_login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: body.toString()

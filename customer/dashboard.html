@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Customer Dashboard - PrintShare</title>
+    <title>My Account – Printez</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -21,7 +21,7 @@
             <div class="flex justify-between h-16 items-center">
                 <a href="../index.html" class="flex items-center space-x-2">
                     <i data-lucide="printer" class="w-8 h-8 text-blue-600"></i>
-                    <span class="font-bold text-xl tracking-tight text-blue-900 hidden sm:block">PrintShare</span>
+                    <span class="font-bold text-xl tracking-tight text-blue-900 hidden sm:block">Printez</span>
                 </a>
                 
                 <div class="flex items-center space-x-4">
@@ -175,7 +175,7 @@
                     
                     try {
                         // Check authentication
-                        const authRes = await fetch('/printshare/api/auth.php?action=customer_me');
+                        const authRes = await fetch('../api/auth.php?action=customer_me');
                         const authData = await authRes.json();
                         if (!authData.success || !authData.data) {
                             window.location.href = 'login.html';
@@ -195,7 +195,7 @@
 
                 async loadHistory() {
                     try {
-                        const res = await fetch('/printshare/api/customer.php?action=history');
+                        const res = await fetch('../api/customer.php?action=history');
                         const data = await res.json();
                         if (data.success) {
                             this.history = (data.data || []).map(j => ({
@@ -217,7 +217,7 @@
 
                 async loadLibrary() {
                     try {
-                        const res = await fetch('/printshare/api/customer.php?action=library');
+                        const res = await fetch('../api/customer.php?action=library');
                         const data = await res.json();
                         if (data.success) {
                             this.library = (data.data || []).map(f => ({
@@ -236,7 +236,7 @@
                     if (confirm('Delete this saved file?')) {
                         try {
                             const body = new URLSearchParams({ file_id: id });
-                            const res = await fetch('/printshare/api/customer.php?action=delete_library_file', {
+                            const res = await fetch('../api/customer.php?action=delete_library_file', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                                 body: body.toString()
@@ -254,7 +254,7 @@
                 },
                 
                 async logout() {
-                    await fetch('/printshare/api/auth.php?action=customer_logout', { method: 'POST' });
+                    await fetch('../api/auth.php?action=customer_logout', { method: 'POST' });
                     window.location.href = '../index.html';
                 }
             }));

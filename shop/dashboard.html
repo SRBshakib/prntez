@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shop Dashboard - PrintShare</title>
+    <title>Shop Dashboard – Printez</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -33,7 +33,7 @@
                 <div class="flex items-center gap-4">
                     <div class="flex items-center gap-2 text-blue-600 font-bold text-xl">
                         <i data-lucide="printer"></i>
-                        <span class="hidden md:inline">PrintShare</span>
+                        <span class="hidden md:inline">Printez</span>
                     </div>
                     <div class="h-6 w-px bg-slate-300 hidden md:block"></div>
                     <div class="font-semibold text-slate-800" x-text="shop ? shop.shop_name : 'Loading...'"></div>
@@ -455,6 +455,7 @@
                 showSettings: false,
                 notificationEnabled: false,
                 notificationSound: true,
+                shopUploadUrl: null,
 
                 showPrintViewer: false,
                 currentFile: null,
@@ -501,7 +502,7 @@
 
                 async checkAuth() {
                     try {
-                        const res = await fetch('/printshare/api/auth.php?action=shop_me');
+                        const res = await fetch('../api/auth.php?action=shop_me');
                         const data = await res.json();
                         if (!data.success || !data.data) {
                             window.location.href = 'login.html';
@@ -511,23 +512,37 @@
                         await this.loadJobs();
                         this.generateQRs();
                         this.setupSSE();
+                        this.loadStats();
                     } catch (e) {
                         window.location.href = 'login.html';
                     }
+                },
+
+                async loadStats() {
+                    try {
+                        const res = await fetch('../api/shop.php?action=stats');
+                        const d = await res.json();
+                        if (d.success && d.data) {
+                            this.stats.today = d.data.today_jobs || 0;
+                            this.stats.pending = d.data.pending_count || 0;
+                            this.stats.printing = 0; // count from jobs list
+                            this.stats.done_today = d.data.done_today || 0;
+                        }
+                    } catch (e) { /* silent */ }
                 },
 
                 async loadJobs(filter) {
                     this.loading = true;
                     try {
                         const status = filter || 'all';
-                        const res = await fetch(`/printshare/api/jobs.php?action=list&status=${status}&limit=100`);
+                        const res = await fetch(`../api/jobs.php?action=list&status=${status}&limit=100`);
                         const data = await res.json();
                         if (data.success) {
                             // For each job, fetch its files
                             const jobs = data.data;
                             await Promise.all(jobs.map(async job => {
                                 try {
-                                    const fr = await fetch(`/printshare/api/jobs.php?action=get&job_code=${job.job_code}&shop_id=${this.shop.id}`);
+                                    const fr = await fetch(`../api/jobs.php?action=get&job_code=${job.job_code}&shop_id=${this.shop.id}`);
                                     const fd = await fr.json();
                                     job.files = (fd.success && fd.data) ? (fd.data.files || []) : [];
                                 } catch {
@@ -569,7 +584,7 @@
                     const jobId = job.id || job;
                     try {
                         const body = new URLSearchParams({ job_id: jobId, status: newStatus });
-                        const res = await fetch('/printshare/api/jobs.php?action=update_status', {
+                        const res = await fetch('../api/jobs.php?action=update_status', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: body.toString()
@@ -601,14 +616,14 @@
                     if (this.eventSource) this.eventSource.close();
                     this.connectionStatus = 'connecting';
 
-                    const es = new EventSource(`/printshare/api/sse.php?last_id=${this.lastJobId}`);
+                    const es = new EventSource(`../api/sse.php?last_id=${this.lastJobId}`);
                     this.eventSource = es;
 
                     es.addEventListener('new_job', async (e) => {
                         const newJob = JSON.parse(e.data);
                         // Fetch files for new job
                         try {
-                            const fr = await fetch(`/printshare/api/jobs.php?action=get&job_code=${newJob.job_code}&shop_id=${this.shop.id}`);
+                            const fr = await fetch(`../api/jobs.php?action=get&job_code=${newJob.job_code}&shop_id=${this.shop.id}`);
                             const fd = await fr.json();
                             newJob.files = (fd.success && fd.data) ? (fd.data.files || []) : [];
                         } catch { newJob.files = []; }
@@ -650,7 +665,9 @@
                 generateQRs() {
                     if (this.qrGenerated || !this.shop) return;
                     
-                    const url = window.location.origin + '/printshare/upload.html?shop=' + this.shop.qr_slug;
+                    // Use server-computed URL (from qr_data action) or derive locally
+                    const url = this.shopUploadUrl || (window.location.origin + window.location.pathname.replace(/\/shop\/[^/]*$/, '') + '/upload.html?shop=' + this.shop.qr_slug);
+                    this.shopUploadUrl = url;
                     
                     new QRCode(document.getElementById('qr-canvas-sidebar'), {
                         text: url, width: 160, height: 160,
@@ -671,16 +688,18 @@
                     const canvas = document.querySelector('#qr-canvas-sidebar canvas');
                     if (canvas) {
                         const link = document.createElement('a');
-                        link.download = `printshare-qr-${this.shop.shop_name.replace(/\s+/g, '-').toLowerCase()}.png`;
+                        link.download = `printez-qr-${this.shop.shop_name.replace(/\s+/g, '-').toLowerCase()}.png`;
                         link.href = canvas.toDataURL();
                         link.click();
                     }
                 },
 
                 copyShopLink() {
-                    const url = window.location.origin + '/printshare/upload.html?shop=' + this.shop.qr_slug;
+                    const url = this.shopUploadUrl || (window.location.origin + window.location.pathname.replace(/\/shop\/[^/]*$/, '') + '/upload.html?shop=' + this.shop.qr_slug);
                     navigator.clipboard.writeText(url).then(() => {
-                        alert('Link copied to clipboard!');
+                        alert('Link copied!');
+                    }).catch(() => {
+                        prompt('Copy this link:', url);
                     });
                 },
 
@@ -708,7 +727,7 @@
                 },
 
                 async logout() {
-                    await fetch('/printshare/api/auth.php?action=shop_logout', { method: 'POST' });
+                    await fetch('../api/auth.php?action=shop_logout', { method: 'POST' });
                     window.location.href = 'login.html';
                 },
 
@@ -766,7 +785,7 @@
                             pdfjsLib.GlobalWorkerOptions.workerSrc =
                                 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-                            const fileUrl = `/printshare/api/serve_file.php?file_id=${file.id}`;
+                            const fileUrl = `../api/serve_file.php?file_id=${file.id}`;
                             this.pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
                             this.pdfTotalPages = this.pdfDoc.numPages;
                             this.pdfPage = 1;
@@ -775,7 +794,7 @@
                         } else {
                             // Image — load securely via serve_file endpoint
                             const img = document.getElementById('image-viewer');
-                            img.src = `/printshare/api/serve_file.php?file_id=${file.id}`;
+                            img.src = `../api/serve_file.php?file_id=${file.id}`;
                             await new Promise((resolve, reject) => {
                                 img.onload = resolve;
                                 img.onerror = reject;

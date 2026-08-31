@@ -83,7 +83,7 @@ switch ($action) {
         
         // Fetch files for these jobs
         foreach ($jobs as &$job) {
-            $stmt = $db->prepare("SELECT original_name, file_type FROM print_files WHERE job_id = ?");
+            $stmt = $db->prepare("SELECT original_name, file_type, file_size, copies, color_mode, paper_size, sides FROM print_files WHERE job_id = ?");
             $stmt->execute([$job['id']]);
             $job['files'] = $stmt->fetchAll();
         }
