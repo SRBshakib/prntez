@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Success - PrintShare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Hind Siliguri', sans-serif; }
+        .success-checkmark {
+            width: 80px; height: 80px; margin: 0 auto;
+            border-radius: 50%; display: block;
+            stroke-width: 2; stroke: #fff;
+            stroke-miterlimit: 10;
+            box-shadow: inset 0px 0px 0px #16A34A;
+            animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both;
+        }
+        .success-checkmark__circle {
+            stroke-dasharray: 166; stroke-dashoffset: 166; stroke-width: 2;
+            stroke-miterlimit: 10; stroke: #16A34A; fill: none;
+            animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+        }
+        .success-checkmark__check {
+            transform-origin: 50% 50%; stroke-dasharray: 48; stroke-dashoffset: 48;
+            animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+        }
+        @keyframes stroke { 100% { stroke-dashoffset: 0; } }
+        @keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } }
+        @keyframes fill { 100% { box-shadow: inset 0px 0px 0px 50px #16A34A; } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" x-data="confirmApp()">
+
+    <!-- Top Navigation -->
+    <nav class="bg-white border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <a href="index.html" class="flex items-center space-x-2">
+                    <i data-lucide="printer" class="w-8 h-8 text-blue-600"></i>
+                    <span class="font-bold text-xl tracking-tight text-blue-900">PrintShare</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 relative">
+            
+            <!-- Delete countdown indicator -->
+            <div class="absolute top-0 left-0 w-full h-1 bg-slate-100">
+                <div class="h-1 bg-red-500" :style="`width: ${deleteProgress}%`" style="transition: width 1s linear"></div>
+            </div>
+
+            <div class="p-8 text-center">
+                <!-- Checkmark Animation -->
+                <div class="mb-6">
+                    <svg class="success-checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <circle class="success-checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
+                        <path class="success-checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                    </svg>
+                </div>
+
+                <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">Your files are uploaded!</h1>
+                <p class="text-slate-600 mb-6">Files successfully sent to <span class="font-bold" x-text="shopName"></span></p>
+
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 mb-6">
+                    <p class="text-sm font-semibold text-blue-800 uppercase tracking-wider mb-2">Your Job Number</p>
+                    <div class="text-6xl font-black text-blue-900 tracking-widest bg-white py-3 rounded-lg border border-blue-100 shadow-sm" x-text="jobCode">
+                        ----
+                    </div>
+                    <p class="mt-4 text-slate-700 font-medium text-lg">আপনার নম্বর: <span x-text="bnNum(jobCode)"></span></p>
+                    <p class="text-sm text-slate-600 mt-1">Show this number at the counter</p>
+                </div>
+
+                <div class="flex items-center justify-center text-sm text-red-600 bg-red-50 py-2 px-4 rounded-lg mb-8 inline-flex mx-auto">
+                    <i data-lucide="clock" class="w-4 h-4 mr-2"></i>
+                    Files will be auto-deleted in <span class="font-bold mx-1" x-text="minutesLeft"></span> mins for your privacy
+                </div>
+
+                <div class="space-y-3">
+                    <a :href="`track.html?code=${jobCode}&shop=${shopSlug}`" class="block w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow hover:bg-blue-700 transition-colors">
+                        Track Status
+                    </a>
+                    <a :href="`upload.html?shop=${shopSlug}`" class="block w-full bg-white text-slate-700 font-bold py-3 px-4 rounded-xl border border-slate-300 shadow-sm hover:bg-slate-50 transition-colors">
+                        Upload More Files
+                    </a>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-slate-100">
+                    <p class="text-xs text-slate-500 flex items-center justify-center">
+                        <i data-lucide="camera" class="w-4 h-4 mr-1"></i>
+                        Tip: Take a screenshot of this page
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('confirmApp', () => ({
+                jobCode: '0042',
+                shopSlug: '',
+                shopName: 'City Print Station',
+                minutesLeft: 30,
+                deleteProgress: 0,
+                
+                init() {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    this.jobCode = urlParams.get('code') || '0042';
+                    this.shopSlug = urlParams.get('shop') || 'sh_demo';
+                    
+                    setTimeout(() => lucide.createIcons(), 100);
+
+                    // Mock timer
+                    let secondsPassed = 0;
+                    const totalSeconds = 30 * 60;
+                    
+                    setInterval(() => {
+                        secondsPassed++;
+                        this.minutesLeft = Math.ceil((totalSeconds - secondsPassed) / 60);
+                        this.deleteProgress = (secondsPassed / totalSeconds) * 100;
+                    }, 1000);
+                },
+
+                bnNum(engNum) {
+                    const bnDigits = {'0':'০','1':'১','2':'২','3':'৩','4':'৪','5':'৫','6':'৬','7':'৭','8':'৮','9':'৯'};
+                    return (engNum+'').replace(/[0-9]/g, w => bnDigits[w]);
+                }
+            }));
+        });
+    </script>
+</body>
+</html>

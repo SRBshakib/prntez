@@ -1,0 +1,4 @@
+Options -Indexes
+RewriteEngine On
+# Block direct access to uploads
+RewriteRule ^uploads/ - [F,L]

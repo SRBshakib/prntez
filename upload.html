@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Files - PrintShare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Hind Siliguri', sans-serif; }
+        [x-cloak] { display: none !important; }
+        .progress-bar-fill { transition: width 0.3s ease; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen" x-data="uploadApp()">
+
+    <!-- Top Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 overflow-hidden">
+                <template x-if="shopLoading">
+                    <div class="animate-pulse flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-slate-200 rounded-full"></div>
+                        <div class="h-4 w-32 bg-slate-200 rounded"></div>
+                    </div>
+                </template>
+                <template x-if="!shopLoading && shop">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+                            <i data-lucide="printer" class="w-5 h-5"></i>
+                        </div>
+                        <div class="truncate">
+                            <p class="text-xs text-slate-500 font-medium leading-none mb-1">Sending files to:</p>
+                            <p class="font-bold text-sm sm:text-base leading-none truncate" x-text="shop.name"></p>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="!shopLoading && !shop">
+                    <div class="flex items-center space-x-2 text-red-600">
+                        <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                        <span class="font-bold">Shop Not Found</span>
+                    </div>
+                </template>
+            </div>
+            
+            <div class="flex items-center relative">
+                <template x-if="customer">
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" @click.away="open = false" class="flex items-center space-x-1 text-sm font-medium text-slate-700 hover:text-blue-600 focus:outline-none">
+                            <span>Hi, <span x-text="customer.name.split(' ')[0]"></span></span>
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </button>
+                        <div x-show="open" x-cloak class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 py-1">
+                            <a href="customer/dashboard.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">My Dashboard</a>
+                            <a href="customer/dashboard.html?tab=history" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">My History</a>
+                            <a href="customer/dashboard.html?tab=library" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">My Library</a>
+                            <hr class="my-1 border-slate-100">
+                            <button @click="logout" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-slate-50">Sign Out</button>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="!customer">
+                    <button @click="showAuthModal = true" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                        Sign in to save history
+                    </button>
+                </template>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        
+        <!-- Error State for invalid shop -->
+        <template x-if="shopError">
+            <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center max-w-lg mx-auto mt-10">
+                <i data-lucide="x-circle" class="w-12 h-12 text-red-500 mx-auto mb-4"></i>
+                <h2 class="text-xl font-bold text-red-700 mb-2" x-text="shopError"></h2>
+                <p class="text-red-600 mb-6">Please check the QR code or link and try again.</p>
+                <a href="index.html" class="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700">Go to Home</a>
+            </div>
+        </template>
+
+        <!-- Main Workspace -->
+        <div x-show="!shopError && shop" x-cloak class="flex flex-col lg:flex-row gap-6">
+            
+            <!-- Left Side: Upload Area (60%) -->
+            <div class="w-full lg:w-3/5 flex flex-col gap-6">
+                
+                <!-- Notice if out of service -->
+                <template x-if="shop && shop.status === 'out_of_service'">
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="alert-triangle" class="h-5 w-5 text-yellow-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-yellow-700">
+                                    This shop is temporarily unavailable. You can still upload files, but they may not be printed immediately.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Dropzone -->
+                <div x-show="!isUploading" 
+                     @dragover.prevent="dragOver = true" 
+                     @dragleave.prevent="dragOver = false" 
+                     @drop.prevent="handleDrop($event)"
+                     @click="$refs.fileInput.click()"
+                     :class="dragOver ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-white hover:bg-slate-50'"
+                     class="border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-colors relative">
+                    <input type="file" x-ref="fileInput" @change="handleFileSelect" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" class="hidden">
+                    <div class="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                        <i data-lucide="upload-cloud" class="w-8 h-8 text-blue-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-900 mb-1">Tap to select files or drag & drop here</h3>
+                    <p class="text-sm text-slate-500">PDF, JPG, PNG, DOCX — max 50MB per file</p>
+                    
+                    <div x-show="dragOver" class="absolute inset-0 bg-blue-500/90 rounded-2xl flex items-center justify-center text-white font-bold text-xl backdrop-blur-sm z-10">
+                        Drop files here
+                    </div>
+                </div>
+
+                <!-- Selected Files List -->
+                <div x-show="files.length > 0" class="space-y-4">
+                    <h4 class="font-semibold text-slate-700 flex justify-between items-center">
+                        <span>Selected Files (<span x-text="files.length"></span>)</span>
+                        <button x-show="!isUploading" @click="files = []" class="text-sm text-red-500 hover:text-red-700 font-medium">Clear All</button>
+                    </h4>
+                    
+                    <template x-for="(file, index) in files" :key="file.id">
+                        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative">
+                            <!-- Remove btn -->
+                            <button x-show="!isUploading" @click="removeFile(index)" class="absolute top-4 right-4 text-slate-400 hover:text-red-500">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                            
+                            <div class="flex items-start gap-3 mb-3">
+                                <div class="mt-1">
+                                    <i data-lucide="file-text" class="w-6 h-6 text-blue-500" x-show="file.type.includes('pdf')"></i>
+                                    <i data-lucide="image" class="w-6 h-6 text-green-500" x-show="file.type.includes('image')"></i>
+                                    <i data-lucide="file" class="w-6 h-6 text-slate-500" x-show="!file.type.includes('pdf') && !file.type.includes('image')"></i>
+                                </div>
+                                <div class="flex-1 pr-8">
+                                    <p class="font-medium text-slate-900 truncate max-w-[200px] sm:max-w-xs" x-text="file.name"></p>
+                                    <p class="text-xs text-slate-500" x-text="formatSize(file.size)"></p>
+                                </div>
+                            </div>
+                            
+                            <!-- Settings (disabled during upload) -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <div>
+                                    <label class="block text-[10px] uppercase text-slate-500 font-bold mb-1">Copies</label>
+                                    <select x-model="file.copies" :disabled="isUploading" class="w-full text-sm border-slate-200 rounded focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-slate-100">
+                                        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                                        <option value="4">4</option><option value="5">5</option><option value="10">10</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase text-slate-500 font-bold mb-1">Color</label>
+                                    <select x-model="file.colorMode" :disabled="isUploading" class="w-full text-sm border-slate-200 rounded focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-slate-100">
+                                        <option value="bw">B&W</option>
+                                        <option value="color">Color</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase text-slate-500 font-bold mb-1">Paper</label>
+                                    <select x-model="file.paperSize" :disabled="isUploading" class="w-full text-sm border-slate-200 rounded focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-slate-100">
+                                        <option value="a4">A4</option>
+                                        <option value="legal">Legal</option>
+                                        <option value="letter">Letter</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase text-slate-500 font-bold mb-1">Sides</label>
+                                    <select x-model="file.sides" :disabled="isUploading" class="w-full text-sm border-slate-200 rounded focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-slate-100">
+                                        <option value="single">Single</option>
+                                        <option value="double">Double</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div x-show="customer" class="mb-3 flex items-center">
+                                <input type="checkbox" :id="'save_'+file.id" x-model="file.saveToLibrary" :disabled="isUploading" class="rounded text-blue-600 focus:ring-blue-500 border-slate-300">
+                                <label :for="'save_'+file.id" class="ml-2 text-sm text-slate-600">Save to My Library</label>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div x-show="isUploading || file.status === 'done' || file.status === 'error'" class="mt-2">
+                                <div class="flex justify-between text-xs font-medium mb-1">
+                                    <span :class="{
+                                        'text-slate-500': file.status === 'waiting',
+                                        'text-blue-600': file.status === 'uploading',
+                                        'text-green-600': file.status === 'done',
+                                        'text-red-600': file.status === 'error'
+                                    }">
+                                        <span x-show="file.status === 'waiting'">Waiting...</span>
+                                        <span x-show="file.status === 'uploading'">Uploading...</span>
+                                        <span x-show="file.status === 'done'">✅ Done</span>
+                                        <span x-show="file.status === 'error'">❌ Failed</span>
+                                    </span>
+                                    <span class="text-slate-600" x-text="file.progress + '%'"></span>
+                                </div>
+                                <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                    <div class="h-2 rounded-full progress-bar-fill" 
+                                         :class="{
+                                             'bg-blue-500': file.status !== 'done' && file.status !== 'error',
+                                             'bg-green-500': file.status === 'done',
+                                             'bg-red-500': file.status === 'error'
+                                         }"
+                                         :style="`width: ${file.progress}%`"></div>
+                                </div>
+                                <div x-show="file.status === 'error'" class="mt-1 text-xs text-red-500 text-right">
+                                    <button @click="retryFile(file)" class="underline">Tap to retry</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Customer Details & Notes -->
+                <div x-show="files.length > 0" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+                    <h4 class="font-semibold text-slate-700">Order Details (Optional)</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" x-show="!customer">
+                        <div>
+                            <input type="text" x-model="customerName" :disabled="isUploading" placeholder="Your name" class="w-full text-sm border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50">
+                        </div>
+                        <div>
+                            <input type="tel" x-model="customerPhone" :disabled="isUploading" placeholder="Your phone" class="w-full text-sm border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50">
+                        </div>
+                    </div>
+                    <div>
+                        <textarea x-model="globalNotes" :disabled="isUploading" rows="2" maxlength="500" placeholder="Any special instructions for the shop?" class="w-full text-sm border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 resize-none"></textarea>
+                    </div>
+                </div>
+
+                <!-- Upload Button -->
+                <div x-show="files.length > 0" class="pb-10">
+                    <button @click="startUpload" :disabled="isUploading" 
+                            class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-lg">
+                        <template x-if="!isUploading">
+                            <div class="flex items-center">
+                                <i data-lucide="send" class="w-5 h-5 mr-2"></i>
+                                <span>Upload & Get Job Number</span>
+                            </div>
+                        </template>
+                        <template x-if="isUploading">
+                            <div class="flex items-center">
+                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Uploading... Please wait</span>
+                            </div>
+                        </template>
+                    </button>
+                    <p class="text-center text-xs text-slate-500 mt-3">By uploading, you agree to our terms. Files are deleted after 30 mins.</p>
+                </div>
+
+            </div>
+
+            <!-- Right Side: Ad Zone & Info (40%) -->
+            <div class="w-full lg:w-2/5">
+                <div class="sticky top-24 space-y-6">
+                    
+                    <!-- Ad Zone (Shows during upload) -->
+                    <div x-show="showAd" x-transition.opacity class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm text-center">
+                        <h4 class="font-bold text-slate-800 mb-2">Uploading safely...</h4>
+                        <div class="flex justify-center space-x-4 text-sm text-slate-600 mb-4">
+                            <span class="flex items-center"><i data-lucide="lock" class="w-4 h-4 mr-1 text-green-600"></i> Encrypted</span>
+                            <span class="flex items-center"><i data-lucide="zap" class="w-4 h-4 mr-1 text-yellow-500"></i> Fast</span>
+                        </div>
+                        
+                        <!-- Simulated Ad Slot -->
+                        <div class="w-[300px] h-[250px] bg-slate-100 border border-slate-200 mx-auto flex flex-col items-center justify-center text-slate-400 rounded">
+                            <span class="text-xs uppercase tracking-wider mb-2">Advertisement</span>
+                            <div id="ad-slot-upload" class="w-full h-full flex items-center justify-center bg-slate-200">
+                                AD SLOT (300x250)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Instructions (Shows before upload) -->
+                    <div x-show="!showAd" class="bg-blue-50 border border-blue-100 rounded-xl p-6">
+                        <h4 class="font-bold text-blue-900 mb-4 flex items-center">
+                            <i data-lucide="info" class="w-5 h-5 mr-2 text-blue-600"></i>
+                            How it works
+                        </h4>
+                        <ul class="space-y-4 text-sm text-blue-800">
+                            <li class="flex items-start">
+                                <span class="bg-blue-200 text-blue-700 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mr-3 mt-0.5 shrink-0">1</span>
+                                Select your files and adjust print settings (copies, B&W/Color).
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-blue-200 text-blue-700 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mr-3 mt-0.5 shrink-0">2</span>
+                                Tap Upload. Do not close the browser while uploading.
+                            </li>
+                            <li class="flex items-start">
+                                <span class="bg-blue-200 text-blue-700 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mr-3 mt-0.5 shrink-0">3</span>
+                                Get your 4-digit number and show it at the shop counter!
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Auth Modal -->
+    <div x-show="showAuthModal" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" x-cloak>
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="showAuthModal" x-transition.opacity class="fixed inset-0 bg-slate-900 bg-opacity-75 transition-opacity" @click="showAuthModal = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div x-show="showAuthModal" x-transition.scale class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full relative">
+                
+                <button @click="showAuthModal = false" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+
+                <div class="px-6 pt-6 pb-2">
+                    <h3 class="text-xl font-bold text-slate-900 text-center mb-6">Welcome to PrintShare</h3>
+                    
+                    <div class="flex border-b border-slate-200 mb-6">
+                        <button @click="authMode = 'login'" :class="authMode === 'login' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'" class="flex-1 pb-3 text-sm font-medium border-b-2 hover:text-blue-600 transition-colors">Sign In</button>
+                        <button @click="authMode = 'register'" :class="authMode === 'register' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'" class="flex-1 pb-3 text-sm font-medium border-b-2 hover:text-blue-600 transition-colors">Register</button>
+                    </div>
+
+                    <!-- Login Form -->
+                    <form x-show="authMode === 'login'" @submit.prevent="submitLogin" class="space-y-4">
+                        <div x-show="authError" class="p-3 bg-red-50 text-red-600 text-sm rounded-lg" x-text="authError"></div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                            <input type="email" x-model="authForm.email" required class="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                            <input type="password" x-model="authForm.password" required class="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <button type="submit" :disabled="authLoading" class="w-full bg-blue-600 text-white font-medium py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-70">
+                            <span x-show="!authLoading">Sign In</span>
+                            <span x-show="authLoading">Loading...</span>
+                        </button>
+                    </form>
+
+                    <!-- Register Form -->
+                    <form x-show="authMode === 'register'" @submit.prevent="submitRegister" class="space-y-4">
+                        <div x-show="authError" class="p-3 bg-red-50 text-red-600 text-sm rounded-lg" x-text="authError"></div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                            <input type="text" x-model="authForm.name" required class="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                            <input type="email" x-model="authForm.email" required class="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                            <input type="password" x-model="authForm.password" required class="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <button type="submit" :disabled="authLoading" class="w-full bg-blue-600 text-white font-medium py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-70">
+                            <span x-show="!authLoading">Create Account</span>
+                            <span x-show="authLoading">Loading...</span>
+                        </button>
+                    </form>
+                </div>
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 text-center">
+                    <button @click="showAuthModal = false" class="text-sm text-slate-600 font-medium hover:text-slate-900">
+                        Continue as Guest
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('uploadApp', () => ({
+                shopSlug: null,
+                shop: null,
+                shopLoading: true,
+                shopError: null,
+                
+                customer: null,
+                showAuthModal: false,
+                authMode: 'login',
+                authForm: { name: '', email: '', password: '' },
+                authError: '',
+                authLoading: false,
+                
+                jobId: null,
+                jobCode: null,
+                customerName: '',
+                customerPhone: '',
+                globalNotes: '',
+                
+                files: [],
+                isUploading: false,
+                showAd: false,
+                dragOver: false,
+
+                init() {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    this.shopSlug = urlParams.get('shop');
+                    
+                    if (!this.shopSlug) {
+                        this.shopError = "Invalid Link";
+                        this.shopLoading = false;
+                        return;
+                    }
+
+                    // Mock Fetch Shop
+                    setTimeout(() => {
+                        this.shop = { name: "City Print Station", slug: this.shopSlug, status: "active" };
+                        this.shopLoading = false;
+                    }, 500);
+
+                    // Mock check auth
+                    const token = localStorage.getItem('ps_customer_token');
+                    if (token) {
+                        this.customer = { name: "John Doe", email: "john@example.com" };
+                        this.customerName = this.customer.name;
+                    }
+                    
+                    setTimeout(() => lucide.createIcons(), 100);
+                },
+
+                handleFileSelect(e) {
+                    const newFiles = Array.from(e.target.files);
+                    this.addFiles(newFiles);
+                    e.target.value = ''; // reset
+                },
+
+                handleDrop(e) {
+                    this.dragOver = false;
+                    if (e.dataTransfer.files.length > 0) {
+                        this.addFiles(Array.from(e.dataTransfer.files));
+                    }
+                },
+
+                addFiles(fileList) {
+                    fileList.forEach(file => {
+                        if (file.size > 50 * 1024 * 1024) {
+                            alert(`File ${file.name} is too large. Max 50MB.`);
+                            return;
+                        }
+                        this.files.push({
+                            id: Math.random().toString(36).substring(2, 9),
+                            fileObj: file,
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            status: 'waiting', // waiting, uploading, done, error
+                            progress: 0,
+                            copies: '1',
+                            colorMode: 'bw',
+                            paperSize: 'a4',
+                            sides: 'single',
+                            saveToLibrary: false
+                        });
+                    });
+                    setTimeout(() => lucide.createIcons(), 10);
+                },
+
+                removeFile(index) {
+                    this.files.splice(index, 1);
+                },
+
+                formatSize(bytes) {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                },
+
+                async startUpload() {
+                    if (this.files.length === 0) return;
+                    
+                    this.isUploading = true;
+                    this.showAd = true;
+                    
+                    // Mock Init Job
+                    await new Promise(r => setTimeout(r, 800));
+                    this.jobId = 123;
+                    this.jobCode = Math.floor(1000 + Math.random() * 9000).toString(); // 4 digit code
+
+                    // Mock upload process
+                    for (let i = 0; i < this.files.length; i++) {
+                        let file = this.files[i];
+                        file.status = 'uploading';
+                        
+                        // Simulate progress
+                        for(let p = 0; p <= 100; p += 20) {
+                            file.progress = p;
+                            await new Promise(r => setTimeout(r, 200));
+                        }
+                        
+                        file.status = 'done';
+                        file.progress = 100;
+                    }
+
+                    // Complete
+                    setTimeout(() => {
+                        window.location.href = `confirm.html?code=${this.jobCode}&shop=${this.shopSlug}`;
+                    }, 500);
+                },
+
+                retryFile(file) {
+                    file.status = 'waiting';
+                    file.progress = 0;
+                    // In real app, we'd trigger upload logic for this file again
+                },
+
+                async submitLogin() {
+                    this.authLoading = true;
+                    // Mock login
+                    setTimeout(() => {
+                        localStorage.setItem('ps_customer_token', 'mock_token');
+                        this.customer = { name: "John Doe", email: this.authForm.email };
+                        this.customerName = this.customer.name;
+                        this.showAuthModal = false;
+                        this.authLoading = false;
+                    }, 800);
+                },
+
+                async submitRegister() {
+                    this.authLoading = true;
+                    // Mock register
+                    setTimeout(() => {
+                        localStorage.setItem('ps_customer_token', 'mock_token');
+                        this.customer = { name: this.authForm.name, email: this.authForm.email };
+                        this.customerName = this.customer.name;
+                        this.showAuthModal = false;
+                        this.authLoading = false;
+                    }, 800);
+                },
+
+                logout() {
+                    localStorage.removeItem('ps_customer_token');
+                    this.customer = null;
+                    this.customerName = '';
+                }
+            }));
+        });
+    </script>
+</body>
+</html>
