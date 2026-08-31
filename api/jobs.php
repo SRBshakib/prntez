@@ -121,15 +121,18 @@ switch ($action) {
         $job_code = sanitize($_GET['job_code'] ?? '');
         $shop_slug = sanitize($_GET['shop_slug'] ?? '');
         
+        if (!$job_code) jsonError('Missing job code');
+        
         $db = getDB();
         if ($shop_slug) {
-            $stmt = $db->prepare("SELECT j.status, j.created_at, j.expires_at, j.files_deleted, s.name as shop_name, j.id as job_id FROM print_jobs j JOIN shops s ON j.shop_id = s.id WHERE j.job_code = ? AND s.qr_slug = ?");
-            $stmt->execute([$job_code, $shop_slug]);
+            $stmt = $db->prepare("SELECT j.status, j.created_at, j.expires_at, j.files_deleted, s.name as shop_name, s.qr_slug as shop_slug, j.id as job_id FROM print_jobs j JOIN shops s ON j.shop_id = s.id WHERE j.job_code = ? AND (s.qr_slug = ? OR s.id = ?)");
+            $stmt->execute([$job_code, $shop_slug, $shop_slug]);
         } else if (isset($_SESSION['customer_id'])) {
-            $stmt = $db->prepare("SELECT j.status, j.created_at, j.expires_at, j.files_deleted, s.name as shop_name, j.id as job_id FROM print_jobs j JOIN shops s ON j.shop_id = s.id WHERE j.job_code = ? AND j.customer_id = ?");
+            $stmt = $db->prepare("SELECT j.status, j.created_at, j.expires_at, j.files_deleted, s.name as shop_name, s.qr_slug as shop_slug, j.id as job_id FROM print_jobs j JOIN shops s ON j.shop_id = s.id WHERE j.job_code = ? AND j.customer_id = ? ORDER BY j.created_at DESC LIMIT 1");
             $stmt->execute([$job_code, $_SESSION['customer_id']]);
         } else {
-            jsonError('Missing shop information');
+            $stmt = $db->prepare("SELECT j.status, j.created_at, j.expires_at, j.files_deleted, s.name as shop_name, s.qr_slug as shop_slug, j.id as job_id FROM print_jobs j JOIN shops s ON j.shop_id = s.id WHERE j.job_code = ? ORDER BY j.created_at DESC LIMIT 1");
+            $stmt->execute([$job_code]);
         }
         
         $job = $stmt->fetch();

@@ -1,7 +1,7 @@
-CREATE DATABASE IF NOT EXISTS `printshare` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `printshare`;
+CREATE DATABASE IF NOT EXISTS `printez` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `printez`;
 
-CREATE TABLE `shops` (
+CREATE TABLE IF NOT EXISTS `shops` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(150) NOT NULL,
   `owner_name` VARCHAR(100) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE `shops` (
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `customers` (
+CREATE TABLE IF NOT EXISTS `customers` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL,
   `email` VARCHAR(191) UNIQUE NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE `customers` (
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `print_jobs` (
+CREATE TABLE IF NOT EXISTS `print_jobs` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `job_code` CHAR(4) NOT NULL,
   `shop_id` INT UNSIGNED,
@@ -57,7 +57,7 @@ CREATE TABLE `print_jobs` (
   INDEX `idx_customer` (`customer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `print_files` (
+CREATE TABLE IF NOT EXISTS `print_files` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `job_id` INT UNSIGNED,
   `original_name` VARCHAR(255) NOT NULL,
@@ -75,7 +75,7 @@ CREATE TABLE `print_files` (
   FOREIGN KEY (`job_id`) REFERENCES `print_jobs`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `library_files` (
+CREATE TABLE IF NOT EXISTS `library_files` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `customer_id` INT UNSIGNED,
   `original_name` VARCHAR(255) NOT NULL,
@@ -86,7 +86,7 @@ CREATE TABLE `library_files` (
   FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `otp_codes` (
+CREATE TABLE IF NOT EXISTS `otp_codes` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `email` VARCHAR(191) NOT NULL,
   `code` CHAR(6) NOT NULL,
@@ -95,7 +95,7 @@ CREATE TABLE `otp_codes` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `rate_limits` (
+CREATE TABLE IF NOT EXISTS `rate_limits` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `ip` VARCHAR(45) NOT NULL,
   `action` VARCHAR(50) NOT NULL,
@@ -104,31 +104,32 @@ CREATE TABLE `rate_limits` (
   INDEX `idx_ip_action` (`ip`, `action`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `job_daily_sequence` (
+CREATE TABLE IF NOT EXISTS `job_daily_sequence` (
   `shop_id` INT UNSIGNED,
   `date` DATE,
   `last_seq` SMALLINT UNSIGNED DEFAULT 0,
   PRIMARY KEY (`shop_id`, `date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `settings` (
+CREATE TABLE IF NOT EXISTS `settings` (
   `key` VARCHAR(50) PRIMARY KEY,
   `value` TEXT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO `settings` (`key`, `value`) VALUES
-('platform_name', 'PrintShare'),
+('platform_name', 'Printez'),
 ('file_expiry_minutes', '30'),
 ('max_file_size_mb', '50'),
 ('max_files_per_job', '10'),
 ('allowed_types', 'pdf,jpg,png,docx'),
+('delete_on_print', '1'),
 ('adsense_code', ''),
 ('ads_enabled', '1'),
-('admin_password', 'admin@printshare2026'),
+('admin_password', 'admin@printez2026'),
 ('maintenance_mode', '0'),
 ('shop_approval', 'auto');
 
-CREATE TABLE `upload_chunks` (
+CREATE TABLE IF NOT EXISTS `upload_chunks` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `upload_id` VARCHAR(64) NOT NULL UNIQUE,
   `job_id` INT UNSIGNED,

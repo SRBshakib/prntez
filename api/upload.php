@@ -24,8 +24,8 @@ switch ($action) {
         
         $db = getDB();
         
-        // Verify shop exists and active
-        $stmt = $db->prepare("SELECT id FROM shops WHERE id = ? AND status = 'active' AND out_of_service = 0");
+        // Verify shop exists and is active
+        $stmt = $db->prepare("SELECT id FROM shops WHERE id = ? AND status = 'active'");
         $stmt->execute([$shop_id]);
         if (!$stmt->fetch()) jsonError('Shop not available');
         
