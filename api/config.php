@@ -1,5 +1,6 @@
 <?php
 error_reporting(0);
+date_default_timezone_set('Asia/Dhaka');
 session_start();
 
 define('DB_HOST', 'localhost');
@@ -44,6 +45,7 @@ function getDB() {
             $db = new PDO('mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4', DB_USER, DB_PASS);
             $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+            $db->exec("SET time_zone = '+06:00'");
         } catch (PDOException $e) {
             jsonError('Database connection failed', 500);
         }

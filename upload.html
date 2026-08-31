@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Upload Files - Printez</title>
     <meta name="description" content="Upload your files securely to a print shop via Printez. Get a 4-digit job number instantly.">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -524,7 +527,7 @@
 
                 async loadShop() {
                     try {
-                        const res = await fetch(`../api/shop.php?action=by_slug&slug=${encodeURIComponent(this.shopSlug)}`);
+                        const res = await fetch(`api/shop.php?action=by_slug&slug=${encodeURIComponent(this.shopSlug)}`);
                         const data = await res.json();
                         if (data.success) {
                             this.shop = data.data;
@@ -545,7 +548,7 @@
 
                 async loadCustomer() {
                     try {
-                        const res = await fetch('../api/auth.php?action=customer_me');
+                        const res = await fetch('api/auth.php?action=customer_me');
                         const data = await res.json();
                         if (data.success && data.data) {
                             this.customer = data.data;
@@ -652,14 +655,14 @@
                             file_count: this.files.length
                         });
 
-                        const initRes = await fetch('../api/upload.php?action=init_job', {
+                        const initRes = await fetch('api/upload.php?action=init_job', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: initBody.toString()
                         });
-                        const initData = await initRes.json();
+                        const initData = await initRes.json().catch(() => ({}));
 
-                        if (!initData.success) {
+                        if (!initRes.ok || !initData.success) {
                             throw new Error(initData.error || 'Failed to start upload job.');
                         }
 
@@ -692,7 +695,7 @@
 
                         // 3. Navigate to confirm page
                         setTimeout(() => {
-                            window.location.href = `../confirm.html?code=${this.jobCode}&shop=${this.shopSlug}`;
+                            window.location.href = `confirm.html?code=${this.jobCode}&shop=${this.shopSlug}`;
                         }, 400);
 
                     } catch (e) {
@@ -721,14 +724,15 @@
                         formData.append('total_chunks', totalChunks);
                         formData.append('chunk', chunk, file.name);
 
-                        const res = await fetch('../api/upload.php?action=upload_chunk', {
+                        const res = await fetch('api/upload.php?action=upload_chunk', {
                             method: 'POST',
                             body: formData
                         });
 
-                        if (!res.ok) throw new Error(`Server error on chunk ${chunkIndex + 1}`);
-                        const data = await res.json();
-                        if (!data.success) throw new Error(data.error || `Chunk ${chunkIndex + 1} failed`);
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok || !data.success) {
+                            throw new Error(data.error || `Chunk ${chunkIndex + 1} failed`);
+                        }
 
                         file.progress = Math.round(((chunkIndex + 1) / totalChunks) * 90);
                     }
@@ -744,14 +748,16 @@
                         save_to_library: file.saveToLibrary ? '1' : '0'
                     });
 
-                    const completeRes = await fetch('../api/upload.php?action=complete_file', {
+                    const completeRes = await fetch('api/upload.php?action=complete_file', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: completeBody.toString()
                     });
 
-                    const completeData = await completeRes.json();
-                    if (!completeData.success) throw new Error(completeData.error || 'Failed to finalize file');
+                    const completeData = await completeRes.json().catch(() => ({}));
+                    if (!completeRes.ok || !completeData.success) {
+                        throw new Error(completeData.error || 'Failed to finalize file');
+                    }
 
                     file.progress = 100;
                 },
@@ -783,7 +789,7 @@
                     this.authError = '';
                     try {
                         const body = new URLSearchParams({ email: this.authForm.email, password: this.authForm.password });
-                        const res = await fetch('../api/auth.php?action=customer_login', {
+                        const res = await fetch('api/auth.php?action=customer_login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: body.toString()
@@ -813,7 +819,7 @@
                             email: this.authForm.email,
                             password: this.authForm.password
                         });
-                        const res = await fetch('../api/auth.php?action=customer_register', {
+                        const res = await fetch('api/auth.php?action=customer_register', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: body.toString()
@@ -834,7 +840,7 @@
                 },
 
                 async logout() {
-                    await fetch('../api/auth.php?action=customer_logout', { method: 'POST' }).catch(() => {});
+                    await fetch('api/auth.php?action=customer_logout', { method: 'POST' }).catch(() => {});
                     this.customer = null;
                     this.customerName = '';
                     this.customerPhone = '';

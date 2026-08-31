@@ -16,7 +16,7 @@ $original_name = 'file';
 
 if ($file_id) {
     $stmt = $db->prepare("
-        SELECT f.stored_path, f.original_name, f.file_type, j.shop_id, j.expires_at 
+        SELECT f.stored_path, f.original_name, f.file_type, j.shop_id, j.expires_at, j.files_deleted 
         FROM print_files f 
         JOIN print_jobs j ON f.job_id = j.id 
         WHERE f.id = ?
@@ -24,17 +24,9 @@ if ($file_id) {
     $stmt->execute([$file_id]);
     $file = $stmt->fetch();
     
-    if (!$file) {
+    if (!$file || $file['files_deleted']) {
         http_response_code(404);
-        exit('File not found');
-    }
-    
-    $is_shop = isset($_SESSION['shop_id']) && $_SESSION['shop_id'] == $file['shop_id'];
-    $is_expired = strtotime($file['expires_at']) < time();
-    
-    if (!$is_shop && $is_expired) {
-        http_response_code(403);
-        exit('Link expired');
+        exit('File not found or has been deleted');
     }
     
     $path = $file['stored_path'];
@@ -68,10 +60,12 @@ $finfo = finfo_open(FILEINFO_MIME_TYPE);
 $mime = finfo_file($finfo, $path);
 finfo_close($finfo);
 
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Content-Type: ' . $mime);
+header('Content-Disposition: inline; filename="' . basename($original_name) . '"');
 header('Content-Length: ' . filesize($path));
 header('Cache-Control: private, max-age=3600');
-// No Content-Disposition attachment so it renders inline if browser supports it
 
 readfile($path);
 exit;

@@ -9,21 +9,36 @@ switch ($action) {
         if (!checkRateLimit($ip, 'job_get', 30, 60)) {
             jsonError('Too many requests', 429);
         }
+        $job_id = (int)($_REQUEST['job_id'] ?? $_REQUEST['id'] ?? 0);
         $job_code = sanitize($_REQUEST['job_code'] ?? '');
         $shop_id = sanitize($_REQUEST['shop_id'] ?? ''); // can be id or qr_slug
         
-        if (!$job_code || !$shop_id) jsonError('Missing parameters');
+        if (!$job_id && (!$job_code || !$shop_id)) jsonError('Missing parameters');
         
         $db = getDB();
-        $stmt = $db->prepare("SELECT id FROM shops WHERE id = ? OR qr_slug = ?");
-        $stmt->execute([$shop_id, $shop_id]);
-        $shop_id_actual = $stmt->fetchColumn();
+        $shop_id_actual = null;
+        if ($shop_id) {
+            $stmt = $db->prepare("SELECT id FROM shops WHERE id = ? OR qr_slug = ?");
+            $stmt->execute([$shop_id, $shop_id]);
+            $shop_id_actual = $stmt->fetchColumn();
+        }
         
-        if (!$shop_id_actual) jsonError('Shop not found');
-        
-        $stmt = $db->prepare("SELECT * FROM print_jobs WHERE job_code = ? AND shop_id = ?");
-        $stmt->execute([$job_code, $shop_id_actual]);
-        $job = $stmt->fetch();
+        if ($job_id) {
+            $query = "SELECT * FROM print_jobs WHERE id = ?";
+            $params = [$job_id];
+            if ($shop_id_actual) {
+                $query .= " AND shop_id = ?";
+                $params[] = $shop_id_actual;
+            }
+            $stmt = $db->prepare($query);
+            $stmt->execute($params);
+            $job = $stmt->fetch();
+        } else {
+            if (!$shop_id_actual) jsonError('Shop not found');
+            $stmt = $db->prepare("SELECT * FROM print_jobs WHERE job_code = ? AND shop_id = ? ORDER BY id DESC LIMIT 1");
+            $stmt->execute([$job_code, $shop_id_actual]);
+            $job = $stmt->fetch();
+        }
         
         if (!$job) jsonError('Job not found');
         
@@ -56,6 +71,24 @@ switch ($action) {
         $stmt = $db->prepare($query);
         $stmt->execute($params);
         $jobs = $stmt->fetchAll();
+        
+        if (!empty($jobs)) {
+            $job_ids = array_column($jobs, 'id');
+            $in_placeholders = implode(',', array_fill(0, count($job_ids), '?'));
+            $stmt_files = $db->prepare("SELECT id, job_id, original_name, file_type, file_size, copies, color_mode, paper_size, sides, upload_status, is_saved_to_library FROM print_files WHERE job_id IN ($in_placeholders)");
+            $stmt_files->execute($job_ids);
+            $all_files = $stmt_files->fetchAll();
+            
+            $files_by_job = [];
+            foreach ($all_files as $f) {
+                $files_by_job[$f['job_id']][] = $f;
+            }
+            
+            foreach ($jobs as &$j) {
+                $j['files'] = $files_by_job[$j['id']] ?? [];
+            }
+            unset($j);
+        }
         
         jsonResponse(['success' => true, 'data' => $jobs]);
         break;

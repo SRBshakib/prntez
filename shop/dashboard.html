@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="../assets/js/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
@@ -332,6 +332,9 @@
                     <span class="px-3 text-sm">Page <span x-text="pdfPage"></span> of <span x-text="pdfTotalPages"></span></span>
                     <button @click="pdfPage++" :disabled="pdfPage >= pdfTotalPages" class="px-3 py-1.5 hover:bg-slate-600 disabled:opacity-50"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
                 </div>
+                <a :href="currentFile ? `../api/serve_file.php?file_id=${currentFile.id}` : '#'" target="_blank" download class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg font-medium flex items-center gap-1.5 text-sm transition">
+                    <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden md:inline">Download</span>
+                </a>
                 <button @click="triggerBrowserPrint" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition shadow-lg">
                     <i data-lucide="printer" class="w-4 h-4"></i> <span class="hidden sm:inline">Print Now</span>
                 </button>
@@ -347,8 +350,11 @@
             </div>
 
             <!-- PDF Canvas -->
-            <canvas id="pdf-canvas" class="bg-white shadow-2xl max-w-full" x-show="isPdf && !viewerLoading" style="display: none;"></canvas>
+            <canvas id="pdf-canvas" class="bg-white shadow-2xl max-w-full" x-show="isPdf && !viewerLoading && !pdfCanvasError" style="display: none;"></canvas>
             
+            <!-- PDF Iframe Fallback -->
+            <iframe id="pdf-fallback-frame" :src="currentFile && isPdf && pdfCanvasError ? `../api/serve_file.php?file_id=${currentFile.id}` : ''" class="w-full h-full min-h-[700px] bg-white rounded shadow-2xl border-0" x-show="isPdf && !viewerLoading && pdfCanvasError" style="display: none;"></iframe>
+
             <!-- Image Tag -->
             <img id="image-viewer" class="bg-white shadow-2xl max-w-full object-contain" x-show="!isPdf && !viewerLoading" style="display: none; max-height: 80vh;">
             
@@ -432,8 +438,10 @@
     </script>
 
     <script>
-        // Setup PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        // Setup PDF.js local worker
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '../assets/js/pdf.worker.min.js';
+        }
 
         document.addEventListener('alpine:init', () => {
             Alpine.data('dashboard', () => ({
@@ -464,6 +472,7 @@
                 pdfDoc: null,
                 pdfPage: 1,
                 pdfTotalPages: 0,
+                pdfCanvasError: false,
 
                 init() {
                     // Start initialization
@@ -538,18 +547,7 @@
                         const res = await fetch(`../api/jobs.php?action=list&status=${status}&limit=100`);
                         const data = await res.json();
                         if (data.success) {
-                            // For each job, fetch its files
-                            const jobs = data.data;
-                            await Promise.all(jobs.map(async job => {
-                                try {
-                                    const fr = await fetch(`../api/jobs.php?action=get&job_code=${job.job_code}&shop_id=${this.shop.id}`);
-                                    const fd = await fr.json();
-                                    job.files = (fd.success && fd.data) ? (fd.data.files || []) : [];
-                                } catch {
-                                    job.files = [];
-                                }
-                            }));
-                            this.jobs = jobs;
+                            this.jobs = data.data || [];
                             this.updateStats();
                         }
                     } catch (e) {
@@ -621,14 +619,15 @@
 
                     es.addEventListener('new_job', async (e) => {
                         const newJob = JSON.parse(e.data);
-                        // Fetch files for new job
-                        try {
-                            const fr = await fetch(`../api/jobs.php?action=get&job_code=${newJob.job_code}&shop_id=${this.shop.id}`);
-                            const fd = await fr.json();
-                            newJob.files = (fd.success && fd.data) ? (fd.data.files || []) : [];
-                        } catch { newJob.files = []; }
+                        newJob.files = newJob.files || [];
 
-                        this.jobs.unshift(newJob);
+                        const existingIdx = this.jobs.findIndex(x => x.id === newJob.id);
+                        if (existingIdx !== -1) {
+                            this.jobs[existingIdx] = newJob;
+                        } else {
+                            this.jobs.unshift(newJob);
+                        }
+
                         if (newJob.id > this.lastJobId) this.lastJobId = newJob.id;
                         this.updateStats();
                         setTimeout(() => lucide.createIcons(), 0);
@@ -646,7 +645,9 @@
                         const j = this.jobs.find(x => x.id === updated.id);
                         if (j) {
                             j.status = updated.status;
+                            if (updated.files) j.files = updated.files;
                             this.updateStats();
+                            setTimeout(() => lucide.createIcons(), 0);
                         }
                     });
 
@@ -777,16 +778,24 @@
                     this.viewerLoading = true;
                     this.isPdf = (file.file_type || '').toLowerCase() === 'pdf';
                     this.pdfDoc = null;
+                    this.pdfCanvasError = false;
                     document.body.style.overflow = 'hidden';
 
                     try {
+                        const fileUrl = `../api/serve_file.php?file_id=${file.id}`;
                         if (this.isPdf) {
-                            // Configure PDF.js worker
-                            pdfjsLib.GlobalWorkerOptions.workerSrc =
-                                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                            if (typeof pdfjsLib !== 'undefined') {
+                                pdfjsLib.GlobalWorkerOptions.workerSrc = '../assets/js/pdf.worker.min.js';
+                            }
 
-                            const fileUrl = `../api/serve_file.php?file_id=${file.id}`;
-                            this.pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
+                            const res = await fetch(fileUrl);
+                            if (!res.ok) {
+                                throw new Error(`HTTP ${res.status}`);
+                            }
+                            const arrayBuffer = await res.arrayBuffer();
+
+                            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                            this.pdfDoc = await loadingTask.promise;
                             this.pdfTotalPages = this.pdfDoc.numPages;
                             this.pdfPage = 1;
                             await this.renderPdfPage(1);
@@ -794,17 +803,15 @@
                         } else {
                             // Image — load securely via serve_file endpoint
                             const img = document.getElementById('image-viewer');
-                            img.src = `../api/serve_file.php?file_id=${file.id}`;
+                            img.src = fileUrl;
                             await new Promise((resolve, reject) => {
                                 img.onload = resolve;
                                 img.onerror = reject;
                             });
                         }
                     } catch (e) {
-                        console.error('Viewer error', e);
-                        alert('Could not load file. It may have expired (files are deleted after 30 minutes).');
-                        this.closePrintViewer();
-                        return;
+                        console.warn('PDF.js canvas render fallback activated:', e);
+                        this.pdfCanvasError = true;
                     } finally {
                         this.viewerLoading = false;
                         setTimeout(() => lucide.createIcons(), 0);

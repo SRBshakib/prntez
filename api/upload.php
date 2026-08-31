@@ -215,6 +215,9 @@ switch ($action) {
             $stmt = $db->prepare("DELETE FROM upload_chunks WHERE upload_id = ?");
             $stmt->execute([$upload_id]);
             
+            $stmt = $db->prepare("UPDATE print_jobs SET updated_at = NOW() WHERE id = ?");
+            $stmt->execute([$job_id]);
+            
             $db->commit();
             jsonResponse(['success' => true, 'data' => ['file_id' => $file_id, 'file_name' => $upload['original_name'], 'file_size' => $file_size, 'file_type' => $ext]]);
         } catch (Exception $e) {
