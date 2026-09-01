@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Clock, Printer, Store, Phone, MapPin, Sparkles, Loader2, ArrowLeft, Copy, Check, QrCode } from 'lucide-react';
+import {
+  CheckCircle2, Clock, Printer, Store, Phone, MapPin, Sparkles, Loader2,
+  ArrowLeft, Copy, Check, QrCode, Bell, BellRing, MessageCircle, CreditCard, Percent
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { socket, playChime } from '../socket';
 import GoogleAdSense from '../components/GoogleAdSense';
+import BrandSponsorCard from '../components/BrandSponsorCard';
 
 export default function TrackJob({ jobCode, onBack }) {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [showPickupQr, setShowPickupQr] = useState(false);
+  const [copiedBkash, setCopiedBkash] = useState(false);
+  const [notifGranted, setNotifGranted] = useState(
+    typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+  );
   const [promoAd, setPromoAd] = useState(null);
+  const [brandSponsor, setBrandSponsor] = useState(null);
   const [adsenseConfig, setAdsenseConfig] = useState(null);
 
   useEffect(() => {
@@ -20,6 +28,7 @@ export default function TrackJob({ jobCode, onBack }) {
       .then(data => {
         if (data.success) {
           if (data.customerAd?.enabled) setPromoAd(data.customerAd);
+          if (data.brandSponsor?.enabled) setBrandSponsor(data.brandSponsor);
           if (data.adsense?.enabled) setAdsenseConfig(data.adsense);
         }
       })
@@ -49,11 +58,24 @@ export default function TrackJob({ jobCode, onBack }) {
     const handleStatusChanged = (update) => {
       setJob(prev => {
         if (!prev) return prev;
-        if (update.status === 'done' && prev.status !== 'done') {
+        const nextStatus = update.status || prev.status;
+        const nextPayStatus = update.payment_status || prev.payment_status;
+
+        if (nextStatus === 'done' && prev.status !== 'done') {
           fireConfetti();
           playChime();
+
+          // Push Notification (Feature 6)
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('🖨️ Print Order Ready!', {
+                body: `Your documents for Order #${jobCode} are printed and ready for pickup at ${prev.shop_name || 'the shop'}.`,
+                icon: '/favicon.ico'
+              });
+            } catch (_) {}
+          }
         }
-        return { ...prev, status: update.status };
+        return { ...prev, ...update };
       });
     };
 
@@ -63,6 +85,20 @@ export default function TrackJob({ jobCode, onBack }) {
       socket.off('status_changed', handleStatusChanged);
     };
   }, [jobCode]);
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window) {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        setNotifGranted(true);
+        try {
+          new Notification('🔔 Notifications Enabled!', {
+            body: `You'll be alerted immediately when Order #${jobCode} finishes printing.`
+          });
+        } catch (_) {}
+      }
+    }
+  };
 
   const fireConfetti = () => {
     try {
@@ -120,9 +156,11 @@ export default function TrackJob({ jobCode, onBack }) {
     );
   }
 
+  const shopBkashNumber = job.shop_bkash || job.shop_phone;
+
   return (
     <div className="min-h-screen bg-slate-50/80 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto space-y-5">
+      <div className="max-w-md mx-auto space-y-4">
         
         {/* Top Header */}
         <div className="flex items-center justify-between">
@@ -139,6 +177,24 @@ export default function TrackJob({ jobCode, onBack }) {
             <span>Live Real-Time Tracker</span>
           </span>
         </div>
+
+        {/* Push Notification Banner Trigger (Feature 6) */}
+        {!notifGranted && typeof window !== 'undefined' && 'Notification' in window && job.status !== 'done' && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs shadow-2xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bell className="w-4 h-4 text-indigo-600 shrink-0" />
+              <p className="text-[11px] text-indigo-900 font-medium truncate">
+                Get sound & push alerts when print is ready
+              </p>
+            </div>
+            <button
+              onClick={requestNotificationPermission}
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] shrink-0 transition"
+            >
+              Enable Alert
+            </button>
+          </div>
+        )}
 
         {/* Order Ticket Card */}
         <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-200 text-center space-y-4">
@@ -164,8 +220,55 @@ export default function TrackJob({ jobCode, onBack }) {
             </div>
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Due</p>
-              <p className="text-sm font-extrabold text-slate-900">৳{parseFloat(job.total_price || 0).toFixed(2)}</p>
+              <div className="flex items-center justify-end gap-1.5">
+                <p className="text-base font-extrabold text-slate-900">৳{parseFloat(job.total_price || 0).toFixed(2)}</p>
+                {parseFloat(job.discount_applied || 0) > 0 && (
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full">
+                    -৳{parseFloat(job.discount_applied).toFixed(2)} off
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+
+          {/* Payment Status Info & bKash Option (Feature 4) */}
+          <div className="p-3 rounded-2xl border text-xs text-left space-y-1.5 bg-slate-50/70 border-slate-200">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700 flex items-center gap-1">
+                <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                <span>Payment Status</span>
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                job.payment_status === 'paid' || job.payment_status === 'paid_cash' || job.payment_status === 'paid_bkash'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+              }`}>
+                {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? '✓ Paid (Cash)' :
+                 job.payment_status === 'paid_bkash' ? '✓ Paid (bKash/Nagad)' :
+                 '● Unpaid'}
+              </span>
+            </div>
+
+            {/* If unpaid, show easy payment number */}
+            {job.payment_status !== 'paid' && job.payment_status !== 'paid_cash' && job.payment_status !== 'paid_bkash' && shopBkashNumber && (
+              <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] text-slate-500">Pay via bKash / Nagad:</p>
+                  <p className="font-mono font-bold text-slate-800">{shopBkashNumber}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(shopBkashNumber);
+                    setCopiedBkash(true);
+                    setTimeout(() => setCopiedBkash(false), 2000);
+                  }}
+                  className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg font-bold text-[10px] text-slate-700 flex items-center gap-1 shadow-2xs"
+                >
+                  {copiedBkash ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedBkash ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Stepper Progress */}
@@ -202,11 +305,11 @@ export default function TrackJob({ jobCode, onBack }) {
             })}
           </div>
 
-          {/* Shop Information Footer */}
+          {/* Shop Information Footer with WhatsApp Direct (Feature 1) */}
           {job.shop_name && (
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-left text-xs">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg shrink-0">
                   <Store className="w-3.5 h-3.5" />
                 </div>
                 <div className="min-w-0">
@@ -214,18 +317,37 @@ export default function TrackJob({ jobCode, onBack }) {
                   <p className="text-[10px] text-slate-400 truncate">{job.shop_address || 'Dhaka'}</p>
                 </div>
               </div>
-              {job.shop_phone && (
-                <a
-                  href={`tel:${job.shop_phone}`}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] flex items-center gap-1 shrink-0"
-                >
-                  <Phone className="w-3 h-3" /> Call
-                </a>
-              )}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {job.shop_phone && (
+                  <a
+                    href={`https://wa.me/${job.shop_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${job.shop_name}, I'm inquiring about my print order #${job.job_code}.`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-[11px] flex items-center gap-1 border border-emerald-200"
+                    title="Message Shop on WhatsApp"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+                {job.shop_phone && (
+                  <a
+                    href={`tel:${job.shop_phone}`}
+                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
             </div>
           )}
 
         </div>
+
+        {/* Brand Collaboration Sponsor Card */}
+        {brandSponsor && (
+          <BrandSponsorCard sponsor={brandSponsor} />
+        )}
 
         {/* Promo / Partner Ad Space */}
         {promoAd && (

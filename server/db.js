@@ -22,7 +22,7 @@ async function query(sql, params = []) {
 // Run schema migrations for v2 compatibility
 async function migrate() {
     const alterOps = [
-        // Shops: add pricing, hours, payment & discount columns
+        // Shops: add pricing, hours, payment, discount, and advanced profile & verification columns
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `price_bw` DECIMAL(10,2) DEFAULT 2.00",
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `price_color` DECIMAL(10,2) DEFAULT 10.00",
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `price_legal` DECIMAL(10,2) DEFAULT 3.00",
@@ -37,7 +37,16 @@ async function migrate() {
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `discount_min_pages` INT DEFAULT 50",
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `discount_percent` DECIMAL(5,2) DEFAULT 10.00",
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `discount_tier2_pages` INT DEFAULT 100",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `discount_tier2_percent` DECIMAL(5,2) DEFAULT 15.00",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `trade_license` VARCHAR(100) DEFAULT ''",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `trade_license_image` LONGTEXT DEFAULT NULL",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `shop_image` LONGTEXT DEFAULT NULL",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `tagline` VARCHAR(255) DEFAULT 'Fast & Reliable Document Printing'",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `owner_name` VARCHAR(100) DEFAULT ''",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `alt_phone` VARCHAR(30) DEFAULT ''",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `nid_number` VARCHAR(50) DEFAULT ''",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `maps_url` TEXT DEFAULT NULL",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `is_verified` TINYINT(1) DEFAULT 0",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `services_offered` VARCHAR(255) DEFAULT 'Laser Print, Color Print, Photocopy, Spiral Binding, Laminating'",
         // print_jobs: add v2 columns
         "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `total_pages` INT DEFAULT 0",
         "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `total_price` DECIMAL(10,2) DEFAULT 0.00",

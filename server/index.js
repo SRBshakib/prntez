@@ -40,11 +40,11 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// Public Announcements & Ad Banners (for customer & shop headers)
+// Public Announcements & Brand Collab Ads (for customer, track, & shop headers)
 app.get('/api/announcements', async (req, res) => {
     try {
         const { query } = require('./db');
-        const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` LIKE 'ad_%' OR `key` LIKE 'adsense_%'");
+        const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` LIKE 'ad_%' OR `key` LIKE 'adsense_%' OR `key` LIKE 'brand_%'");
         const ads = {};
         rows.forEach(r => { ads[r.key] = r.value; });
         res.json({
@@ -61,6 +61,18 @@ app.get('/api/announcements', async (req, res) => {
                 text: ads.ad_shop_text || '',
                 link: ads.ad_shop_link || ''
             },
+            brandSponsor: {
+                enabled: ads.brand_sponsor_enabled === '1' || ads.brand_sponsor_enabled === 'true',
+                brandName: ads.brand_name || 'Brand Partner',
+                badge: ads.brand_badge || '⭐ SPONSOR',
+                headline: ads.brand_headline || 'Special Student & Customer Discount',
+                description: ads.brand_description || 'Exclusive offer for Printez users.',
+                couponCode: ads.brand_coupon_code || '',
+                imageUrl: ads.brand_image_url || '',
+                ctaText: ads.brand_cta_text || 'Claim Offer →',
+                targetUrl: ads.brand_target_url || '',
+                totalClicks: parseInt(ads.brand_sponsor_clicks || '0', 10)
+            },
             adsense: {
                 enabled: ads.adsense_enabled === '1' || ads.adsense_enabled === 'true',
                 clientId: ads.adsense_client_id || '',
@@ -73,7 +85,18 @@ app.get('/api/announcements', async (req, res) => {
             }
         });
     } catch (err) {
-        res.json({ success: false, customerAd: { enabled: false }, shopAd: { enabled: false }, adsense: { enabled: false } });
+        res.json({ success: false, customerAd: { enabled: false }, shopAd: { enabled: false }, brandSponsor: { enabled: false }, adsense: { enabled: false } });
+    }
+});
+
+// Brand Collab Sponsor Click Tracker (Proof of performance for brand sponsors)
+app.post('/api/announcements/click', async (req, res) => {
+    try {
+        const { query } = require('./db');
+        await query("INSERT INTO settings (`key`, `value`) VALUES ('brand_sponsor_clicks', '1') ON DUPLICATE KEY UPDATE `value` = CAST(`value` AS UNSIGNED) + 1");
+        res.json({ success: true });
+    } catch (_) {
+        res.json({ success: false });
     }
 });
 
@@ -123,6 +146,17 @@ io.on('connection', (socket) => {
     });
 });
 
+// Serve Frontend Production Build (SPA Fallback)
+const fs = require('fs');
+const clientDistPath = path.join(__dirname, '..', 'client', 'dist');
+if (fs.existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath));
+    app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) return next();
+        res.sendFile(path.join(clientDistPath, 'index.html'));
+    });
+}
+
 process.on('uncaughtException', (err) => {
     console.error('[Server] Uncaught exception:', err);
 });
@@ -139,5 +173,8 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`[✓] REST API & WebSocket Server: http://localhost:${PORT}`);
     console.log(`[✓] Real-Time Engine           : Socket.io Active (< 10ms)`);
     console.log(`[✓] High-Speed DB Pool         : MySQL prntez`);
+    if (fs.existsSync(clientDistPath)) {
+        console.log(`[✓] Unified Frontend Client    : Serving client/dist on port ${PORT}`);
+    }
     console.log('===============================================================');
 });

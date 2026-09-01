@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Printer, QrCode, Download, Trash2, CheckCircle2, Clock, Zap, FolderSync,
+  Printer, QrCode, Download, Trash2, CheckCircle2, Clock, Zap,
   Eye, RefreshCw, Search, ArrowUpRight, LogOut, ChevronDown, ChevronUp,
   FileText, Image as ImageIcon, Volume2, VolumeX, Store, Check, AlertCircle, X,
   Command, Sparkles, Play, Layers, Copy, BarChart3, TrendingUp, MessageCircle,
-  CreditCard, ShieldCheck, Sun, Moon, Percent
+  CreditCard, ShieldCheck, Sun, Moon, Percent, Wrench
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import { socket, playChime } from '../socket';
 import PrintModal from '../components/PrintModal';
 import GoogleAdSense from '../components/GoogleAdSense';
 import ShopQrModal from '../components/ShopQrModal';
+import ShopToolsModal from '../components/ShopToolsModal';
+import ShopProfileModal from '../components/ShopProfileModal';
 
 export default function ShopDashboard({ shop, onLogout }) {
   const [jobs, setJobs] = useState([]);
@@ -33,6 +35,8 @@ export default function ShopDashboard({ shop, onLogout }) {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showToolsModal, setShowToolsModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
@@ -42,13 +46,6 @@ export default function ShopDashboard({ shop, onLogout }) {
   // Editable Shop Profile & Pricing
   const [currentShopData, setCurrentShopData] = useState(shop);
   const [savingShopSettings, setSavingShopSettings] = useState(false);
-
-  // Local PC Folder Sync State
-  const [localDirHandle, setLocalDirHandle] = useState(null);
-  const [localFolderName, setLocalFolderName] = useState('');
-  const [autoSaveLocal, setAutoSaveLocal] = useState(true);
-  const [autoDeleteLocal, setAutoDeleteLocal] = useState(true);
-  const savedLocalFilesRef = useRef({});
   const searchInputRef = useRef(null);
 
   // Active Document Preview Modal
@@ -97,10 +94,6 @@ export default function ShopDashboard({ shop, onLogout }) {
       if (audioEnabled) playChime();
       showToast(`⚡ New Order #${newJob.job_code} from ${newJob.customer_name}`, 'success');
 
-      if (localDirHandle && autoSaveLocal) {
-        saveJobToLocalFolder(newJob, localDirHandle);
-      }
-
       if (autoPrint && newJob.files && newJob.files.length > 0) {
         handlePrintAll(newJob);
       }
@@ -122,7 +115,7 @@ export default function ShopDashboard({ shop, onLogout }) {
       socket.off('new_job', onNewJob);
       socket.off('job_updated', onJobUpdated);
     };
-  }, [shop?.id, autoPrint, audioEnabled, localDirHandle, autoSaveLocal]);
+  }, [shop?.id, autoPrint, audioEnabled]);
 
   // 2. Keyboard Shortcuts (Linear / Gmail style speed)
   useEffect(() => {
@@ -312,63 +305,7 @@ export default function ShopDashboard({ shop, onLogout }) {
     }
   };
 
-  // 3. Local PC Folder Sync (File System Access API)
-  const handleSelectFolder = async () => {
-    try {
-      if (!window.showDirectoryPicker) {
-        alert('Local Folder Sync requires Google Chrome or Microsoft Edge.');
-        return;
-      }
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      setLocalDirHandle(handle);
-      setLocalFolderName(handle.name || 'Selected Folder');
-      showToast(`📁 Connected to: "${handle.name}"`, 'success');
-
-      // Sync existing pending jobs
-      jobs.filter(j => j.status === 'pending').forEach(j => saveJobToLocalFolder(j, handle));
-    } catch (e) {
-      if (e.name !== 'AbortError') showToast('Failed to connect local folder.', 'error');
-    }
-  };
-
-  const saveJobToLocalFolder = async (job, dirHandle) => {
-    const handle = dirHandle || localDirHandle;
-    if (!handle || !job || !job.files) return;
-
-    for (const file of job.files) {
-      try {
-        const cleanName = (file.original_name || 'document.pdf').replace(/[/\\?%*:|"<>]/g, '_');
-        const fileName = `Job_${job.job_code}_[${file.copies}x_${file.color_mode.toUpperCase()}_${file.paper_size}]_${cleanName}`;
-
-        savedLocalFilesRef.current[job.id] = savedLocalFilesRef.current[job.id] || [];
-        if (savedLocalFilesRef.current[job.id].includes(fileName)) continue;
-
-        const res = await fetch(`/api/jobs/serve/${file.id}`);
-        if (!res.ok) continue;
-        const blob = await res.blob();
-
-        const fileHandle = await handle.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-
-        savedLocalFilesRef.current[job.id].push(fileName);
-      } catch (err) {
-        console.error('Save to local folder error:', err);
-      }
-    }
-  };
-
-  const deleteFromLocalFolder = async (job) => {
-    if (!localDirHandle || !job) return;
-    const fileNames = savedLocalFilesRef.current[job.id] || [];
-    for (const fName of fileNames) {
-      try { await localDirHandle.removeEntry(fName); } catch (_) {}
-    }
-    delete savedLocalFilesRef.current[job.id];
-  };
-
-  // 4. Print Actions (Node.js Spooler + Simulate Mode)
+  // 3. Print Actions (Node.js Spooler + Simulate Mode)
   const handleQuickPrint = async (file, job) => {
     if (!file) return;
 
@@ -545,6 +482,16 @@ export default function ShopDashboard({ shop, onLogout }) {
 
           <div className="flex items-center gap-1.5 sm:gap-2">
             
+            {/* Shop Tools Suite Button */}
+            <button
+              onClick={() => setShowToolsModal(true)}
+              className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
+              title="Print & Photocopy Counter Tool Suite (Calculators, Receipts, Sheet Converter)"
+            >
+              <Wrench className="w-4 h-4 text-indigo-600" />
+              <span className="hidden sm:inline">Tools</span>
+            </button>
+
             {/* Analytics Dashboard Trigger (Feature 2) */}
             <button
               onClick={() => { setShowAnalyticsModal(true); fetchAnalytics(); }}
@@ -612,6 +559,16 @@ export default function ShopDashboard({ shop, onLogout }) {
             >
               <QrCode className="w-4 h-4" />
               <span className="hidden lg:inline">QR Standee</span>
+            </button>
+
+            {/* Advanced Profile & Verification Button */}
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
+              title="Shop Profile, Trade License, Owner NID & Branding"
+            >
+              <ShieldCheck className="w-4 h-4 text-blue-600" />
+              <span className="hidden lg:inline">Profile</span>
             </button>
 
             {/* Settings & Rates Button */}
@@ -826,74 +783,6 @@ export default function ShopDashboard({ shop, onLogout }) {
             </div>
           </div>
 
-          {/* PC Local Folder Auto-Sync Card */}
-          <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 space-y-2.5">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
-                <FolderSync className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="font-bold text-xs text-slate-800">PC Folder Sync</h4>
-                <p className="text-[10px] text-slate-400">Save jobs to local drive</p>
-              </div>
-            </div>
-
-            {!localDirHandle ? (
-              <div className="space-y-2">
-                <p className="text-[11px] text-slate-500 leading-tight">
-                  Auto-download incoming files directly into a PC folder.
-                </p>
-                <button
-                  onClick={handleSelectFolder}
-                  className="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-xs"
-                >
-                  <FolderSync className="w-3.5 h-3.5" />
-                  <span>Choose Folder</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2 pt-0.5">
-                <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-xl flex items-center justify-between">
-                  <div className="min-w-0">
-                    <p className="text-[9px] font-bold text-emerald-800 uppercase">Connected</p>
-                    <p className="text-xs font-bold text-slate-800 truncate">{localFolderName}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setLocalDirHandle(null);
-                      setLocalFolderName('');
-                      showToast('Folder disconnected.', 'info');
-                    }}
-                    className="p-1 text-slate-400 hover:text-rose-500"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                <div className="space-y-1 text-xs text-slate-600">
-                  <label className="flex items-center justify-between cursor-pointer text-[11px]">
-                    <span>Auto-save incoming</span>
-                    <input
-                      type="checkbox"
-                      checked={autoSaveLocal}
-                      onChange={e => setAutoSaveLocal(e.target.checked)}
-                      className="rounded text-blue-600"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between cursor-pointer text-[11px]">
-                    <span>Auto-delete on Done</span>
-                    <input
-                      type="checkbox"
-                      checked={autoDeleteLocal}
-                      onChange={e => setAutoDeleteLocal(e.target.checked)}
-                      className="rounded text-blue-600"
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Partner / Supplies Ad Banner Space in Sidebar */}
           {shopAd && (
             <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-2xl p-4 shadow-sm border border-indigo-800/50 space-y-2.5">
@@ -1104,6 +993,30 @@ export default function ShopDashboard({ shop, onLogout }) {
                           <span className="text-xs font-extrabold text-slate-900 ml-auto lg:ml-0">
                             ৳{parseFloat(job.total_price || 0).toFixed(2)}
                           </span>
+
+                          {/* Bulk Discount Pill */}
+                          {parseFloat(job.discount_applied || 0) > 0 && (
+                            <span className="px-2 py-0.2 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              🏷️ -৳{parseFloat(job.discount_applied).toFixed(2)} off
+                            </span>
+                          )}
+
+                          {/* Payment Status Badge */}
+                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                            job.payment_status === 'paid' || job.payment_status === 'paid_cash' || job.payment_status === 'paid_bkash'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : job.payment_status === 'paid_online_pending_verify'
+                                ? 'bg-indigo-100 text-indigo-800 animate-pulse'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}>
+                            <CreditCard className="w-2.5 h-2.5" />
+                            <span>
+                              {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? 'Paid (Cash)' :
+                               job.payment_status === 'paid_bkash' ? 'Paid (bKash)' :
+                               job.payment_status === 'paid_online_pending_verify' ? `Verify ${job.payment_method?.toUpperCase()} (Trx: ${job.payment_trx_id || 'Yes'})` :
+                               'Unpaid'}
+                            </span>
+                          </span>
                         </div>
 
                         {/* Specs Pills */}
@@ -1140,8 +1053,51 @@ export default function ShopDashboard({ shop, onLogout }) {
                       </div>
 
                       {/* Right: Quick Action Buttons */}
-                      <div className="flex items-center gap-1.5 shrink-0 self-end lg:self-center">
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end lg:self-center">
                         
+                        {/* Quick WhatsApp Ready Message (Feature 1) */}
+                        {job.customer_phone && (
+                          <button
+                            onClick={() => handleSendWhatsApp(job)}
+                            className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold rounded-xl text-xs flex items-center gap-1 transition shadow-2xs"
+                            title="Send WhatsApp Ready Message to customer"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="hidden sm:inline">WhatsApp</span>
+                          </button>
+                        )}
+
+                        {/* Payment Quick Toggle Menu (Feature 4) */}
+                        <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[10px] font-bold">
+                          <button
+                            onClick={() => updatePaymentStatus(job.id, 'paid_cash', 'cash')}
+                            className={`px-2 py-1 rounded-lg transition ${
+                              job.payment_status === 'paid_cash' || job.payment_status === 'paid' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="Mark Paid via Cash"
+                          >
+                            Cash
+                          </button>
+                          <button
+                            onClick={() => updatePaymentStatus(job.id, 'paid_bkash', 'bkash')}
+                            className={`px-2 py-1 rounded-lg transition ${
+                              job.payment_status === 'paid_bkash' ? 'bg-pink-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="Mark Paid via bKash/Nagad"
+                          >
+                            bKash
+                          </button>
+                          <button
+                            onClick={() => updatePaymentStatus(job.id, 'unpaid', 'cash')}
+                            className={`px-1.5 py-1 rounded-lg transition ${
+                              job.payment_status === 'unpaid' ? 'bg-slate-300 text-slate-800' : 'text-slate-400 hover:text-rose-600'
+                            }`}
+                            title="Mark Unpaid"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
                         {/* 1-Click Print Directly */}
                         {hasFiles && !job.files_deleted && (
                           <button
@@ -1392,6 +1348,104 @@ export default function ShopDashboard({ shop, onLogout }) {
                 </div>
               </div>
 
+              {/* Operating Hours (Feature 3) */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                    Operating Hours & Open/Closed
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentShopData({ ...currentShopData, is_closed: currentShopData.is_closed ? 0 : 1 })}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      !currentShopData.is_closed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {!currentShopData.is_closed ? '🟢 Currently OPEN' : '🔴 Currently CLOSED'}
+                  </button>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Opening Time</label>
+                    <input
+                      type="time"
+                      value={currentShopData.opening_time || '08:00'}
+                      onChange={e => setCurrentShopData({ ...currentShopData, opening_time: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Closing Time</label>
+                    <input
+                      type="time"
+                      value={currentShopData.closing_time || '22:00'}
+                      onChange={e => setCurrentShopData({ ...currentShopData, closing_time: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Online Payment Numbers (Feature 4) */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                  <CreditCard className="w-3.5 h-3.5 text-pink-600" />
+                  Online Payment Numbers (bKash & Nagad)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">bKash (Personal/Merchant)</label>
+                    <input
+                      type="tel"
+                      placeholder="017XXXXXXXX"
+                      value={currentShopData.bkash_number || ''}
+                      onChange={e => setCurrentShopData({ ...currentShopData, bkash_number: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Nagad Number</label>
+                    <input
+                      type="tel"
+                      placeholder="018XXXXXXXX"
+                      value={currentShopData.nagad_number || ''}
+                      onChange={e => setCurrentShopData({ ...currentShopData, nagad_number: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bulk Discount Rules (Feature 7) */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                  <Percent className="w-3.5 h-3.5 text-amber-600" />
+                  Auto Bulk Discounts
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Min Pages</label>
+                    <input
+                      type="number"
+                      value={currentShopData.discount_min_pages || 50}
+                      onChange={e => setCurrentShopData({ ...currentShopData, discount_min_pages: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Discount %</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={currentShopData.discount_percent || 10}
+                      onChange={e => setCurrentShopData({ ...currentShopData, discount_percent: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Shop Address / Counter Location</label>
                 <input
@@ -1407,9 +1461,125 @@ export default function ShopDashboard({ shop, onLogout }) {
                 disabled={savingShopSettings}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-xs"
               >
-                {savingShopSettings ? 'Saving...' : '✓ Save Rates & Notice'}
+                {savingShopSettings ? 'Saving...' : '✓ Save Settings & Rates'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Shop Analytics Dashboard Modal (Feature 2) */}
+      {showAnalyticsModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-800">Shop Analytics & Revenue Dashboard</h3>
+                  <p className="text-[11px] text-slate-400">Live order metrics, revenue, and popular print modes</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAnalyticsModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+              >✕</button>
+            </div>
+
+            {loadingAnalytics ? (
+              <div className="py-12 text-center">
+                <RefreshCw className="w-6 h-6 animate-spin text-indigo-600 mx-auto mb-2" />
+                <p className="text-xs text-slate-500 font-semibold">Calculating analytics...</p>
+              </div>
+            ) : analyticsData ? (
+              <div className="space-y-4 text-xs">
+                
+                {/* 4 Summary Stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Today's Revenue</p>
+                    <p className="text-lg font-extrabold text-emerald-600 mt-0.5">৳{parseFloat(analyticsData.today?.today_revenue || 0).toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-500">{analyticsData.today?.today_jobs || 0} orders today</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Revenue</p>
+                    <p className="text-lg font-extrabold text-indigo-600 mt-0.5">৳{parseFloat(analyticsData.overall?.total_revenue || 0).toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-500">{analyticsData.overall?.total_jobs || 0} all-time jobs</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Pages Printed</p>
+                    <p className="text-lg font-extrabold text-slate-800 mt-0.5">{analyticsData.overall?.total_pages || 0}</p>
+                    <p className="text-[10px] text-slate-500">sheets of paper</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Bulk Discounts</p>
+                    <p className="text-lg font-extrabold text-amber-600 mt-0.5">৳{parseFloat(analyticsData.overall?.total_discounts || 0).toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-500">saved by customers</p>
+                  </div>
+                </div>
+
+                {/* Color vs B&W Ratio */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-700 text-xs">Print Mode Breakdown</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {analyticsData.modeBreakdown?.map((m, i) => (
+                      <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-xs capitalize text-slate-800">{m.color_mode === 'color' ? '🎨 Color Print' : '⬛ Black & White'}</p>
+                          <p className="text-[10px] text-slate-400">{m.file_count} files ({m.total_pages} pages)</p>
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-700">{m.total_pages}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Paper Sizes Breakdown */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-700 text-xs">Paper Sizes Distribution</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {analyticsData.paperBreakdown?.map((p, i) => (
+                      <div key={i} className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center gap-2">
+                        <span className="font-bold text-slate-800">{p.paper_size}</span>
+                        <span className="px-1.5 py-0.2 bg-blue-50 text-blue-700 font-extrabold rounded text-[10px]">{p.count} files</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Peak Hours Distribution */}
+                {analyticsData.hourlyStats && analyticsData.hourlyStats.length > 0 && (
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
+                    <h4 className="font-bold text-slate-700 text-xs">Peak Hours (Last 7 Days)</h4>
+                    <div className="grid grid-cols-6 sm:grid-cols-12 gap-1 text-center">
+                      {analyticsData.hourlyStats.map((h, i) => (
+                        <div key={i} className="p-1.5 bg-indigo-50/60 rounded-lg border border-indigo-100">
+                          <p className="text-[9px] text-slate-400 font-mono">{h.hour}:00</p>
+                          <p className="font-extrabold text-xs text-indigo-700">{h.jobs_count}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            ) : null}
+
+            <div className="pt-2 border-t border-slate-100 text-right">
+              <button
+                onClick={() => setShowAnalyticsModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition"
+              >
+                Close
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -1422,7 +1592,28 @@ export default function ShopDashboard({ shop, onLogout }) {
         />
       )}
 
+      {/* Print & Photocopy Shop Counter Tools Suite */}
+      {showToolsModal && (
+        <ShopToolsModal
+          shop={currentShopData || shop}
+          onClose={() => setShowToolsModal(false)}
+        />
+      )}
+
+      {/* Advanced Shop Profile & Business Verification Modal */}
+      {showProfileModal && (
+        <ShopProfileModal
+          shop={currentShopData || shop}
+          onSave={(updatedShop) => {
+            setCurrentShopData(updatedShop);
+            showToast('✓ Shop profile & trade license saved!', 'success');
+          }}
+          onClose={() => setShowProfileModal(false)}
+        />
+      )}
+
     </div>
   );
 }
+
 

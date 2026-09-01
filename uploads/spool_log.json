@@ -1,5 +1,47 @@
 [
   {
+    "mode": "fallback",
+    "file": "file_1788287664042_o5dsn.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 312,
+    "timestamp": "2026-09-01T18:34:46.869Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788287545717_ok7np.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 386,
+    "timestamp": "2026-09-01T18:32:59.996Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788284196248_1fcyj.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 268,
+    "timestamp": "2026-09-01T17:37:04.003Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788284118369_coamf.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 274,
+    "timestamp": "2026-09-01T17:35:53.284Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788284070030_l50wm.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 282,
+    "timestamp": "2026-09-01T17:35:52.267Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788257545251_8kznp.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 294,
+    "timestamp": "2026-09-01T17:32:44.578Z"
+  },
+  {
     "mode": "real",
     "file": "file_1788256059978_yv4oi.jpg",
     "printer": "Microsoft Print to PDF",

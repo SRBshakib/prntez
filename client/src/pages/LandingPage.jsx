@@ -6,6 +6,14 @@ import {
 
 export default function LandingPage({ onNavigate }) {
   const [trackCode, setTrackCode] = useState('');
+  const [recentOrders, setRecentOrders] = useState([]);
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('prntez_customer_orders');
+      if (saved) setRecentOrders(JSON.parse(saved));
+    } catch (_) {}
+  }, []);
 
   const handleTrack = (e) => {
     e.preventDefault();
@@ -190,7 +198,7 @@ export default function LandingPage({ onNavigate }) {
                 type="text"
                 value={trackCode}
                 onChange={(e) => setTrackCode(e.target.value.toUpperCase())}
-                placeholder="e.g. PZ-A1B2C3"
+                placeholder="e.g. 0001"
                 className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono font-bold text-center tracking-wider focus:ring-2 focus:ring-indigo-500 focus:bg-white transition placeholder:text-slate-400 placeholder:font-normal placeholder:tracking-normal"
               />
               <button
@@ -202,6 +210,25 @@ export default function LandingPage({ onNavigate }) {
                 <span>Track</span>
               </button>
             </form>
+
+            {/* Recent Orders List (Feature 5) */}
+            {recentOrders.length > 0 && (
+              <div className="pt-2 text-left border-t border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Your Recent Orders</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {recentOrders.map((o, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => onNavigate('track', o.jobCode)}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded-lg text-xs font-mono font-bold text-slate-700 transition flex items-center gap-1"
+                    >
+                      <span>#{o.jobCode}</span>
+                      <span className="text-[10px] text-slate-400 font-sans">({o.shopName})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>

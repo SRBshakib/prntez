@@ -73,7 +73,7 @@ router.get('/by-slug/:slug', async (req, res) => {
     }
 });
 
-// Update Shop Pricing, Notice, Hours, Payment & Discounts
+// Update Shop Pricing, Notice, Hours, Payment, Discounts & Advanced Profile
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -82,7 +82,8 @@ router.put('/:id', async (req, res) => {
             counter_notice, operating_hours,
             opening_time, closing_time, is_closed,
             bkash_number, nagad_number,
-            discount_min_pages, discount_percent, discount_tier2_pages, discount_tier2_percent
+            discount_min_pages, discount_percent, discount_tier2_pages, discount_tier2_percent,
+            trade_license, trade_license_image, shop_image, tagline, owner_name, alt_phone, nid_number, maps_url, services_offered
         } = req.body;
 
         await query(`
@@ -104,7 +105,16 @@ router.put('/:id', async (req, res) => {
                 discount_min_pages = COALESCE(?, discount_min_pages),
                 discount_percent = COALESCE(?, discount_percent),
                 discount_tier2_pages = COALESCE(?, discount_tier2_pages),
-                discount_tier2_percent = COALESCE(?, discount_tier2_percent)
+                discount_tier2_percent = COALESCE(?, discount_tier2_percent),
+                trade_license = COALESCE(?, trade_license),
+                trade_license_image = COALESCE(?, trade_license_image),
+                shop_image = COALESCE(?, shop_image),
+                tagline = COALESCE(?, tagline),
+                owner_name = COALESCE(?, owner_name),
+                alt_phone = COALESCE(?, alt_phone),
+                nid_number = COALESCE(?, nid_number),
+                maps_url = COALESCE(?, maps_url),
+                services_offered = COALESCE(?, services_offered)
             WHERE id = ?
         `, [
             name || null, phone || null, address || null,
@@ -123,6 +133,15 @@ router.put('/:id', async (req, res) => {
             discount_percent !== undefined ? parseFloat(discount_percent) : null,
             discount_tier2_pages !== undefined ? parseInt(discount_tier2_pages, 10) : null,
             discount_tier2_percent !== undefined ? parseFloat(discount_tier2_percent) : null,
+            trade_license !== undefined ? trade_license : null,
+            trade_license_image !== undefined ? trade_license_image : null,
+            shop_image !== undefined ? shop_image : null,
+            tagline !== undefined ? tagline : null,
+            owner_name !== undefined ? owner_name : null,
+            alt_phone !== undefined ? alt_phone : null,
+            nid_number !== undefined ? nid_number : null,
+            maps_url !== undefined ? maps_url : null,
+            services_offered !== undefined ? services_offered : null,
             id
         ]);
 
