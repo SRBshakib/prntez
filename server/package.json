@@ -1,7 +1,7 @@
 {
-  "name": "printez-server",
+  "name": "prntez-server",
   "version": "2.0.0",
-  "description": "Printez Real-Time High-Performance Backend",
+  "description": "prntez Real-Time High-Performance Backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

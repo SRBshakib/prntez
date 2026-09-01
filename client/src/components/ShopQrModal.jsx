@@ -154,7 +154,7 @@ export default function ShopQrModal({ shop, onClose }) {
       ctx.fillStyle = theme === 'minimal' ? '#000000' : '#ffffff';
       ctx.font = 'bold 36px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('PRINTEZ REAL-TIME PRINT COUNTER', 600, theme === 'minimal' ? 80 : 100);
+      ctx.fillText('PRNTEZ REAL-TIME PRINT COUNTER', 600, theme === 'minimal' ? 80 : 100);
 
       // Main Card Box (White Card in center)
       ctx.shadowColor = 'rgba(0,0,0,0.08)';
@@ -245,7 +245,7 @@ export default function ShopQrModal({ shop, onClose }) {
       // Footer URL / Address
       ctx.fillStyle = textSecondary;
       ctx.font = '20px sans-serif';
-      ctx.fillText(shop.address ? `${shop.address} • Powered by Printez.com` : 'Powered by Printez Cloud Print POS', 600, 1560);
+      ctx.fillText(shop.address ? `${shop.address} • Powered by prntez.com` : 'Powered by prntez Cloud Print POS', 600, 1560);
 
       // Trigger Download with Blob
       posterCanvas.toBlob((blob) => {

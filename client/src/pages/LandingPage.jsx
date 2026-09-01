@@ -97,7 +97,7 @@ export default function LandingPage({ onNavigate }) {
                 <div className="text-[11px] font-bold text-blue-600 uppercase tracking-widest mb-1.5">Step 1</div>
                 <h3 className="text-lg font-bold text-slate-800 mb-2">Scan QR Code</h3>
                 <p className="text-sm text-slate-500 leading-relaxed">
-                  Look for the Printez QR standee at the shop counter. Scan it with your phone camera — it opens instantly.
+                  Look for the prntez QR standee at the shop counter. Scan it with your phone camera — it opens instantly.
                 </p>
               </div>
             </div>
@@ -272,12 +272,12 @@ export default function LandingPage({ onNavigate }) {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
             <Printer className="w-4 h-4 text-blue-600" />
-            <span>Printez</span>
+            <span className="tracking-tight">prntez</span>
             <span className="text-slate-300">·</span>
             <span className="text-xs text-slate-400 font-normal">Real-Time Print Management</span>
           </div>
           <p className="text-[11px] text-slate-400">
-            © {new Date().getFullYear()} Printez. All rights reserved.
+            © {new Date().getFullYear()} prntez. All rights reserved.
           </p>
         </div>
       </footer>

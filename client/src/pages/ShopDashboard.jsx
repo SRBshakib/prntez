@@ -450,9 +450,9 @@ export default function ShopDashboard({ shop, onLogout }) {
         <div className="flex items-center justify-between h-16 max-w-7xl mx-auto">
           
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-blue-600 font-extrabold text-lg">
+            <div className="flex items-center gap-2 text-blue-600 font-extrabold text-lg tracking-tight">
               <Printer className="w-5 h-5" />
-              <span>Printez</span>
+              <span>prntez</span>
             </div>
             <div className="h-5 w-px bg-slate-200 hidden sm:block"></div>
             <div className="font-bold text-slate-800 text-xs hidden sm:block truncate max-w-[160px]">{shop?.name}</div>

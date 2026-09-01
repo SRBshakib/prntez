@@ -135,7 +135,7 @@ export default function AdminDashboard({ onLogout }) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-sm font-extrabold text-slate-800 leading-tight">Printez Admin Central</h1>
+                <h1 className="text-sm font-extrabold text-slate-800 leading-tight">prntez Admin Central</h1>
                 <span className="px-2 py-0.2 bg-indigo-50 text-indigo-700 font-extrabold rounded-full text-[10px] border border-indigo-200">
                   v2.0 PRO
                 </span>
@@ -709,7 +709,7 @@ export default function AdminDashboard({ onLogout }) {
                   <label className="text-[10px] font-bold text-slate-300 block mb-1">Promo / Coupon Code</label>
                   <input
                     type="text"
-                    placeholder="e.g. PRINTEZ20 (optional)"
+                    placeholder="e.g. PRNTEZ20 (optional)"
                     value={settings.brand_coupon_code || ''}
                     onChange={e => setSettings({ ...settings, brand_coupon_code: e.target.value })}
                     className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-mono font-bold placeholder:text-slate-500"
@@ -742,7 +742,7 @@ export default function AdminDashboard({ onLogout }) {
                   <label className="text-[10px] font-bold text-slate-300 block mb-1">Campaign Body Description</label>
                   <input
                     type="text"
-                    placeholder="e.g. Use code PRINTEZ20 on the app to claim your student discount."
+                    placeholder="e.g. Use code PRNTEZ20 on the app to claim your student discount."
                     value={settings.brand_description || ''}
                     onChange={e => setSettings({ ...settings, brand_description: e.target.value })}
                     className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-500"
@@ -764,7 +764,7 @@ export default function AdminDashboard({ onLogout }) {
                   <label className="text-[10px] font-bold text-slate-300 block mb-1">Target Landing Page URL</label>
                   <input
                     type="url"
-                    placeholder="https://sponsorbrand.com/offer?ref=printez"
+                    placeholder="https://sponsorbrand.com/offer?ref=prntez"
                     value={settings.brand_target_url || ''}
                     onChange={e => setSettings({ ...settings, brand_target_url: e.target.value })}
                     className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-500 font-mono"
@@ -891,7 +891,7 @@ export default function AdminDashboard({ onLogout }) {
               <label className="font-bold text-slate-700 block mb-1">Platform Brand Name</label>
               <input
                 type="text"
-                value={settings.platform_name || 'Printez'}
+                value={settings.platform_name || 'prntez'}
                 onChange={e => setSettings({ ...settings, platform_name: e.target.value })}
                 className="w-full max-w-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold"
               />

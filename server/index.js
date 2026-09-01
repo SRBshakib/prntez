@@ -66,7 +66,7 @@ app.get('/api/announcements', async (req, res) => {
                 brandName: ads.brand_name || 'Brand Partner',
                 badge: ads.brand_badge || '⭐ SPONSOR',
                 headline: ads.brand_headline || 'Special Student & Customer Discount',
-                description: ads.brand_description || 'Exclusive offer for Printez users.',
+                description: ads.brand_description || 'Exclusive offer for prntez users.',
                 couponCode: ads.brand_coupon_code || '',
                 imageUrl: ads.brand_image_url || '',
                 ctaText: ads.brand_cta_text || 'Claim Offer →',
@@ -168,7 +168,7 @@ process.on('unhandledRejection', (reason) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log('===============================================================');
-    console.log('            PRINTEZ 2.0 REAL-TIME SERVER RUNNING               ');
+    console.log('            PRNTEZ 2.0 REAL-TIME SERVER RUNNING               ');
     console.log('===============================================================');
     console.log(`[✓] REST API & WebSocket Server: http://localhost:${PORT}`);
     console.log(`[✓] Real-Time Engine           : Socket.io Active (< 10ms)`);

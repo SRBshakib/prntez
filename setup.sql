@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS `settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT IGNORE INTO `settings` (`key`, `value`) VALUES
-('platform_name', 'Printez'),
+('platform_name', 'prntez'),
 ('file_expiry_minutes', '30'),
 ('max_file_size_mb', '50'),
 ('max_files_per_job', '10'),
@@ -125,7 +125,7 @@ INSERT IGNORE INTO `settings` (`key`, `value`) VALUES
 ('delete_on_print', '1'),
 ('adsense_code', ''),
 ('ads_enabled', '1'),
-('admin_password', 'admin@printez2026'),
+('admin_password', 'admin@prntez2026'),
 ('maintenance_mode', '0'),
 ('shop_approval', 'auto');
 

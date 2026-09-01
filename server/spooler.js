@@ -4,7 +4,7 @@ const os = require('os');
 const { exec, spawn } = require('child_process');
 
 const SUMATRA_PATH = path.join(__dirname, '..', 'tools', 'SumatraPDF.exe');
-const TEMP_DIR = path.join(os.tmpdir(), 'printez_spool');
+const TEMP_DIR = path.join(os.tmpdir(), 'prntez_spool');
 const SPOOL_LOG_PATH = path.join(__dirname, '..', 'uploads', 'spool_log.json');
 
 if (!fs.existsSync(TEMP_DIR)) {

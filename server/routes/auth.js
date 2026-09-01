@@ -106,7 +106,7 @@ router.post('/admin-login', async (req, res) => {
         const settings = await query("SELECT `value` FROM settings WHERE `key` = 'admin_password'");
         const adminPass = settings.length > 0 ? settings[0].value : 'admin@printshare2026';
 
-        const validPasswords = ['admin@printshare2026', 'admin@printez2026', adminPass];
+        const validPasswords = ['admin@prntez2026', 'admin@printez2026', adminPass];
         if (username === 'admin' && validPasswords.includes(password)) {
             return res.json({ success: true, admin: { username: 'admin', role: 'superadmin' } });
         }

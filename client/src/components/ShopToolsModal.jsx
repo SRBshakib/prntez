@@ -596,7 +596,7 @@ export default function ShopToolsModal({ shop, onClose }) {
                     <span className="px-2.5 py-0.5 bg-amber-400 text-slate-950 font-extrabold text-[10px] rounded-full uppercase tracking-wider">
                       🚀 In Development
                     </span>
-                    <span className="text-xs font-extrabold text-indigo-200">Printez Counter PDF Engine</span>
+                    <span className="text-xs font-extrabold text-indigo-200">prntez Counter PDF Engine</span>
                   </div>
                   <h3 className="text-base font-extrabold text-white">Browser-Based PDF Utility Suite</h3>
                   <p className="text-xs text-slate-300">
@@ -723,7 +723,7 @@ export default function ShopToolsModal({ shop, onClose }) {
                     <span className="px-2.5 py-0.5 bg-amber-400 text-slate-950 font-extrabold text-[10px] rounded-full uppercase tracking-wider">
                       ✨ AI Photo Studio
                     </span>
-                    <span className="text-xs font-extrabold text-purple-200">Printez Image & Passport Tools</span>
+                    <span className="text-xs font-extrabold text-purple-200">prntez Image & Passport Tools</span>
                   </div>
                   <h3 className="text-base font-extrabold text-white">Counter Photo Studio & ID Enhancer</h3>
                   <p className="text-xs text-slate-300">

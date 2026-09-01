@@ -81,7 +81,7 @@ async function migrate() {
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_customer_link', '')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_customer_enabled', '1')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_badge', '📢 SUPPLIES')");
-    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_text', 'Wholesale A4 Paper & Ink Cartridges at special partner rates. Contact Printez Network.')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_text', 'Wholesale A4 Paper & Ink Cartridges at special partner rates. Contact prntez Network.')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_link', '')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_enabled', '1')");
 

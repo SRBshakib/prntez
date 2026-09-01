@@ -89,10 +89,10 @@ export default function App() {
           <div className="max-w-5xl mx-auto flex items-center justify-between h-16">
             <div
               onClick={() => setView('home')}
-              className="flex items-center gap-2 text-blue-600 font-extrabold text-xl cursor-pointer select-none"
+              className="flex items-center gap-2 text-blue-600 font-extrabold text-xl cursor-pointer select-none tracking-tight"
             >
               <Printer className="w-6 h-6" />
-              <span>Printez</span>
+              <span>prntez</span>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
