@@ -1,0 +1,76 @@
+[
+  {
+    "mode": "real",
+    "file": "file_1788256059978_yv4oi.jpg",
+    "printer": "Microsoft Print to PDF",
+    "copies": 1,
+    "color": "monochrome",
+    "sides": "simplex",
+    "elapsedMs": 10169,
+    "timestamp": "2026-09-01T09:51:21.680Z"
+  },
+  {
+    "mode": "real_timeout",
+    "file": "file_1788256059978_yv4oi.jpg",
+    "printer": "Microsoft Print to PDF",
+    "copies": 1,
+    "color": "monochrome",
+    "sides": "simplex",
+    "elapsedMs": 10134,
+    "timestamp": "2026-09-01T09:51:21.678Z"
+  },
+  {
+    "mode": "real",
+    "file": "file_1788255745800_w7iez.pdf",
+    "printer": "Microsoft Print to PDF",
+    "copies": 1,
+    "color": "monochrome",
+    "sides": "simplex",
+    "elapsedMs": 10035,
+    "timestamp": "2026-09-01T09:42:51.091Z"
+  },
+  {
+    "mode": "real_timeout",
+    "file": "file_1788255745800_w7iez.pdf",
+    "printer": "Microsoft Print to PDF",
+    "copies": 1,
+    "color": "monochrome",
+    "sides": "simplex",
+    "elapsedMs": 10009,
+    "timestamp": "2026-09-01T09:42:51.065Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788255156213_tz8o3.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 320,
+    "timestamp": "2026-09-01T09:41:02.334Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788255544276_0zgmm.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 340,
+    "timestamp": "2026-09-01T09:40:49.591Z"
+  },
+  {
+    "mode": "real",
+    "file": "file_1788254546606_ya5j5.pdf",
+    "printer": "Microsoft Print to PDF",
+    "copies": 1,
+    "color": "color",
+    "sides": "simplex",
+    "elapsedMs": 10038,
+    "timestamp": "2026-09-01T09:23:35.336Z"
+  },
+  {
+    "mode": "real_timeout",
+    "file": "file_1788254546606_ya5j5.pdf",
+    "printer": "Microsoft Print to PDF",
+    "copies": 1,
+    "color": "color",
+    "sides": "simplex",
+    "elapsedMs": 10017,
+    "timestamp": "2026-09-01T09:23:35.315Z"
+  }
+]

@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased selection:bg-blue-600 selection:text-white;
+  }
+}
+
+/* Print CSS Rules for 0-Margin, Clean Direct Printing */
+@media print {
+  @page {
+    margin: 0 !important;
+    size: auto;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #direct-print-area, #direct-print-area * {
+    visibility: visible;
+  }
+
+  #direct-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
