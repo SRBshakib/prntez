@@ -1,6 +1,27 @@
 [
   {
     "mode": "fallback",
+    "file": "file_1788288997720_3xb1z.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 265,
+    "timestamp": "2026-09-01T18:56:38.282Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788288956723_qdj85.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 278,
+    "timestamp": "2026-09-01T18:55:57.450Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1788288816671_p8vvu.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 280,
+    "timestamp": "2026-09-01T18:53:55.824Z"
+  },
+  {
+    "mode": "fallback",
     "file": "file_1788287664042_o5dsn.pdf",
     "printer": "Microsoft Print to PDF",
     "elapsedMs": 312,
