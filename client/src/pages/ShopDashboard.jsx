@@ -342,9 +342,6 @@ export default function ShopDashboard({ shop, onLogout }) {
   // 3. Print Actions (Browser Dialog Ctrl+P vs Hardware Spooler)
   const handleBrowserPrint = (file, job) => {
     if (!file) return;
-    if (job && job.status === 'pending') {
-      updateJobStatus(job.id, 'printing');
-    }
 
     const fileUrl = `/api/jobs/serve/${file.id}`;
     showToast(`🖨️ Opening print dialog for ${file.original_name}...`, 'info');
@@ -363,9 +360,16 @@ export default function ShopDashboard({ shop, onLogout }) {
       try {
         printFrame.contentWindow.focus();
         printFrame.contentWindow.print();
+        // Automatically mark done upon sending to printer
+        if (job?.id && job.status !== 'done') {
+          updateJobStatus(job.id, 'done');
+        }
       } catch (_) {
         // Fallback: open in new tab so user can use Ctrl + P directly
         window.open(fileUrl, '_blank');
+        if (job?.id && job.status !== 'done') {
+          updateJobStatus(job.id, 'done');
+        }
       }
     };
   };
@@ -377,10 +381,6 @@ export default function ShopDashboard({ shop, onLogout }) {
     if (printMode === 'browser') {
       handleBrowserPrint(file, job);
       return;
-    }
-
-    if (job && job.status === 'pending') {
-      updateJobStatus(job.id, 'printing');
     }
 
     try {
@@ -404,6 +404,10 @@ export default function ShopDashboard({ shop, onLogout }) {
           ? `✅ Simulated: ${file.original_name} (${file.copies || 1}x, ${file.color_mode || 'bw'})`
           : `✅ Spooled in ${data.spoolTimeMs}ms → ${data.printer}`;
         showToast(label, 'success');
+        // Automatically mark done upon spooling!
+        if (job?.id && job.status !== 'done') {
+          await updateJobStatus(job.id, 'done');
+        }
         fetchSpoolLog();
         return;
       }
@@ -418,6 +422,9 @@ export default function ShopDashboard({ shop, onLogout }) {
   const handlePrintAll = (job) => {
     if (!job || !job.files || job.files.length === 0) return;
     job.files.forEach(f => handleQuickPrint(f, job));
+    if (job.id && job.status !== 'done') {
+      updateJobStatus(job.id, 'done');
+    }
   };
 
   // Batch action: Print ALL pending jobs
@@ -449,7 +456,7 @@ export default function ShopDashboard({ shop, onLogout }) {
           setPointsBalance(data.points_balance);
         }
         const ptsMsg = data.points_awarded > 0 ? ` (+${data.points_awarded} pts ⭐)` : '';
-        showToast(`✓ Order #${j?.job_code || ''} marked DONE${ptsMsg}`, 'success');
+        showToast(`✓ Order #${j?.job_code || ''} printed & marked DONE!${ptsMsg}`, 'success');
       } else if (!data.success) {
         showToast(data.error || 'Failed to update status', 'error');
       }
