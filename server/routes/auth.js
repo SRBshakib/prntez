@@ -33,6 +33,8 @@ router.post('/shop-login', async (req, res) => {
             price_color: shop.price_color || 10.00,
             price_legal: shop.price_legal || 3.00,
             price_a3: shop.price_a3 || 15.00,
+            points_balance: shop.points_balance || 0,
+            lifetime_points: shop.lifetime_points || 0,
             status: shop.status
         };
 
@@ -85,6 +87,8 @@ router.post('/shop-register', async (req, res) => {
             qr_slug: qrSlug,
             price_bw: bwPrice,
             price_color: colorPrice,
+            points_balance: 0,
+            lifetime_points: 0,
             status: 'active'
         };
 

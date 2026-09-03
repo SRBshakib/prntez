@@ -40,6 +40,28 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+// Public Platform Stats (unauthenticated — aggregate counts only, no PII)
+app.get('/api/public-stats', async (req, res) => {
+    try {
+        const { query } = require('./db');
+        const [shopsRow] = await query("SELECT COUNT(*) as total FROM shops WHERE status = 'active'");
+        const [customersRow] = await query("SELECT COUNT(*) as total FROM customers");
+        const [jobsRow] = await query("SELECT COUNT(*) as total, COALESCE(SUM(total_pages), 0) as pages FROM print_jobs WHERE status = 'done'");
+        res.json({
+            success: true,
+            stats: {
+                shops: shopsRow?.total || 0,
+                customers: customersRow?.total || 0,
+                jobsCompleted: jobsRow?.total || 0,
+                pagesPrinted: parseInt(jobsRow?.pages || 0)
+            }
+        });
+    } catch (err) {
+        console.error('Public stats error:', err);
+        res.json({ success: true, stats: { shops: 0, customers: 0, jobsCompleted: 0, pagesPrinted: 0 } });
+    }
+});
+
 // Public Announcements & Brand Collab Ads (for customer, track, & shop headers)
 app.get('/api/announcements', async (req, res) => {
     try {

@@ -3,7 +3,8 @@ import {
   ShieldCheck, Users, Printer, DollarSign, Settings, Store, RefreshCw,
   KeyRound, LogOut, Check, Search, AlertCircle, Megaphone, Sparkles, ExternalLink,
   QrCode, BarChart3, TrendingUp, Layers, Ban, CheckCircle, Percent, Clock,
-  FileText, Shield, Globe, Award, Zap, Phone, MessageCircle, AlertTriangle
+  FileText, Shield, Globe, Award, Zap, Phone, MessageCircle, AlertTriangle,
+  Eye, Image as ImageIcon, X
 } from 'lucide-react';
 import ShopQrModal from '../components/ShopQrModal';
 
@@ -18,6 +19,7 @@ export default function AdminDashboard({ onLogout }) {
   const [searchShop, setSearchShop] = useState('');
   const [shopFilterStatus, setShopFilterStatus] = useState('all');
   const [selectedShopForQr, setSelectedShopForQr] = useState(null);
+  const [selectedShopForDetails, setSelectedShopForDetails] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
   const showToast = (msg) => {
@@ -199,44 +201,48 @@ export default function AdminDashboard({ onLogout }) {
           <div className="space-y-5 animate-in fade-in duration-150">
             {/* 4 Core Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {/* Card 1: Platform Monetization (Real Platform Revenue Model) */}
+              <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-4 sm:p-5 rounded-2xl border border-indigo-700/50 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-wider">Platform Monetization</p>
+                  <h3 className="text-xl font-extrabold text-white mt-1">Ads & Sponsors</h3>
+                  <p className="text-[10px] text-indigo-200 mt-1">Google AdSense + Brand Promos</p>
+                </div>
+                <div className="p-3 bg-white/10 text-amber-300 rounded-2xl">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+              </div>
+
+              {/* Card 2: Total Shop Counter GMV */}
               <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Platform Revenue</p>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Shop Earnings</p>
                   <h3 className="text-2xl font-extrabold text-slate-900 mt-1">৳{parseFloat(stats.total_revenue || 0).toFixed(2)}</h3>
-                  <p className="text-[10px] text-emerald-600 font-bold mt-1">Across all completed orders</p>
+                  <p className="text-[10px] text-emerald-600 font-bold mt-1">Shop counters income (GMV)</p>
                 </div>
                 <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
                   <DollarSign className="w-6 h-6" />
                 </div>
               </div>
 
+              {/* Card 3: Today's Shop Counter Volume */}
               <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Today's Shop Income</p>
                   <h3 className="text-2xl font-extrabold text-indigo-600 mt-1">৳{parseFloat(stats.today_revenue || 0).toFixed(2)}</h3>
-                  <p className="text-[10px] text-indigo-600 font-bold mt-1">{stats.today_jobs} orders today</p>
+                  <p className="text-[10px] text-indigo-600 font-bold mt-1">{stats.today_jobs} orders completed</p>
                 </div>
                 <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
                   <TrendingUp className="w-6 h-6" />
                 </div>
               </div>
 
+              {/* Card 4: Network Size */}
               <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Print Jobs</p>
-                  <h3 className="text-2xl font-extrabold text-slate-900 mt-1">{stats.total_jobs}</h3>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1">{stats.done_jobs} successfully printed</p>
-                </div>
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
-                  <Printer className="w-6 h-6" />
-                </div>
-              </div>
-
-              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Registered Shops</p>
-                  <h3 className="text-2xl font-extrabold text-slate-800 mt-1">{stats.total_shops}</h3>
-                  <p className="text-[10px] text-emerald-600 font-bold mt-1">{stats.active_shops} actively receiving</p>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Platform Network</p>
+                  <h3 className="text-2xl font-extrabold text-slate-800 mt-1">{stats.total_shops} Shops</h3>
+                  <p className="text-[10px] text-slate-500 font-bold mt-1">{stats.total_jobs} total print jobs</p>
                 </div>
                 <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
                   <Store className="w-6 h-6" />
@@ -248,8 +254,8 @@ export default function AdminDashboard({ onLogout }) {
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-extrabold text-slate-800">7-Day Revenue & Order Volume</h3>
-                  <p className="text-[11px] text-slate-400">Daily gross print spending across the network</p>
+                  <h3 className="text-sm font-extrabold text-slate-800">7-Day Shop Counter Printing Volume</h3>
+                  <p className="text-[11px] text-slate-400">Total customer printing spend going directly to shop counters (Platform earns via Ads & Sponsorships)</p>
                 </div>
                 <span className="text-xs font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                   Live Sync
@@ -495,6 +501,13 @@ export default function AdminDashboard({ onLogout }) {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSelectedShopForDetails(s)}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] inline-flex items-center gap-1 transition"
+                            title="View Trade License, NID, Verification & Shop Profile"
+                          >
+                            <Eye className="w-3 h-3" /> Details
+                          </button>
                           <button
                             onClick={() => handleToggleShopStatus(s.id, s.status)}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
@@ -926,6 +939,201 @@ export default function AdminDashboard({ onLogout }) {
           shop={selectedShopForQr}
           onClose={() => setSelectedShopForQr(null)}
         />
+      )}
+
+      {/* Selected Shop Full Verification & Details Modal */}
+      {selectedShopForDetails && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-xs z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Store className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                    {selectedShopForDetails.name}
+                    {selectedShopForDetails.is_verified ? (
+                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-extrabold rounded-full border border-emerald-200 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Verified Shop
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-extrabold rounded-full border border-amber-200">
+                        Unverified
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-400">QR Slug: <span className="font-mono font-bold text-indigo-600">/{selectedShopForDetails.qr_slug}</span> · ID #{selectedShopForDetails.id}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedShopForDetails(null)}
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 text-xs text-slate-700">
+              {/* Business & Legal Credentials */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  Legal & Verification Documents
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">Trade License Number</span>
+                    <p className="font-bold text-slate-800 text-xs mt-0.5">
+                      {selectedShopForDetails.trade_license || <span className="text-slate-400 font-normal italic">Not provided</span>}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">Owner NID / National ID</span>
+                    <p className="font-bold text-slate-800 text-xs mt-0.5">
+                      {selectedShopForDetails.nid_number || <span className="text-slate-400 font-normal italic">Not provided</span>}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Trade License Document Image */}
+                <div className="pt-2 border-t border-slate-200/60">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase mb-1.5">Trade License Document Photo</span>
+                  {selectedShopForDetails.trade_license_image ? (
+                    <div className="relative group rounded-xl overflow-hidden border border-slate-300 max-h-56 bg-slate-100 flex items-center justify-center">
+                      <img
+                        src={selectedShopForDetails.trade_license_image}
+                        alt="Trade License"
+                        className="object-contain max-h-56 w-full"
+                      />
+                      <a
+                        href={selectedShopForDetails.trade_license_image}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="absolute bottom-2 right-2 bg-slate-900/80 hover:bg-slate-900 text-white px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow"
+                      >
+                        <ExternalLink className="w-3 h-3" /> View Full Image
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-white rounded-xl border border-dashed border-slate-300 text-center text-slate-400">
+                      No Trade License image uploaded yet by this shopkeeper.
+                    </div>
+                  )}
+                </div>
+
+                {/* Shop Counter / Storefront Image */}
+                <div className="pt-2 border-t border-slate-200/60">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase mb-1.5">Storefront / Counter Image</span>
+                  {selectedShopForDetails.shop_image ? (
+                    <div className="relative group rounded-xl overflow-hidden border border-slate-300 max-h-56 bg-slate-100 flex items-center justify-center">
+                      <img
+                        src={selectedShopForDetails.shop_image}
+                        alt="Storefront"
+                        className="object-contain max-h-56 w-full"
+                      />
+                      <a
+                        href={selectedShopForDetails.shop_image}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="absolute bottom-2 right-2 bg-slate-900/80 hover:bg-slate-900 text-white px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow"
+                      >
+                        <ExternalLink className="w-3 h-3" /> View Full Image
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-white rounded-xl border border-dashed border-slate-300 text-center text-slate-400">
+                      No Storefront image uploaded yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Owner & Contact Information */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
+                  <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    Owner & Contacts
+                  </h4>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">Owner Full Name</span>
+                    <p className="font-bold text-slate-800">{selectedShopForDetails.owner_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">Primary Email</span>
+                    <p className="font-bold text-slate-800">{selectedShopForDetails.email}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">Phone Numbers</span>
+                    <p className="font-bold text-slate-800">{selectedShopForDetails.phone || 'N/A'} {selectedShopForDetails.alt_phone ? `· ${selectedShopForDetails.alt_phone}` : ''}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">Shop Address</span>
+                    <p className="font-semibold text-slate-700">{selectedShopForDetails.address || 'N/A'}</p>
+                  </div>
+                  {selectedShopForDetails.maps_url && (
+                    <a
+                      href={selectedShopForDetails.maps_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 hover:underline font-bold text-[11px] pt-1"
+                    >
+                      <Globe className="w-3 h-3" /> Open in Google Maps
+                    </a>
+                  )}
+                </div>
+
+                {/* Rates & MFS Numbers */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
+                  <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                    Rates & Counter Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 block">B&W Rate</span>
+                      <p className="font-extrabold text-slate-900">৳{selectedShopForDetails.price_bw || '2.00'}</p>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 block">Color Rate</span>
+                      <p className="font-extrabold text-indigo-600">৳{selectedShopForDetails.price_color || '10.00'}</p>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 block">Legal / A3</span>
+                      <p className="font-bold text-slate-800">৳{selectedShopForDetails.price_legal || '3.00'} / ৳{selectedShopForDetails.price_a3 || '15.00'}</p>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 block">Hours</span>
+                      <p className="font-bold text-slate-800">{selectedShopForDetails.opening_time || '08:00'} - {selectedShopForDetails.closing_time || '22:00'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">bKash Number</span>
+                    <p className="font-bold text-slate-800">{selectedShopForDetails.bkash_number || <span className="text-slate-400 italic">Not set</span>}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">Nagad Number</span>
+                    <p className="font-bold text-slate-800">{selectedShopForDetails.nagad_number || <span className="text-slate-400 italic">Not set</span>}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Created: {new Date(selectedShopForDetails.created_at).toLocaleDateString()}</span>
+              <button
+                onClick={() => setSelectedShopForDetails(null)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Printer, QrCode, Download, Trash2, CheckCircle2, Clock, Zap,
+  Printer, QrCode, Download, Trash2, CheckCircle2, Clock, Zap, Star,
   Eye, RefreshCw, Search, ArrowUpRight, LogOut, ChevronDown, ChevronUp,
   FileText, Image as ImageIcon, Volume2, VolumeX, Store, Check, AlertCircle, X,
   Command, Sparkles, Play, Layers, Copy, BarChart3, TrendingUp, MessageCircle,
@@ -13,6 +13,7 @@ import GoogleAdSense from '../components/GoogleAdSense';
 import ShopQrModal from '../components/ShopQrModal';
 import ShopToolsModal from '../components/ShopToolsModal';
 import ShopProfileModal from '../components/ShopProfileModal';
+import ShopPointsModal from '../components/ShopPointsModal';
 
 export default function ShopDashboard({ shop, onLogout }) {
   const [jobs, setJobs] = useState([]);
@@ -25,6 +26,10 @@ export default function ShopDashboard({ shop, onLogout }) {
   // Real-time & Spooler State
   const [wsConnected, setWsConnected] = useState(socket.connected);
   const [autoPrint, setAutoPrint] = useState(false);
+  // Print Mode: 'browser' (Manual Ctrl+P dialog - Default) | 'spool' (Direct silent hardware spool)
+  const [printMode, setPrintMode] = useState(() => {
+    return localStorage.getItem('prntez_print_mode') || 'browser';
+  });
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [bridgeConnected, setBridgeConnected] = useState(false);
   const [defaultPrinter, setDefaultPrinter] = useState('');
@@ -37,6 +42,8 @@ export default function ShopDashboard({ shop, onLogout }) {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showPointsModal, setShowPointsModal] = useState(false);
+  const [pointsBalance, setPointsBalance] = useState(() => shop?.points_balance || 0);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
@@ -66,6 +73,16 @@ export default function ShopDashboard({ shop, onLogout }) {
     fetchJobs();
     checkHardwareBridge();
     const bridgeInterval = setInterval(checkHardwareBridge, 10000);
+
+    // Initial Fetch for Shop Points
+    fetch(`/api/shops/${shop.id}/points`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.points_balance !== undefined) {
+          setPointsBalance(data.points_balance);
+        }
+      })
+      .catch(() => {});
 
     // Fetch Shop Partner Ads & AdSense
     fetch('/api/announcements')
@@ -100,13 +117,29 @@ export default function ShopDashboard({ shop, onLogout }) {
     };
 
     const onJobUpdated = (update) => {
-      setJobs(prev => prev.map(j => (j.id === update.id ? { ...j, ...update } : j)));
+      setJobs(prev => prev.map(j => (j.id === update.id ? {
+        ...j,
+        ...update,
+        files_deleted: update.files_deleted !== undefined ? update.files_deleted : (update.status === 'done' ? 1 : j.files_deleted),
+        files: (update.files_deleted === 1 || update.status === 'done') ? [] : j.files
+      } : j)));
+    };
+
+    const onPointsAwarded = (data) => {
+      if (data?.points_balance !== undefined) {
+        setPointsBalance(data.points_balance);
+      } else if (data?.points) {
+        setPointsBalance(prev => prev + data.points);
+      }
+      if (audioEnabled) playChime();
+      showToast(`⭐ +${data.points} Points Earned! (Total: ${data.points_balance ?? ''} pts)`, 'success');
     };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('new_job', onNewJob);
     socket.on('job_updated', onJobUpdated);
+    socket.on('points_awarded', onPointsAwarded);
 
     return () => {
       clearInterval(bridgeInterval);
@@ -114,6 +147,7 @@ export default function ShopDashboard({ shop, onLogout }) {
       socket.off('disconnect', onDisconnect);
       socket.off('new_job', onNewJob);
       socket.off('job_updated', onJobUpdated);
+      socket.off('points_awarded', onPointsAwarded);
     };
   }, [shop?.id, autoPrint, audioEnabled]);
 
@@ -305,9 +339,53 @@ export default function ShopDashboard({ shop, onLogout }) {
     }
   };
 
-  // 3. Print Actions (Node.js Spooler + Simulate Mode)
+  // 3. Print Actions (Browser Dialog Ctrl+P vs Hardware Spooler)
+  const handleBrowserPrint = (file, job) => {
+    if (!file) return;
+    if (job && job.status === 'pending') {
+      updateJobStatus(job.id, 'printing');
+    }
+
+    const fileUrl = `/api/jobs/serve/${file.id}`;
+    showToast(`🖨️ Opening print dialog for ${file.original_name}...`, 'info');
+
+    // Create or reuse hidden iframe to invoke native browser print dialog (Ctrl + P)
+    let printFrame = document.getElementById('direct-print-iframe');
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'direct-print-iframe';
+      printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      document.body.appendChild(printFrame);
+    }
+    
+    printFrame.src = fileUrl;
+    printFrame.onload = () => {
+      try {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+        if (job?.id) {
+          // Immediately delete file and mark job done
+          setTimeout(() => updateJobStatus(job.id, 'done'), 400);
+        }
+      } catch (_) {
+        // Fallback: open in new tab so user can use Ctrl + P directly
+        window.open(fileUrl, '_blank');
+        if (job?.id) {
+          // Grace timeout to ensure tab loads stream, then purge file immediately
+          setTimeout(() => updateJobStatus(job.id, 'done'), 2500);
+        }
+      }
+    };
+  };
+
   const handleQuickPrint = async (file, job) => {
     if (!file) return;
+
+    // If printMode is set to manual/browser (Default), use the browser print dialog
+    if (printMode === 'browser') {
+      handleBrowserPrint(file, job);
+      return;
+    }
 
     if (job && job.status === 'pending') {
       updateJobStatus(job.id, 'printing');
@@ -332,9 +410,11 @@ export default function ShopDashboard({ shop, onLogout }) {
       if (data.success) {
         const label = data.simulated
           ? `✅ Simulated: ${file.original_name} (${file.copies || 1}x, ${file.color_mode || 'bw'})`
-          : `✅ Spooled in ${data.spoolTimeMs}ms → ${data.printer}`;
+          : `✅ Spooled in ${data.spoolTimeMs}ms → ${data.printer} (File Deleted)`;
         showToast(label, 'success');
-        if (job?.id) updateJobStatus(job.id, 'done');
+        if (job?.id) {
+          await updateJobStatus(job.id, 'done');
+        }
         fetchSpoolLog();
         return;
       }
@@ -342,45 +422,43 @@ export default function ShopDashboard({ shop, onLogout }) {
       console.warn('Spooler error, falling back to browser print:', e);
     }
 
-    // Fallback: silent print iframe
-    let printFrame = document.getElementById('direct-print-iframe');
-    if (!printFrame) {
-      printFrame = document.createElement('iframe');
-      printFrame.id = 'direct-print-iframe';
-      printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-      document.body.appendChild(printFrame);
-    }
-    printFrame.src = `/api/jobs/serve/${file.id}`;
-    printFrame.onload = () => {
-      try {
-        printFrame.contentWindow.focus();
-        printFrame.contentWindow.print();
-      } catch (_) {
-        setActivePreview({ file, job });
-      }
-    };
+    // Fallback: browser print
+    handleBrowserPrint(file, job);
   };
 
-  const handlePrintAll = (job) => {
+  const handlePrintAll = async (job) => {
     if (!job || !job.files || job.files.length === 0) return;
-    job.files.forEach(f => handleQuickPrint(f, job));
+    showToast(`⚡ Printing all ${job.files.length} file(s) for Order #${job.job_code}...`, 'info');
+    for (const f of job.files) {
+      await handleQuickPrint(f, job);
+    }
+    if (job.id) {
+      await updateJobStatus(job.id, 'done');
+    }
   };
 
   // Batch action: Print ALL pending jobs
-  const handlePrintAllPending = () => {
+  const handlePrintAllPending = async () => {
     const pendingJobs = jobs.filter(j => j.status === 'pending');
     if (pendingJobs.length === 0) {
       showToast('No pending jobs to print.', 'info');
       return;
     }
     showToast(`⚡ Printing all ${pendingJobs.length} pending orders...`, 'info');
-    pendingJobs.forEach(j => handlePrintAll(j));
+    for (const j of pendingJobs) {
+      await handlePrintAll(j);
+    }
   };
 
   // 5. Update Job Status
   const updateJobStatus = async (jobId, newStatus) => {
     try {
-      setJobs(prev => prev.map(j => (j.id === jobId ? { ...j, status: newStatus } : j)));
+      setJobs(prev => prev.map(j => (j.id === jobId ? {
+        ...j,
+        status: newStatus,
+        files_deleted: newStatus === 'done' ? 1 : j.files_deleted,
+        files: newStatus === 'done' ? [] : j.files
+      } : j)));
 
       const res = await fetch('/api/jobs/status', {
         method: 'POST',
@@ -391,10 +469,16 @@ export default function ShopDashboard({ shop, onLogout }) {
 
       if (data.success && newStatus === 'done') {
         const j = jobs.find(x => x.id === jobId);
-        if (j && autoDeleteLocal) deleteFromLocalFolder(j);
-        showToast(`✓ Order #${j?.job_code} marked DONE & files cleaned.`, 'success');
+        if (data.points_balance !== undefined) {
+          setPointsBalance(data.points_balance);
+        }
+        const ptsMsg = data.points_awarded > 0 ? ` (+${data.points_awarded} pts ⭐)` : '';
+        showToast(`✓ Order #${j?.job_code || ''} printed & file deleted immediately!${ptsMsg}`, 'success');
+      } else if (!data.success) {
+        showToast(data.error || 'Failed to update status', 'error');
       }
-    } catch (_) {
+    } catch (err) {
+      console.error('Update status error:', err);
       showToast('Failed to update status', 'error');
     }
   };
@@ -402,11 +486,16 @@ export default function ShopDashboard({ shop, onLogout }) {
   const deleteJobFiles = async (job) => {
     if (!window.confirm(`Purge all files for Order #${job.job_code}?`)) return;
     try {
-      await fetch(`/api/jobs/${job.id}/files`, { method: 'DELETE' });
-      setJobs(prev => prev.map(j => (j.id === job.id ? { ...j, files_deleted: 1, files: [] } : j)));
-      deleteFromLocalFolder(job);
-      showToast('Files purged.', 'success');
-    } catch (_) {
+      const res = await fetch(`/api/jobs/${job.id}/files`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setJobs(prev => prev.map(j => (j.id === job.id ? { ...j, files_deleted: 1, files: [] } : j)));
+        showToast('Files purged.', 'success');
+      } else {
+        showToast(data.error || 'Failed to delete files', 'error');
+      }
+    } catch (err) {
+      console.error('Delete files error:', err);
       showToast('Failed to delete files', 'error');
     }
   };
@@ -481,105 +570,130 @@ export default function ShopDashboard({ shop, onLogout }) {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            
-            {/* Shop Tools Suite Button */}
+
+            {/* Print Hardware & Mode Controls (Grouped Pill) */}
+            <div className="hidden md:flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 gap-1">
+              {/* Spool / Simulate Mode */}
+              <button
+                onClick={() => { setShowSpoolLog(s => !s); fetchSpoolLog(); }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition ${
+                  isSimulating
+                    ? 'bg-amber-100/90 text-amber-900 border border-amber-300 shadow-xs'
+                    : bridgeConnected
+                      ? 'bg-emerald-100/90 text-emerald-900 border border-emerald-300 shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+                title="Click to view Print Spool Log"
+              >
+                <span className={`w-2 h-2 rounded-full ${
+                  isSimulating ? 'bg-amber-500 animate-pulse' :
+                  bridgeConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                }`}></span>
+                <span className="max-w-[110px] truncate">{
+                  isSimulating ? 'Simulate' :
+                  bridgeConnected ? defaultPrinter :
+                  'No Printer'
+                }</span>
+              </button>
+
+              {/* Print Dialog Mode Toggle */}
+              <button
+                onClick={() => {
+                  const nextMode = printMode === 'browser' ? 'spool' : 'browser';
+                  setPrintMode(nextMode);
+                  localStorage.setItem('prntez_print_mode', nextMode);
+                  showToast(
+                    nextMode === 'browser'
+                      ? '🖨️ Mode: Browser Print Dialog (Ctrl+P)'
+                      : '⚡ Mode: Silent Hardware Spool (Direct to Printer)',
+                    'success'
+                  );
+                }}
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
+                  printMode === 'browser'
+                    ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
+                    : 'bg-indigo-600 text-white shadow-xs'
+                }`}
+                title="Toggle between Manual Print Dialog (Ctrl+P) and Silent Hardware Spool"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{printMode === 'browser' ? 'Dialog (Ctrl+P)' : 'Silent'}</span>
+              </button>
+
+              {/* Auto-Print Toggle */}
+              <button
+                onClick={() => {
+                  const next = !autoPrint;
+                  setAutoPrint(next);
+                  showToast(next ? '⚡ Auto-Print ON' : 'Auto-Print Disabled', next ? 'success' : 'info');
+                }}
+                className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
+                  autoPrint ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-500 hover:bg-white'
+                }`}
+                title="Auto-Print Orders"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>{autoPrint ? 'Auto: ON' : 'Auto: OFF'}</span>
+              </button>
+            </div>
+
+            {/* Shop Loyalty Rewards Points Pill */}
             <button
-              onClick={() => setShowToolsModal(true)}
-              className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
-              title="Print & Photocopy Counter Tool Suite (Calculators, Receipts, Sheet Converter)"
+              onClick={() => setShowPointsModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl text-xs font-black shadow-xs hover:shadow transition border border-amber-300/40"
+              title="Shop Loyalty Points & Offers"
             >
-              <Wrench className="w-4 h-4 text-indigo-600" />
-              <span className="hidden sm:inline">Tools</span>
+              <Star className="w-3.5 h-3.5 fill-amber-200 text-amber-100 animate-pulse" />
+              <span>{pointsBalance.toLocaleString()} pts</span>
             </button>
 
-            {/* Analytics Dashboard Trigger (Feature 2) */}
-            <button
-              onClick={() => { setShowAnalyticsModal(true); fetchAnalytics(); }}
-              className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
-              title="Shop Analytics & Revenue Reports"
-            >
-              <BarChart3 className="w-4 h-4 text-indigo-600" />
-              <span className="hidden sm:inline">Analytics</span>
-            </button>
+            {/* Shop Management Tools */}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-2xl border border-slate-200/60">
+              <button
+                onClick={() => setShowToolsModal(true)}
+                className="px-2.5 py-1 text-slate-700 hover:text-indigo-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
+                title="Print Tools & Calculators"
+              >
+                <Wrench className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden xl:inline">Tools</span>
+              </button>
 
-            {/* Keyboard Shortcuts Trigger Button */}
-            <button
-              onClick={() => setShowShortcutsModal(true)}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition hidden sm:flex items-center gap-1 text-xs font-bold"
-              title="Keyboard Shortcuts (?)"
-            >
-              <Command className="w-3.5 h-3.5" />
-              <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">?</span>
-            </button>
+              <button
+                onClick={() => { setShowAnalyticsModal(true); fetchAnalytics(); }}
+                className="px-2.5 py-1 text-slate-700 hover:text-indigo-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
+                title="Analytics & Reports"
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden xl:inline">Analytics</span>
+              </button>
 
-            {/* Printer / Simulate Mode Badge */}
-            <button
-              onClick={() => { setShowSpoolLog(s => !s); fetchSpoolLog(); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                isSimulating
-                  ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                  : bridgeConnected
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
-              }`}
-              title="Click to view Print Spool Log"
-            >
-              <span className={`w-2 h-2 rounded-full ${
-                isSimulating ? 'bg-amber-500 animate-pulse' :
-                bridgeConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
-              }`}></span>
-              <span className="hidden sm:inline">{
-                isSimulating ? '🖥️ Simulate Mode' :
-                bridgeConnected ? `🖨️ ${defaultPrinter.substring(0, 14)}` :
-                'No Printer'
-              }</span>
-              <span className="sm:hidden">Spool Log</span>
-            </button>
+              <button
+                onClick={() => setShowQrModal(true)}
+                className="px-2.5 py-1 text-slate-700 hover:text-blue-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
+                title="Print QR Standee / Poster"
+              >
+                <QrCode className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden xl:inline">QR Standee</span>
+              </button>
 
-            {/* Auto-Print Toggle */}
-            <button
-              onClick={() => {
-                const next = !autoPrint;
-                setAutoPrint(next);
-                showToast(next ? '⚡ Auto-Print ON — orders print immediately' : 'Auto-Print Disabled', next ? 'success' : 'info');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition border ${
-                autoPrint ? 'bg-amber-500 text-white border-amber-600 shadow-xs' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-              }`}
-            >
-              <Zap className={`w-3.5 h-3.5 ${autoPrint ? 'text-amber-100' : 'text-slate-500'}`} />
-              <span className="hidden sm:inline">{autoPrint ? 'Auto-Print: ON' : 'Auto-Print: OFF'}</span>
-            </button>
+              <button
+                onClick={() => setShowProfileModal(true)}
+                className="px-2.5 py-1 text-slate-700 hover:text-emerald-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
+                title="Profile & Verification"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden xl:inline">Profile</span>
+              </button>
 
-            {/* QR Poster & Standee Button */}
-            <button
-              onClick={() => setShowQrModal(true)}
-              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
-              title="Print QR Standee / Poster"
-            >
-              <QrCode className="w-4 h-4" />
-              <span className="hidden lg:inline">QR Standee</span>
-            </button>
-
-            {/* Advanced Profile & Verification Button */}
-            <button
-              onClick={() => setShowProfileModal(true)}
-              className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
-              title="Shop Profile, Trade License, Owner NID & Branding"
-            >
-              <ShieldCheck className="w-4 h-4 text-blue-600" />
-              <span className="hidden lg:inline">Profile</span>
-            </button>
-
-            {/* Settings & Rates Button */}
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition flex items-center gap-1 text-xs font-bold"
-              title="Shop Rates, Notice, Hours & Payment"
-            >
-              <Store className="w-4 h-4" />
-              <span className="hidden lg:inline">Settings</span>
-            </button>
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="px-2.5 py-1 text-slate-700 hover:text-slate-900 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
+                title="Shop Settings & Rates"
+              >
+                <Store className="w-3.5 h-3.5 text-slate-600" />
+                <span className="hidden xl:inline">Rates</span>
+              </button>
+            </div>
 
             {/* Audio Chime Toggle */}
             <button
@@ -1609,6 +1723,15 @@ export default function ShopDashboard({ shop, onLogout }) {
             showToast('✓ Shop profile & trade license saved!', 'success');
           }}
           onClose={() => setShowProfileModal(false)}
+        />
+      )}
+
+      {/* Shop Loyalty Rewards Points Modal */}
+      {showPointsModal && (
+        <ShopPointsModal
+          shop={currentShopData || shop}
+          currentPoints={pointsBalance}
+          onClose={() => setShowPointsModal(false)}
         />
       )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  X, Download, Printer, QrCode, Sparkles, Check, Copy, Sliders, Palette, FileText, Layout, Image as ImageIcon
+  X, Download, Printer, QrCode, Sparkles, Check, Copy, Sliders, Palette, FileText, Layout, Image as ImageIcon, ShieldCheck
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 
@@ -10,6 +10,7 @@ export default function ShopQrModal({ shop, onClose }) {
   const [tagline, setTagline] = useState('Scan to Upload & Print Documents Instantly');
   const [showPrices, setShowPrices] = useState(true);
   const [showInstructions, setShowInstructions] = useState(true);
+  const [showPrivacyBadge, setShowPrivacyBadge] = useState(true);
   const [customNotice, setCustomNotice] = useState(shop?.counter_notice || '');
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -235,6 +236,22 @@ export default function ShopQrModal({ shop, onClose }) {
         curY += 100;
       }
 
+      // Privacy Guarantee / No WhatsApp Motto (Optional)
+      if (showPrivacyBadge) {
+        ctx.fillStyle = theme === 'dark' ? '#064e3b' : '#ecfdf5';
+        roundRect(ctx, 160, curY, 880, 68, 20);
+        ctx.fill();
+
+        ctx.fillStyle = theme === 'dark' ? '#34d399' : '#047857';
+        ctx.font = 'bold 23px sans-serif';
+        ctx.fillText(
+          '🛡️ NO WHATSAPP OR GMAIL NEEDED   •   🔒 FILES AUTO-DELETE INSTANTLY',
+          600,
+          curY + 43
+        );
+        curY += 95;
+      }
+
       // 3-Step Instructions
       if (showInstructions) {
         ctx.fillStyle = textSecondary;
@@ -329,7 +346,176 @@ export default function ShopQrModal({ shop, onClose }) {
 
   // Direct 1-Click Print Standee
   const handleDirectPrint = () => {
-    window.print();
+    let qrDataUrl = '';
+    if (canvasRef.current) {
+      try {
+        qrDataUrl = canvasRef.current.toDataURL('image/png');
+      } catch (_) {}
+    }
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${headline || shop?.name || 'Shop'} - Counter Standee</title>
+          <style>
+            @page {
+              margin: 10mm;
+              size: auto;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            }
+            body {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 100vh;
+              background: #fff;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .standee-card {
+              width: 100%;
+              max-width: 380px;
+              border: 2px solid ${theme === 'minimal' ? '#000' : theme === 'gold' ? '#f59e0b' : theme === 'dark' ? '#334155' : '#93c5fd'};
+              border-radius: 28px;
+              padding: 24px;
+              text-align: center;
+              background: ${theme === 'dark' ? '#0f172a' : theme === 'gold' ? '#fffbeb' : '#ffffff'};
+              color: ${theme === 'dark' ? '#ffffff' : '#0f172a'};
+              box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            }
+            .badge {
+              display: inline-block;
+              background: ${theme === 'minimal' ? '#000' : theme === 'gold' ? '#d97706' : theme === 'dark' ? '#4f46e5' : '#2563eb'};
+              color: #fff;
+              font-size: 10px;
+              font-weight: 800;
+              letter-spacing: 2px;
+              padding: 4px 14px;
+              border-radius: 9999px;
+              text-transform: uppercase;
+              margin-bottom: 12px;
+            }
+            .shop-title {
+              font-size: 22px;
+              font-weight: 800;
+              margin-bottom: 4px;
+            }
+            .tagline {
+              font-size: 12px;
+              color: ${theme === 'dark' ? '#94a3b8' : '#64748b'};
+              margin-bottom: 14px;
+            }
+            .qr-box {
+              display: inline-block;
+              padding: 10px;
+              background: #fff;
+              border: 1px solid #e2e8f0;
+              border-radius: 16px;
+              margin-bottom: 12px;
+            }
+            .qr-box img {
+              width: 190px;
+              height: 190px;
+              display: block;
+            }
+            .slug-pill {
+              display: inline-block;
+              background: ${theme === 'dark' ? '#1e293b' : '#f1f5f9'};
+              color: ${theme === 'dark' ? '#818cf8' : '#1d4ed8'};
+              font-family: monospace;
+              font-size: 12px;
+              font-weight: 700;
+              padding: 4px 14px;
+              border-radius: 8px;
+              margin-bottom: 10px;
+            }
+            .rates-pill {
+              background: ${theme === 'dark' ? '#1e293b' : '#f1f5f9'};
+              color: ${theme === 'dark' ? '#f1f5f9' : '#1e293b'};
+              font-size: 11px;
+              font-weight: 700;
+              padding: 7px 12px;
+              border-radius: 10px;
+              margin-bottom: 7px;
+            }
+            .privacy-pill {
+              background: ${theme === 'dark' ? '#064e3b' : '#ecfdf5'};
+              color: ${theme === 'dark' ? '#6ee7b7' : '#065f46'};
+              border: 1px solid ${theme === 'dark' ? '#047857' : '#a7f3d0'};
+              font-size: 10px;
+              font-weight: 700;
+              padding: 6px 10px;
+              border-radius: 10px;
+              margin-bottom: 7px;
+            }
+            .notice-pill {
+              background: ${theme === 'dark' ? '#312e81' : '#fef3c7'};
+              color: ${theme === 'dark' ? '#c7d2fe' : '#92400e'};
+              border: 1px solid ${theme === 'dark' ? '#4338ca' : '#fde68a'};
+              font-size: 10px;
+              font-weight: 600;
+              padding: 6px 10px;
+              border-radius: 10px;
+              margin-bottom: 7px;
+            }
+            .steps {
+              font-size: 10px;
+              color: ${theme === 'dark' ? '#94a3b8' : '#64748b'};
+              margin-top: 8px;
+            }
+            .address {
+              font-size: 9px;
+              color: ${theme === 'dark' ? '#64748b' : '#94a3b8'};
+              margin-top: 6px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="standee-card">
+            <div class="badge">SELF-SERVICE PRINT</div>
+            <div class="shop-title">${headline || shop?.name || 'Shop'}</div>
+            <div class="tagline">${tagline}</div>
+            <div class="qr-box">
+              <img src="${qrDataUrl}" alt="QR Code" />
+            </div>
+            <div><span class="slug-pill">ID: ${shop?.qr_slug || ''}</span></div>
+            ${showPrices ? `<div class="rates-pill">B&W: ৳${shop?.price_bw || '2.00'} · Color: ৳${shop?.price_color || '10.00'}</div>` : ''}
+            ${showPrivacyBadge ? `<div class="privacy-pill">🛡️ No WhatsApp or Gmail Needed · 🔒 Files Delete Instantly</div>` : ''}
+            ${customNotice ? `<div class="notice-pill">📢 ${customNotice}</div>` : ''}
+            ${showInstructions ? `<div class="steps">1. Scan with Phone Camera • 2. Upload Files • 3. Collect from Counter</div>` : ''}
+            ${shop?.address ? `<div class="address">${shop.address}</div>` : ''}
+          </div>
+        </body>
+      </html>
+    `;
+
+    let printFrame = document.getElementById('standee-print-frame');
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'standee-print-frame';
+      printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      document.body.appendChild(printFrame);
+    }
+
+    const doc = printFrame.contentWindow.document;
+    doc.open();
+    doc.write(printHtml);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+      } catch (_) {
+        window.print();
+      }
+    }, 250);
   };
 
   return (
@@ -440,6 +626,15 @@ export default function ShopQrModal({ shop, onClose }) {
                     type="checkbox"
                     checked={showPrices}
                     onChange={e => setShowPrices(e.target.checked)}
+                    className="rounded text-blue-600"
+                  />
+                </label>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-600 font-semibold text-[11px]">Show Privacy Guarantee (No WhatsApp / Auto-Delete)</span>
+                  <input
+                    type="checkbox"
+                    checked={showPrivacyBadge}
+                    onChange={e => setShowPrivacyBadge(e.target.checked)}
                     className="rounded text-blue-600"
                   />
                 </label>
@@ -556,16 +751,28 @@ export default function ShopQrModal({ shop, onClose }) {
 
               {/* Rates Pill */}
               {showPrices && (
-                <div className={`p-2 rounded-xl text-xs font-bold mb-2.5 ${
+                <div className={`p-2 rounded-xl text-xs font-bold mb-2 ${
                   theme === 'dark' ? 'bg-slate-800/90 text-slate-200' : 'bg-slate-100 text-slate-800'
                 }`}>
                   B&W: ৳{shop.price_bw || '2.00'} · Color: ৳{shop.price_color || '10.00'}
                 </div>
               )}
 
+              {/* Privacy Motto Pill (No WhatsApp / Auto-Delete) */}
+              {showPrivacyBadge && (
+                <div className={`p-2 rounded-xl text-[10px] font-bold mb-2 flex items-center justify-center gap-1.5 ${
+                  theme === 'dark'
+                    ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                }`}>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>No WhatsApp or Gmail · Files delete instantly</span>
+                </div>
+              )}
+
               {/* Custom Notice */}
               {customNotice && (
-                <div className={`p-2 rounded-xl text-[11px] font-semibold mb-2.5 ${
+                <div className={`p-2 rounded-xl text-[11px] font-semibold mb-2 ${
                   theme === 'dark' ? 'bg-indigo-950/60 text-indigo-200 border border-indigo-800/40' : 'bg-amber-50 text-amber-900 border border-amber-200'
                 }`}>
                   📢 {customNotice}

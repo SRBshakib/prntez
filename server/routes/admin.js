@@ -93,14 +93,17 @@ router.get('/stats', async (req, res) => {
     }
 });
 
-// List All Shops
+// List All Shops with Full Details & Verification Assets
 router.get('/shops', async (req, res) => {
     try {
         const shops = await query(`
-            SELECT s.id, s.name, s.email, s.phone, s.address, s.qr_slug, s.status, 
+            SELECT s.id, s.name, s.owner_name, s.email, s.phone, s.alt_phone, s.address, s.maps_url,
+                   s.qr_slug, s.status, s.is_verified,
+                   s.trade_license, s.trade_license_image, s.nid_number, s.shop_image, s.tagline, s.services_offered,
                    s.price_bw, s.price_color, s.price_legal, s.price_a3,
                    s.opening_time, s.closing_time, s.is_closed,
                    s.bkash_number, s.nagad_number,
+                   s.discount_min_pages, s.discount_percent, s.discount_tier2_pages, s.discount_tier2_percent,
                    s.created_at,
                    COUNT(j.id) as job_count, 
                    COALESCE(SUM(j.total_price), 0) as total_revenue

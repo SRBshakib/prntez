@@ -47,6 +47,9 @@ async function migrate() {
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `maps_url` TEXT DEFAULT NULL",
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `is_verified` TINYINT(1) DEFAULT 0",
         "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `services_offered` VARCHAR(255) DEFAULT 'Laser Print, Color Print, Photocopy, Spiral Binding, Laminating'",
+        // shops: points system columns
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `points_balance` INT DEFAULT 0",
+        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `lifetime_points` INT DEFAULT 0",
         // print_jobs: add v2 columns
         "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `total_pages` INT DEFAULT 0",
         "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `total_price` DECIMAL(10,2) DEFAULT 0.00",
@@ -64,6 +67,25 @@ async function migrate() {
 
     for (const sql of alterOps) {
         try { await pool.execute(sql); } catch (e) { /* column may already exist */ }
+    }
+
+    // Ensure shop_points_ledger table exists
+    try {
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS \`shop_points_ledger\` (
+                \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+                \`shop_id\` INT NOT NULL,
+                \`job_id\` INT DEFAULT NULL,
+                \`points\` INT NOT NULL,
+                \`type\` VARCHAR(50) DEFAULT 'job_completed',
+                \`description\` VARCHAR(255) DEFAULT '',
+                \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX \`idx_ledger_shop\` (\`shop_id\`),
+                INDEX \`idx_ledger_job\` (\`job_id\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `);
+    } catch (e) {
+        console.error('[DB] Error creating shop_points_ledger table:', e);
     }
 
     // For the v2 system, set known plaintext passwords for existing shops in the `password` column

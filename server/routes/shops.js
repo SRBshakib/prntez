@@ -241,4 +241,36 @@ router.get('/:id/analytics', async (req, res) => {
     }
 });
 
+// ─────────────────────────────────────────────────────
+// Get Shop Points & Rewards History
+// ─────────────────────────────────────────────────────
+router.get('/:id/points', async (req, res) => {
+    try {
+        const shopId = parseInt(req.params.id, 10);
+        const shops = await query('SELECT id, name, points_balance, lifetime_points FROM shops WHERE id = ?', [shopId]);
+        if (shops.length === 0) {
+            return res.status(404).json({ success: false, error: 'Shop not found' });
+        }
+
+        const shop = shops[0];
+        const ledger = await query(`
+            SELECT id, job_id, points, type, description, created_at
+            FROM shop_points_ledger
+            WHERE shop_id = ?
+            ORDER BY id DESC
+            LIMIT 50
+        `, [shopId]);
+
+        res.json({
+            success: true,
+            points_balance: shop.points_balance || 0,
+            lifetime_points: shop.lifetime_points || 0,
+            ledger
+        });
+    } catch (err) {
+        console.error('Fetch shop points error:', err);
+        res.status(500).json({ success: false, error: 'Failed to fetch points' });
+    }
+});
+
 module.exports = router;
