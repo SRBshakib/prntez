@@ -74,6 +74,8 @@ async function migrate() {
     await ensureColumn('print_jobs', 'payment_method', "VARCHAR(20) DEFAULT 'cash'");
     await ensureColumn('print_jobs', 'payment_trx_id', 'VARCHAR(50) DEFAULT NULL');
     await ensureColumn('print_jobs', 'customer_email', 'VARCHAR(191) DEFAULT NULL');
+    await ensureColumn('print_jobs', 'customer_ip', 'VARCHAR(45) DEFAULT NULL');
+    await ensureColumn('print_jobs', 'customer_alias', 'VARCHAR(100) DEFAULT NULL');
     await ensureColumn('print_jobs', 'completed_at', 'DATETIME DEFAULT NULL');
 
     // 3. Ensure columns on print_files

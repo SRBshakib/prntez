@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { query } = require('../db');
+const { getClientIp, getAnonymousPersona } = require('../utils/anonymous');
 
 // Ensure uploads root directory exists
 const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads', 'temp');
@@ -147,18 +148,29 @@ router.post('/', upload.array('files', 20), async (req, res) => {
         // Set expiry: 30 minutes from now
         const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
+        // Google Docs style Anonymous Animal based on client IP
+        const clientIp = getClientIp(req);
+        const persona = getAnonymousPersona(clientIp);
+
+        let finalCustomerName = (customer_name || '').trim();
+        if (!finalCustomerName || finalCustomerName.toLowerCase() === 'guest customer' || finalCustomerName.toLowerCase() === 'guest') {
+            finalCustomerName = persona.fullName; // e.g. "Anonymous Penguin 🐧"
+        }
+
         // Insert print_job
         const jobInsert = await query(`
             INSERT INTO print_jobs (
-                job_code, shop_id, customer_name, customer_phone,
+                job_code, shop_id, customer_name, customer_phone, customer_ip, customer_alias,
                 total_files, total_pages, total_price, discount_applied,
                 payment_status, payment_method, payment_trx_id,
                 status, global_notes, files_deleted, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?)
         `, [
             jobCode, targetShopId,
-            (customer_name || 'Guest Customer').trim(),
+            finalCustomerName,
             (customer_phone || '').trim(),
+            clientIp,
+            persona.fullName,
             processedFiles.length,
             totalPages,
             grandTotal,
@@ -216,8 +228,10 @@ router.post('/', upload.array('files', 20), async (req, res) => {
             id: jobId,
             job_code: jobCode,
             shop_id: targetShopId,
-            customer_name: customer_name || 'Guest Customer',
+            customer_name: finalCustomerName,
             customer_phone: customer_phone || '',
+            customer_ip: clientIp,
+            customer_alias: persona.fullName,
             total_pages: totalPages,
             total_files: dbFiles.length,
             total_price: grandTotal,
@@ -239,6 +253,9 @@ router.post('/', upload.array('files', 20), async (req, res) => {
             job_id: jobId,
             job_code: jobCode,
             shop_name: shopRow.name,
+            customer_name: finalCustomerName,
+            customer_alias: persona.fullName,
+            customer_ip: clientIp,
             total_files: dbFiles.length,
             total_price: grandTotal,
             status: 'pending'

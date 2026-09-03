@@ -80,6 +80,7 @@ router.get('/track/:jobCode', async (req, res) => {
         const { jobCode } = req.params;
         const jobs = await query(`
             SELECT j.id, j.job_code, j.shop_id, j.customer_name, j.customer_phone,
+                   j.customer_ip, j.customer_alias,
                    j.total_files, COALESCE(j.total_price, 0.00) as total_price,
                    COALESCE(j.total_pages, 0) as total_pages,
                    COALESCE(j.discount_applied, 0.00) as discount_applied,

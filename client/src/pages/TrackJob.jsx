@@ -214,9 +214,17 @@ export default function TrackJob({ jobCode, onBack }) {
           </div>
 
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between text-left">
-            <div>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase">Customer</p>
-              <p className="text-xs font-bold text-slate-800">{job.customer_name || 'Guest'}</p>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base shadow-xs">
+                {job.customer_name?.includes('Anonymous') ? (job.customer_name.split(' ').pop() || '👤') : '👤'}
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-semibold uppercase">Customer</p>
+                <p className="text-xs font-bold text-slate-800">{job.customer_name || job.customer_alias || 'Guest'}</p>
+                {job.customer_ip && (
+                  <p className="text-[9px] text-slate-400 font-mono">🌐 IP: {job.customer_ip}</p>
+                )}
+              </div>
             </div>
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Due</p>
