@@ -216,21 +216,11 @@ export default function TrackJob({ jobCode, onBack }) {
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between text-left">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base shadow-xs">
-                {(job.customer_alias || job.customer_name || '').split(' ').pop() || '👤'}
+                {job.customer_name?.includes('Anonymous') ? (job.customer_name.split(' ').pop() || '👤') : '👤'}
               </div>
               <div>
                 <p className="text-[10px] text-slate-400 font-semibold uppercase">Customer</p>
-                <p className="text-xs font-bold text-slate-800">{job.customer_name || job.customer_alias || 'Guest'}</p>
-                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                  {job.customer_alias && job.customer_name !== job.customer_alias && (
-                    <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded font-medium">
-                      {job.customer_alias}
-                    </span>
-                  )}
-                  {job.customer_ip && (
-                    <span className="text-[9px] text-slate-400 font-mono">🌐 {job.customer_ip}</span>
-                  )}
-                </div>
+                <p className="text-xs font-bold text-slate-800">{job.customer_name || 'Guest'}</p>
               </div>
             </div>
             <div className="text-right">

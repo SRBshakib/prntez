@@ -183,4 +183,24 @@ router.put('/settings', async (req, res) => {
     }
 });
 
+// Recent Platform Orders with IP & Device Audits (Admin Only)
+router.get('/orders', async (req, res) => {
+    try {
+        const orders = await query(`
+            SELECT j.id, j.job_code, j.shop_id, j.customer_name, j.customer_phone,
+                   j.customer_ip, j.customer_alias, j.total_pages, j.total_price,
+                   j.status, j.payment_status, j.created_at,
+                   s.name as shop_name
+            FROM print_jobs j
+            JOIN shops s ON j.shop_id = s.id
+            ORDER BY j.id DESC
+            LIMIT 60
+        `);
+        res.json({ success: true, orders });
+    } catch (err) {
+        console.error('Admin orders error:', err);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
