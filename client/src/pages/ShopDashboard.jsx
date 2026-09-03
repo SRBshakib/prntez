@@ -363,17 +363,9 @@ export default function ShopDashboard({ shop, onLogout }) {
       try {
         printFrame.contentWindow.focus();
         printFrame.contentWindow.print();
-        if (job?.id) {
-          // Immediately delete file and mark job done
-          setTimeout(() => updateJobStatus(job.id, 'done'), 400);
-        }
       } catch (_) {
         // Fallback: open in new tab so user can use Ctrl + P directly
         window.open(fileUrl, '_blank');
-        if (job?.id) {
-          // Grace timeout to ensure tab loads stream, then purge file immediately
-          setTimeout(() => updateJobStatus(job.id, 'done'), 2500);
-        }
       }
     };
   };
@@ -410,11 +402,8 @@ export default function ShopDashboard({ shop, onLogout }) {
       if (data.success) {
         const label = data.simulated
           ? `✅ Simulated: ${file.original_name} (${file.copies || 1}x, ${file.color_mode || 'bw'})`
-          : `✅ Spooled in ${data.spoolTimeMs}ms → ${data.printer} (File Deleted)`;
+          : `✅ Spooled in ${data.spoolTimeMs}ms → ${data.printer}`;
         showToast(label, 'success');
-        if (job?.id) {
-          await updateJobStatus(job.id, 'done');
-        }
         fetchSpoolLog();
         return;
       }
@@ -426,39 +415,26 @@ export default function ShopDashboard({ shop, onLogout }) {
     handleBrowserPrint(file, job);
   };
 
-  const handlePrintAll = async (job) => {
+  const handlePrintAll = (job) => {
     if (!job || !job.files || job.files.length === 0) return;
-    showToast(`⚡ Printing all ${job.files.length} file(s) for Order #${job.job_code}...`, 'info');
-    for (const f of job.files) {
-      await handleQuickPrint(f, job);
-    }
-    if (job.id) {
-      await updateJobStatus(job.id, 'done');
-    }
+    job.files.forEach(f => handleQuickPrint(f, job));
   };
 
   // Batch action: Print ALL pending jobs
-  const handlePrintAllPending = async () => {
+  const handlePrintAllPending = () => {
     const pendingJobs = jobs.filter(j => j.status === 'pending');
     if (pendingJobs.length === 0) {
       showToast('No pending jobs to print.', 'info');
       return;
     }
     showToast(`⚡ Printing all ${pendingJobs.length} pending orders...`, 'info');
-    for (const j of pendingJobs) {
-      await handlePrintAll(j);
-    }
+    pendingJobs.forEach(j => handlePrintAll(j));
   };
 
   // 5. Update Job Status
   const updateJobStatus = async (jobId, newStatus) => {
     try {
-      setJobs(prev => prev.map(j => (j.id === jobId ? {
-        ...j,
-        status: newStatus,
-        files_deleted: newStatus === 'done' ? 1 : j.files_deleted,
-        files: newStatus === 'done' ? [] : j.files
-      } : j)));
+      setJobs(prev => prev.map(j => (j.id === jobId ? { ...j, status: newStatus } : j)));
 
       const res = await fetch('/api/jobs/status', {
         method: 'POST',
@@ -473,7 +449,7 @@ export default function ShopDashboard({ shop, onLogout }) {
           setPointsBalance(data.points_balance);
         }
         const ptsMsg = data.points_awarded > 0 ? ` (+${data.points_awarded} pts ⭐)` : '';
-        showToast(`✓ Order #${j?.job_code || ''} printed & file deleted immediately!${ptsMsg}`, 'success');
+        showToast(`✓ Order #${j?.job_code || ''} marked DONE${ptsMsg}`, 'success');
       } else if (!data.success) {
         showToast(data.error || 'Failed to update status', 'error');
       }

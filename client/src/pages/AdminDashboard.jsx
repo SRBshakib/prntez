@@ -921,6 +921,78 @@ export default function AdminDashboard({ onLogout }) {
               />
             </div>
 
+            {/* File Retention & Privacy Controls */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-emerald-600" />
+                    Automated File Cleanup & Privacy Retention
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Configure when printed and unprinted customer documents are automatically purged from the server disk.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                  <span>Auto-Cleanup Active</span>
+                  <input
+                    type="checkbox"
+                    checked={settings.file_cleanup_enabled !== '0'}
+                    onChange={e => setSettings({ ...settings, file_cleanup_enabled: e.target.checked ? '1' : '0' })}
+                    className="w-4 h-4 text-indigo-600 rounded"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <label className="font-bold text-slate-700 block mb-1">
+                    ✓ Successful Prints (Status: Done)
+                  </label>
+                  <p className="text-[10px] text-slate-500 mb-2">
+                    How long to retain files on the server after shop marks an order Done:
+                  </p>
+                  <select
+                    value={settings.file_cleanup_success_minutes ?? '30'}
+                    onChange={e => setSettings({ ...settings, file_cleanup_success_minutes: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+                  >
+                    <option value="0">⚡ Delete Immediately (0 minutes)</option>
+                    <option value="5">5 Minutes</option>
+                    <option value="15">15 Minutes</option>
+                    <option value="30">30 Minutes (Recommended)</option>
+                    <option value="60">1 Hour</option>
+                    <option value="180">3 Hours</option>
+                    <option value="1440">24 Hours (1 Day)</option>
+                    <option value="-1">Never auto-delete (Manual purge only)</option>
+                  </select>
+                </div>
+
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <label className="font-bold text-slate-700 block mb-1">
+                    ⚠️ Unfinished / Abandoned Prints (Pending / Error)
+                  </label>
+                  <p className="text-[10px] text-slate-500 mb-2">
+                    How long to keep files for abandoned or unprinted orders before deleting:
+                  </p>
+                  <select
+                    value={settings.file_cleanup_unsuccess_minutes ?? '1440'}
+                    onChange={e => setSettings({ ...settings, file_cleanup_unsuccess_minutes: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+                  >
+                    <option value="30">30 Minutes</option>
+                    <option value="60">1 Hour</option>
+                    <option value="180">3 Hours</option>
+                    <option value="360">6 Hours</option>
+                    <option value="720">12 Hours</option>
+                    <option value="1440">24 Hours (Default)</option>
+                    <option value="2880">48 Hours (2 Days)</option>
+                    <option value="-1">Never auto-delete (Manual purge only)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={savingSettings}

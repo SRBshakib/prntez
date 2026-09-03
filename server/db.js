@@ -19,55 +19,67 @@ async function query(sql, params = []) {
     return results;
 }
 
+// Helper to safely add column on ANY MySQL/MariaDB version without error
+async function ensureColumn(table, column, definition) {
+    try {
+        const [rows] = await pool.query(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+            [table, column]
+        );
+        if (rows.length === 0) {
+            await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+        }
+    } catch (e) {
+        // Fallback standard alter
+        try { await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN IF NOT EXISTS \`${column}\` ${definition}`); } catch (_) {}
+    }
+}
+
 // Run schema migrations for v2 compatibility
 async function migrate() {
-    const alterOps = [
-        // Shops: add pricing, hours, payment, discount, and advanced profile & verification columns
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `price_bw` DECIMAL(10,2) DEFAULT 2.00",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `price_color` DECIMAL(10,2) DEFAULT 10.00",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `price_legal` DECIMAL(10,2) DEFAULT 3.00",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `price_a3` DECIMAL(10,2) DEFAULT 15.00",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `counter_notice` VARCHAR(255) DEFAULT 'High-quality laser printing & document services available.'",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `password` VARCHAR(255) DEFAULT NULL",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `opening_time` VARCHAR(10) DEFAULT '08:00'",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `closing_time` VARCHAR(10) DEFAULT '22:00'",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `is_closed` TINYINT(1) DEFAULT 0",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `bkash_number` VARCHAR(20) DEFAULT ''",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `nagad_number` VARCHAR(20) DEFAULT ''",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `discount_min_pages` INT DEFAULT 50",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `discount_percent` DECIMAL(5,2) DEFAULT 10.00",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `discount_tier2_pages` INT DEFAULT 100",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `trade_license` VARCHAR(100) DEFAULT ''",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `trade_license_image` LONGTEXT DEFAULT NULL",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `shop_image` LONGTEXT DEFAULT NULL",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `tagline` VARCHAR(255) DEFAULT 'Fast & Reliable Document Printing'",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `owner_name` VARCHAR(100) DEFAULT ''",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `alt_phone` VARCHAR(30) DEFAULT ''",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `nid_number` VARCHAR(50) DEFAULT ''",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `maps_url` TEXT DEFAULT NULL",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `is_verified` TINYINT(1) DEFAULT 0",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `services_offered` VARCHAR(255) DEFAULT 'Laser Print, Color Print, Photocopy, Spiral Binding, Laminating'",
-        // shops: points system columns
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `points_balance` INT DEFAULT 0",
-        "ALTER TABLE `shops` ADD COLUMN IF NOT EXISTS `lifetime_points` INT DEFAULT 0",
-        // print_jobs: add v2 columns
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `total_pages` INT DEFAULT 0",
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `total_price` DECIMAL(10,2) DEFAULT 0.00",
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `discount_applied` DECIMAL(10,2) DEFAULT 0.00",
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `payment_status` VARCHAR(20) DEFAULT 'unpaid'",
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `payment_method` VARCHAR(20) DEFAULT 'cash'",
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `payment_trx_id` VARCHAR(50) DEFAULT NULL",
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `customer_email` VARCHAR(191) DEFAULT NULL",
-        "ALTER TABLE `print_jobs` ADD COLUMN IF NOT EXISTS `completed_at` DATETIME DEFAULT NULL",
-        // print_files: add v2 columns
-        "ALTER TABLE `print_files` ADD COLUMN IF NOT EXISTS `file_price` DECIMAL(10,2) DEFAULT 0.00",
-        "ALTER TABLE `print_files` ADD COLUMN IF NOT EXISTS `page_count` INT DEFAULT 1",
-        "ALTER TABLE `print_files` ADD COLUMN IF NOT EXISTS `notes` TEXT DEFAULT NULL",
-    ];
+    // 1. Ensure columns on shops
+    await ensureColumn('shops', 'price_bw', 'DECIMAL(10,2) DEFAULT 2.00');
+    await ensureColumn('shops', 'price_color', 'DECIMAL(10,2) DEFAULT 10.00');
+    await ensureColumn('shops', 'price_legal', 'DECIMAL(10,2) DEFAULT 3.00');
+    await ensureColumn('shops', 'price_a3', 'DECIMAL(10,2) DEFAULT 15.00');
+    await ensureColumn('shops', 'counter_notice', "VARCHAR(255) DEFAULT 'High-quality laser printing & document services available.'");
+    await ensureColumn('shops', 'password', 'VARCHAR(255) DEFAULT NULL');
+    await ensureColumn('shops', 'opening_time', "VARCHAR(10) DEFAULT '08:00'");
+    await ensureColumn('shops', 'closing_time', "VARCHAR(10) DEFAULT '22:00'");
+    await ensureColumn('shops', 'is_closed', 'TINYINT(1) DEFAULT 0');
+    await ensureColumn('shops', 'bkash_number', "VARCHAR(20) DEFAULT ''");
+    await ensureColumn('shops', 'nagad_number', "VARCHAR(20) DEFAULT ''");
+    await ensureColumn('shops', 'discount_min_pages', 'INT DEFAULT 50');
+    await ensureColumn('shops', 'discount_percent', 'DECIMAL(5,2) DEFAULT 10.00');
+    await ensureColumn('shops', 'discount_tier2_pages', 'INT DEFAULT 100');
+    await ensureColumn('shops', 'discount_tier2_percent', 'DECIMAL(5,2) DEFAULT 15.00');
+    await ensureColumn('shops', 'trade_license', "VARCHAR(100) DEFAULT ''");
+    await ensureColumn('shops', 'trade_license_image', 'LONGTEXT DEFAULT NULL');
+    await ensureColumn('shops', 'shop_image', 'LONGTEXT DEFAULT NULL');
+    await ensureColumn('shops', 'tagline', "VARCHAR(255) DEFAULT 'Fast & Reliable Document Printing'");
+    await ensureColumn('shops', 'owner_name', "VARCHAR(100) DEFAULT ''");
+    await ensureColumn('shops', 'alt_phone', "VARCHAR(30) DEFAULT ''");
+    await ensureColumn('shops', 'nid_number', "VARCHAR(50) DEFAULT ''");
+    await ensureColumn('shops', 'maps_url', 'TEXT DEFAULT NULL');
+    await ensureColumn('shops', 'is_verified', 'TINYINT(1) DEFAULT 0');
+    await ensureColumn('shops', 'services_offered', "VARCHAR(255) DEFAULT 'Laser Print, Color Print, Photocopy, Spiral Binding, Laminating'");
+    await ensureColumn('shops', 'points_balance', 'INT DEFAULT 0');
+    await ensureColumn('shops', 'lifetime_points', 'INT DEFAULT 0');
 
-    for (const sql of alterOps) {
-        try { await pool.execute(sql); } catch (e) { /* column may already exist */ }
-    }
+    // 2. Ensure columns on print_jobs
+    await ensureColumn('print_jobs', 'total_pages', 'INT DEFAULT 0');
+    await ensureColumn('print_jobs', 'total_price', 'DECIMAL(10,2) DEFAULT 0.00');
+    await ensureColumn('print_jobs', 'discount_applied', 'DECIMAL(10,2) DEFAULT 0.00');
+    await ensureColumn('print_jobs', 'payment_status', "VARCHAR(20) DEFAULT 'unpaid'");
+    await ensureColumn('print_jobs', 'payment_method', "VARCHAR(20) DEFAULT 'cash'");
+    await ensureColumn('print_jobs', 'payment_trx_id', 'VARCHAR(50) DEFAULT NULL');
+    await ensureColumn('print_jobs', 'customer_email', 'VARCHAR(191) DEFAULT NULL');
+    await ensureColumn('print_jobs', 'completed_at', 'DATETIME DEFAULT NULL');
+
+    // 3. Ensure columns on print_files
+    await ensureColumn('print_files', 'file_price', 'DECIMAL(10,2) DEFAULT 0.00');
+    await ensureColumn('print_files', 'page_count', 'INT DEFAULT 1');
+    await ensureColumn('print_files', 'notes', 'TEXT DEFAULT NULL');
 
     // Ensure shop_points_ledger table exists
     try {
@@ -89,12 +101,12 @@ async function migrate() {
     }
 
     // For the v2 system, set known plaintext passwords for existing shops in the `password` column
-    // This allows the new token-less auth to work alongside the old bcrypt system
-    // In production, shops simply register via the new Register form
-    await pool.execute(`
-        UPDATE shops SET password = 'TestPass123' 
-        WHERE email = 'testshop@prntez.com' AND (password IS NULL OR password = '' OR LENGTH(password) > 20)
-    `);
+    try {
+        await pool.execute(`
+            UPDATE shops SET password = 'TestPass123' 
+            WHERE email = 'testshop@prntez.com' AND (password IS NULL OR password = '' OR LENGTH(password) > 20)
+        `);
+    } catch (_) {}
 
     // Ensure admin password & ad banner defaults in settings
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('admin_password', 'admin@printshare2026')");
@@ -106,6 +118,11 @@ async function migrate() {
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_text', 'Wholesale A4 Paper & Ink Cartridges at special partner rates. Contact prntez Network.')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_link', '')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('ad_shop_enabled', '1')");
+
+    // File Storage Lifecycle & Timing Defaults (Admin Managed)
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('file_cleanup_enabled', '1')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('file_cleanup_success_minutes', '30')"); // 30 min default after done
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('file_cleanup_unsuccess_minutes', '1440')"); // 24h default for abandoned
 
     // Google AdSense Defaults (Shop Top/Side/Bottom + Customer Upload/Bottom)
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('adsense_enabled', '1')");

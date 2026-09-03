@@ -195,8 +195,13 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`[✓] REST API & WebSocket Server: http://localhost:${PORT}`);
     console.log(`[✓] Real-Time Engine           : Socket.io Active (< 10ms)`);
     console.log(`[✓] High-Speed DB Pool         : MySQL prntez`);
-    if (fs.existsSync(clientDistPath)) {
-        console.log(`[✓] Unified Frontend Client    : Serving client/dist on port ${PORT}`);
-    }
     console.log('===============================================================');
+
+    // Start background file lifecycle & retention cleanup
+    try {
+        const { startCleanupCron } = require('./cleanup');
+        startCleanupCron(io);
+    } catch (cleanErr) {
+        console.error('[Server] Failed to initialize cleanup cron:', cleanErr);
+    }
 });

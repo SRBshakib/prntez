@@ -177,33 +177,31 @@ router.post('/status', async (req, res) => {
 
         let filesDeleted = job.files_deleted;
 
-        // Auto-delete files immediately from disk when done
+        // Auto-delete files if admin configured immediate deletion (0 minutes)
         if (status === 'done' && !job.files_deleted) {
-            const files = await query('SELECT id, stored_path FROM print_files WHERE job_id = ?', [job_id]);
-            let jobDir = null;
-            for (const f of files) {
-                if (f.stored_path) {
-                    if (!jobDir) {
-                        try { jobDir = path.dirname(f.stored_path); } catch (_) {}
-                    }
-                    if (fs.existsSync(f.stored_path)) {
-                        try { fs.unlinkSync(f.stored_path); } catch (e) {
-                            console.error(`[Jobs] Failed to delete file ${f.stored_path}:`, e.message);
-                        }
+            let shouldDeleteNow = false;
+            try {
+                const [settingRow] = await query("SELECT `value` FROM settings WHERE `key` = 'file_cleanup_success_minutes'");
+                if (settingRow && parseInt(settingRow.value, 10) === 0) {
+                    shouldDeleteNow = true;
+                }
+            } catch (_) {}
+
+            if (shouldDeleteNow) {
+                const files = await query('SELECT id, stored_path FROM print_files WHERE job_id = ?', [job_id]);
+                let jobDir = null;
+                for (const f of files) {
+                    if (f.stored_path) {
+                        if (!jobDir) try { jobDir = path.dirname(f.stored_path); } catch (_) {}
+                        if (fs.existsSync(f.stored_path)) try { fs.unlinkSync(f.stored_path); } catch (_) {}
                     }
                 }
-            }
-            // Recursively wipe the job folder completely
-            if (jobDir && fs.existsSync(jobDir)) {
-                try {
-                    fs.rmSync(jobDir, { recursive: true, force: true });
-                } catch (e) {
-                    console.error(`[Jobs] Failed to remove job directory ${jobDir}:`, e.message);
+                if (jobDir && fs.existsSync(jobDir)) {
+                    try { fs.rmSync(jobDir, { recursive: true, force: true }); } catch (_) {}
                 }
+                await query('UPDATE print_files SET stored_path = NULL WHERE job_id = ?', [job_id]);
+                filesDeleted = 1;
             }
-            // Null out stored_path in DB so file is completely dereferenced
-            await query('UPDATE print_files SET stored_path = NULL WHERE job_id = ?', [job_id]);
-            filesDeleted = 1;
         }
 
         const completedAt = status === 'done' ? new Date() : null;
@@ -221,7 +219,6 @@ router.post('/status', async (req, res) => {
 
         if (status === 'done' && job.status !== 'done') {
             const pages = parseInt(job.total_pages || 1, 10);
-            // 10 base points + 1 bonus point per 5 pages
             pointsAwarded = 10 + Math.floor(Math.max(0, pages - 1) / 5);
 
             try {
@@ -244,7 +241,7 @@ router.post('/status', async (req, res) => {
                     freshLifetimePoints = shopRows[0].lifetime_points || 0;
                 }
             } catch (pErr) {
-                console.error('[Points] Error awarding points on job completion:', pErr);
+                console.error('[Points] Non-fatal error awarding points:', pErr.message);
             }
         }
 
@@ -380,70 +377,18 @@ router.post('/spool', async (req, res) => {
         const targetFile = files[0];
         const filePath = targetFile.stored_path;
 
-        const result = await printSilent(filePath, {
+        const result = await printSilent(targetFile.stored_path, {
             printer,
             copies: parseInt(copies, 10) || 1,
             color: color || 'bw',
             sides: sides || 'single'
         });
 
-        // Delete the file immediately from disk upon successful print spooling
-        if (filePath && fs.existsSync(filePath)) {
-            try {
-                fs.unlinkSync(filePath);
-            } catch (delErr) {
-                console.error(`[Spooler] Failed to delete spooled file ${filePath}:`, delErr.message);
-            }
-        }
-        await query('UPDATE print_files SET stored_path = NULL WHERE id = ?', [file_id]);
-
-        // Check if all files for this job have been printed
-        const remaining = await query(
-            'SELECT id FROM print_files WHERE job_id = ? AND stored_path IS NOT NULL',
-            [targetFile.job_id]
-        );
-
-        let jobCompleted = false;
-        if (remaining.length === 0) {
-            // All files printed! Clean directory completely
-            const jobDir = path.dirname(filePath);
-            if (fs.existsSync(jobDir)) {
-                try { fs.rmSync(jobDir, { recursive: true, force: true }); } catch (_) {}
-            }
-
-            // Mark job as done
-            await query(
-                'UPDATE print_jobs SET status = "done", files_deleted = 1, completed_at = NOW(), updated_at = NOW() WHERE id = ?',
-                [targetFile.job_id]
-            );
-            jobCompleted = true;
-
-            const io = req.app.get('io');
-            if (io) {
-                const [j] = await query('SELECT * FROM print_jobs WHERE id = ?', [targetFile.job_id]);
-                if (j) {
-                    io.to(`shop_${j.shop_id}`).emit('job_updated', {
-                        id: j.id,
-                        status: 'done',
-                        files_deleted: 1,
-                        files: []
-                    });
-                    io.to(`job_${j.job_code}`).emit('status_changed', {
-                        id: j.id,
-                        status: 'done',
-                        files_deleted: 1
-                    });
-                }
-            }
-        }
-
         res.json({
             success: true,
-            message: `Spooled to ${result.printer} & file deleted immediately`,
+            message: `Spooled to ${result.printer}`,
             spoolTimeMs: result.elapsed,
-            printer: result.printer,
-            file_deleted: true,
-            job_completed: jobCompleted
+            printer: result.printer
         });
     } catch (err) {
         console.error('Spool error:', err);
