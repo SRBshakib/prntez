@@ -1076,8 +1076,13 @@ export default function ShopDashboard({ shop, onLogout }) {
                       <div className="space-y-1.5 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <span className="text-base font-extrabold text-blue-600 tracking-tight">#{job.job_code}</span>
-                          <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                            <span>{job.customer_name || job.customer_alias || 'Guest'}</span>
+                          <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5 flex-wrap">
+                            <span>{job.customer_name || 'Guest'}</span>
+                            {job.customer_alias && job.customer_name !== job.customer_alias && (
+                              <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-medium" title="Device Persona">
+                                {job.customer_alias}
+                              </span>
+                            )}
                             {job.customer_ip && (
                               <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title={`Client IP: ${job.customer_ip}`}>
                                 🌐 {job.customer_ip}
