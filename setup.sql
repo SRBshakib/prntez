@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS `customers` (
 CREATE TABLE IF NOT EXISTS `print_jobs` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `job_code` CHAR(4) NOT NULL,
+  `auth_code` VARCHAR(20) DEFAULT NULL,
   `shop_id` INT UNSIGNED,
   `customer_id` INT UNSIGNED NULL,
   `customer_name` VARCHAR(100),
@@ -127,7 +128,9 @@ INSERT IGNORE INTO `settings` (`key`, `value`) VALUES
 ('ads_enabled', '1'),
 ('admin_password', 'admin@prntez2026'),
 ('maintenance_mode', '0'),
-('shop_approval', 'auto');
+('shop_approval', 'auto'),
+('google_auth_enabled', '1'),
+('google_client_id', '');
 
 CREATE TABLE IF NOT EXISTS `upload_chunks` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

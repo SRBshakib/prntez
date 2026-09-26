@@ -13,6 +13,7 @@ export default function TrackJob({ jobCode, onBack }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedAuth, setCopiedAuth] = useState(false);
   const [copiedBkash, setCopiedBkash] = useState(false);
   const [notifGranted, setNotifGranted] = useState(
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
@@ -210,6 +211,23 @@ export default function TrackJob({ jobCode, onBack }) {
                 {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
+            {job.auth_code && (
+              <div className="flex items-center justify-center gap-1.5 mt-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Auth:</span>
+                <span
+                  onClick={() => {
+                    navigator.clipboard.writeText(job.auth_code);
+                    setCopiedAuth(true);
+                    setTimeout(() => setCopiedAuth(false), 2000);
+                  }}
+                  className="font-mono text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded cursor-pointer transition select-all"
+                  title="Click to copy Auth Code"
+                >
+                  {job.auth_code}
+                </span>
+                {copiedAuth && <span className="text-[10px] font-bold text-emerald-600">Copied!</span>}
+              </div>
+            )}
             <p className="text-[11px] text-slate-400 mt-1">Show this token at the print counter</p>
           </div>
 

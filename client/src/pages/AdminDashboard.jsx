@@ -4,7 +4,7 @@ import {
   KeyRound, LogOut, Check, Search, AlertCircle, Megaphone, Sparkles, ExternalLink,
   QrCode, BarChart3, TrendingUp, Layers, Ban, CheckCircle, Percent, Clock,
   FileText, Shield, Globe, Award, Zap, Phone, MessageCircle, AlertTriangle,
-  Eye, Image as ImageIcon, X
+  Eye, Image as ImageIcon, X, Copy
 } from 'lucide-react';
 import ShopQrModal from '../components/ShopQrModal';
 
@@ -12,7 +12,7 @@ export default function AdminDashboard({ onLogout }) {
   const [stats, setStats] = useState(null);
   const [shops, setShops] = useState([]);
   const [settings, setSettings] = useState({});
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'charts' | 'shops' | 'ads' | 'settings' | 'future'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'verify' | 'charts' | 'shops' | 'future' | 'ads' | 'settings'
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -21,6 +21,14 @@ export default function AdminDashboard({ onLogout }) {
   const [selectedShopForQr, setSelectedShopForQr] = useState(null);
   const [selectedShopForDetails, setSelectedShopForDetails] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Job Verification & Auth Code states
+  const [authSearchCode, setAuthSearchCode] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authJobResult, setAuthJobResult] = useState(null);
+  const [authError, setAuthError] = useState('');
+  const [ordersList, setOrdersList] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -34,23 +42,67 @@ export default function AdminDashboard({ onLogout }) {
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      const [statsRes, shopsRes, settingsRes] = await Promise.all([
+      const [statsRes, shopsRes, settingsRes, ordersRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/shops'),
-        fetch('/api/admin/settings')
+        fetch('/api/admin/settings'),
+        fetch('/api/admin/orders')
       ]);
 
-      const statsData = await statsRes.json();
-      const shopsData = await shopsRes.json();
-      const settingsData = await settingsRes.json();
+      const [statsData, shopsData, settingsData, ordersData] = await Promise.all([
+        statsRes.json(),
+        shopsRes.json(),
+        settingsRes.json(),
+        ordersRes.json()
+      ]);
 
       if (statsData.success) setStats(statsData.stats);
       if (shopsData.success) setShops(shopsData.shops || []);
       if (settingsData.success) setSettings(settingsData.settings || {});
+      if (ordersData.success) setOrdersList(ordersData.orders || []);
     } catch (err) {
       console.error('Admin data fetch error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOrdersList = async () => {
+    setOrdersLoading(true);
+    try {
+      const res = await fetch('/api/admin/orders');
+      const data = await res.json();
+      if (data.success) {
+        setOrdersList(data.orders || []);
+      }
+    } catch (_) {
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const handleLookupAuth = async (lookupCode) => {
+    const code = (lookupCode || authSearchCode || '').trim();
+    if (!code) {
+      setAuthError('Please enter a job code or unique authentication code');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    setAuthJobResult(null);
+    try {
+      const res = await fetch(`/api/admin/verify-job/${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (data.success && data.job) {
+        setAuthJobResult(data.job);
+        showToast('✓ Job successfully authenticated!');
+      } else {
+        setAuthError(data.error || 'Job not found or invalid authentication code.');
+      }
+    } catch (_) {
+      setAuthError('Verification request failed. Check server connection.');
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -172,6 +224,7 @@ export default function AdminDashboard({ onLogout }) {
         <div className="flex items-center gap-1.5 border-b border-slate-200 pb-3 overflow-x-auto">
           {[
             { id: 'overview', label: 'Platform Overview', icon: DollarSign },
+            { id: 'verify', label: '🔐 Job Verification', icon: ShieldCheck },
             { id: 'charts', label: '📊 Deep Charts & Analytics', icon: BarChart3 },
             { id: 'shops', label: `Shops (${shops.length})`, icon: Store },
             { id: 'future', label: '⚡ Future Options & Controls', icon: Sparkles },
@@ -356,6 +409,349 @@ export default function AdminDashboard({ onLogout }) {
                 </div>
               </div>
 
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Job Verification & Auth Code Central */}
+        {activeTab === 'verify' && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {/* Header Banner */}
+            <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-indigo-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-2xl">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-indigo-500/20 text-indigo-300 rounded-lg border border-indigo-400/30">
+                    <ShieldCheck className="w-4 h-4" />
+                  </span>
+                  <h2 className="text-base font-extrabold tracking-tight">Job Authentication & Verification Central</h2>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Verify the authenticity of any print order across all shops using its unique small Auth Code (e.g.{' '}
+                  <span className="font-mono text-amber-300 font-bold">PZ-XXXX</span>), pickup token (#0001), or database ID. Inspect customer audit trail, payment confirmation, and original document specs.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={fetchOrdersList}
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${ordersLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh Orders</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Search Form */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+              <label className="text-xs font-extrabold text-slate-800 block">
+                Enter Unique Authentication Code or Job Token:
+              </label>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleLookupAuth();
+                }}
+                className="flex flex-col sm:flex-row gap-2.5"
+              >
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="e.g. PZ-7K9M or 0001 or #0001..."
+                    value={authSearchCode}
+                    onChange={(e) => setAuthSearchCode(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-hidden transition"
+                  />
+                  {authSearchCode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthSearchCode('');
+                        setAuthJobResult(null);
+                        setAuthError('');
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={authLoading || !authSearchCode.trim()}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-md shadow-indigo-500/20 active:scale-98 shrink-0"
+                >
+                  {authLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Authenticate Job</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {authError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{authError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Authenticated Job Result Card */}
+            {authJobResult && (
+              <div className="bg-white rounded-3xl border-2 border-emerald-500/40 p-5 sm:p-6 shadow-md space-y-5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shadow-inner">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-extrabold text-emerald-800 uppercase tracking-wide">
+                          AUTHENTICATED & VERIFIED
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Verified via Central Database Authority · Order #{authJobResult.job_code}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Auth Code:</span>
+                      <span className="font-mono text-sm font-extrabold text-indigo-700 select-all">
+                        {authJobResult.auth_code || 'N/A'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (authJobResult.auth_code) {
+                          navigator.clipboard.writeText(authJobResult.auth_code);
+                          showToast(`Copied: ${authJobResult.auth_code}`);
+                        }
+                      }}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition"
+                      title="Copy Auth Code"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                    <p className="text-[10px] font-extrabold uppercase text-slate-400">Print Shop</p>
+                    <p className="font-bold text-slate-800 text-sm">{authJobResult.shop_name}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{authJobResult.shop_address || 'No address'}</p>
+                    <p className="text-[11px] text-blue-600 font-mono">{authJobResult.shop_phone || 'No phone'}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                    <p className="text-[10px] font-extrabold uppercase text-slate-400">Customer</p>
+                    <p className="font-bold text-slate-800 text-sm">{authJobResult.customer_name || 'Guest'}</p>
+                    <p className="text-[11px] text-slate-500 font-mono">{authJobResult.customer_phone || 'Anonymous'}</p>
+                    <p className="text-[10px] text-slate-400">IP: {authJobResult.customer_ip || 'Internal'}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                    <p className="text-[10px] font-extrabold uppercase text-slate-400">Amount & Payment</p>
+                    <p className="font-extrabold text-slate-900 text-base">
+                      ৳{parseFloat(authJobResult.total_price || 0).toFixed(2)}
+                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          authJobResult.payment_status?.startsWith('paid')
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {authJobResult.payment_status}
+                      </span>
+                      {authJobResult.payment_trx_id && (
+                        <span className="text-[10px] font-mono text-slate-500">
+                          Trx: {authJobResult.payment_trx_id}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-1">
+                    <p className="text-[10px] font-extrabold uppercase text-slate-400">Lifecycle Status</p>
+                    <div>
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-extrabold uppercase ${
+                          authJobResult.status === 'done'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : authJobResult.status === 'printing'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {authJobResult.status}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Ordered: {new Date(authJobResult.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Attached Files List */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-extrabold text-slate-700">
+                    Attached Document Files ({authJobResult.files?.length || 0})
+                  </h4>
+                  <div className="space-y-1.5">
+                    {authJobResult.files?.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                          <span className="font-bold text-slate-800 truncate">{file.original_name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500 shrink-0 font-mono">
+                          <span>{file.copies} copy(ies)</span>
+                          <span>·</span>
+                          <span className="uppercase font-bold text-slate-700">{file.color_mode}</span>
+                          <span>·</span>
+                          <span>{file.paper_size}</span>
+                          <span>·</span>
+                          <span className="font-extrabold text-slate-900">
+                            ৳{parseFloat(file.file_price || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recent Platform Orders Table */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden space-y-3 p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-800">Recent Platform Jobs & Quick Auth</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Click any Auth Code or "Inspect" to run a live authenticity audit.
+                  </p>
+                </div>
+                <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                  {ordersList.length} Recent Jobs
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400 font-semibold text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Auth Code</th>
+                      <th className="py-2.5 px-3">Job #</th>
+                      <th className="py-2.5 px-3">Shop</th>
+                      <th className="py-2.5 px-3">Customer</th>
+                      <th className="py-2.5 px-3">Time & Date</th>
+                      <th className="py-2.5 px-3">Amount</th>
+                      <th className="py-2.5 px-3">Payment</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {ordersList.length > 0 ? (
+                      ordersList.map(order => (
+                        <tr key={order.id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-2.5 px-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAuthSearchCode(order.auth_code);
+                                handleLookupAuth(order.auth_code);
+                              }}
+                              className="font-mono text-[11px] font-extrabold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200 transition select-all"
+                              title="Click to authenticate this job"
+                            >
+                              {order.auth_code || 'N/A'}
+                            </button>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-blue-600">#{order.job_code}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-800 max-w-[140px] truncate">
+                            {order.shop_name}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 max-w-[130px] truncate">
+                            {order.customer_name || 'Guest'}
+                          </td>
+                          <td className="py-2.5 px-3 text-[11px] text-slate-500 whitespace-nowrap font-medium">
+                            {order.created_at ? (
+                              <span>
+                                {new Date(order.created_at).toLocaleDateString([], { day: '2-digit', month: 'short' })},
+                                {' '}
+                                {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-2.5 px-3 font-extrabold text-slate-900">
+                            ৳{parseFloat(order.total_price || 0).toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                order.payment_status?.startsWith('paid')
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-rose-100 text-rose-800'
+                              }`}
+                            >
+                              {order.payment_status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                order.status === 'done'
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : order.status === 'printing'
+                                  ? 'bg-blue-50 text-blue-700'
+                                  : 'bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              {order.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAuthSearchCode(order.auth_code || order.job_code);
+                                handleLookupAuth(order.auth_code || order.job_code);
+                              }}
+                              className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-[11px] inline-flex items-center gap-1 transition"
+                            >
+                              <ShieldCheck className="w-3 h-3" /> Inspect
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="py-6 text-center text-slate-400 text-xs">
+                          {ordersLoading ? 'Loading platform orders...' : 'No print jobs recorded yet.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

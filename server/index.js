@@ -163,6 +163,28 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Download Permission Request: Shop → Customer (Feature 2)
+    // Shop emits this; server relays to the customer tracking room for that job
+    socket.on('download_permission_request', (data) => {
+        if (data?.job_code) {
+            console.log(`[Socket] Shop #${data.shop_id} requesting download permission for job ${data.job_code}`);
+            io.to(`job_${data.job_code}`).emit('download_permission_request', data);
+        }
+    });
+
+    // Download Permission Response: Customer → Shop (Feature 2)
+    // Customer emits this; server relays back to the shop room
+    socket.on('download_permission_response', (data) => {
+        if (data?.shop_id && data?.job_code) {
+            const eventName = data.granted ? 'download_permission_granted' : 'download_permission_denied';
+            console.log(`[Socket] Customer ${data.granted ? 'GRANTED' : 'DENIED'} download for job ${data.job_code}`);
+            io.to(`shop_${data.shop_id}`).emit(eventName, {
+                job_id: data.job_id,
+                job_code: data.job_code
+            });
+        }
+    });
+
     socket.on('disconnect', () => {
         // cleaned automatically
     });

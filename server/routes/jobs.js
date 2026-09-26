@@ -19,7 +19,9 @@ router.get('/', async (req, res) => {
         }
 
         let sql = `
-            SELECT id, job_code, shop_id, customer_name, customer_phone,
+            SELECT id, job_code, 
+                   COALESCE(NULLIF(auth_code, ''), CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(id, '-', job_code, '-prntez')), 1, 4)))) as auth_code,
+                   shop_id, customer_name, customer_phone,
                    COALESCE(total_pages, 0) as total_pages,
                    total_files,
                    COALESCE(total_price, 0.00) as total_price,
@@ -78,8 +80,11 @@ router.get('/', async (req, res) => {
 router.get('/track/:jobCode', async (req, res) => {
     try {
         const { jobCode } = req.params;
+        const cleanCode = (jobCode || '').trim();
         const jobs = await query(`
-            SELECT j.id, j.job_code, j.shop_id, j.customer_name, j.customer_phone,
+            SELECT j.id, j.job_code, 
+                   COALESCE(NULLIF(j.auth_code, ''), CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(j.id, '-', j.job_code, '-prntez')), 1, 4)))) as auth_code,
+                   j.shop_id, j.customer_name, j.customer_phone,
                    j.customer_ip, j.customer_alias,
                    j.total_files, COALESCE(j.total_price, 0.00) as total_price,
                    COALESCE(j.total_pages, 0) as total_pages,
@@ -92,9 +97,9 @@ router.get('/track/:jobCode', async (req, res) => {
                    s.bkash_number as shop_bkash, s.nagad_number as shop_nagad
             FROM print_jobs j
             JOIN shops s ON j.shop_id = s.id
-            WHERE j.job_code = ?
+            WHERE j.job_code = ? OR UPPER(COALESCE(NULLIF(j.auth_code, ''), CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(j.id, '-', j.job_code, '-prntez')), 1, 4))))) = UPPER(?)
             ORDER BY j.id DESC LIMIT 1
-        `, [jobCode]);
+        `, [cleanCode, cleanCode]);
 
         if (jobs.length === 0) {
             return res.status(404).json({ success: false, error: 'Print job not found' });

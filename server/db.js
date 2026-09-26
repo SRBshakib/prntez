@@ -65,6 +65,8 @@ async function migrate() {
     await ensureColumn('shops', 'services_offered', "VARCHAR(255) DEFAULT 'Laser Print, Color Print, Photocopy, Spiral Binding, Laminating'");
     await ensureColumn('shops', 'points_balance', 'INT DEFAULT 0');
     await ensureColumn('shops', 'lifetime_points', 'INT DEFAULT 0');
+    await ensureColumn('shops', 'latitude', 'DECIMAL(10,8) DEFAULT 23.81510000');
+    await ensureColumn('shops', 'longitude', 'DECIMAL(11,8) DEFAULT 90.42550000');
 
     // 2. Ensure columns on print_jobs
     await ensureColumn('print_jobs', 'total_pages', 'INT DEFAULT 0');
@@ -77,6 +79,25 @@ async function migrate() {
     await ensureColumn('print_jobs', 'customer_ip', 'VARCHAR(45) DEFAULT NULL');
     await ensureColumn('print_jobs', 'customer_alias', 'VARCHAR(100) DEFAULT NULL');
     await ensureColumn('print_jobs', 'completed_at', 'DATETIME DEFAULT NULL');
+
+    // Direct guarantee: Ensure auth_code column exists on print_jobs
+    try {
+        await pool.query("ALTER TABLE `print_jobs` ADD COLUMN `auth_code` VARCHAR(20) DEFAULT NULL");
+    } catch (_) {}
+    try {
+        await pool.query("CREATE INDEX `idx_print_jobs_auth_code` ON `print_jobs` (`auth_code`)");
+    } catch (_) {}
+
+    // Backfill any existing print_jobs without auth_code directly in 1 MySQL query
+    try {
+        await pool.query(`
+            UPDATE print_jobs 
+            SET auth_code = CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(id, '-', job_code, '-prntez')), 1, 4)))
+            WHERE auth_code IS NULL OR auth_code = '' OR auth_code = 'N/A'
+        `);
+    } catch (e) {
+        console.error('[DB] Backfill auth_code error:', e.message);
+    }
 
     // 3. Ensure columns on print_files
     await ensureColumn('print_files', 'file_price', 'DECIMAL(10,2) DEFAULT 0.00');

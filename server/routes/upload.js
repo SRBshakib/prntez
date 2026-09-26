@@ -157,16 +157,23 @@ router.post('/', upload.array('files', 20), async (req, res) => {
             finalCustomerName = persona.fullName; // e.g. "Anonymous Penguin 🐧"
         }
 
+        // Generate small unique authentication code (e.g. PZ-7K9M) for admin/shopkeeper verification
+        const authChars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+        let authCode = 'PZ-';
+        for (let i = 0; i < 4; i++) {
+            authCode += authChars.charAt(Math.floor(Math.random() * authChars.length));
+        }
+
         // Insert print_job
         const jobInsert = await query(`
             INSERT INTO print_jobs (
-                job_code, shop_id, customer_name, customer_phone, customer_ip, customer_alias,
+                job_code, auth_code, shop_id, customer_name, customer_phone, customer_ip, customer_alias,
                 total_files, total_pages, total_price, discount_applied,
                 payment_status, payment_method, payment_trx_id,
                 status, global_notes, files_deleted, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?)
         `, [
-            jobCode, targetShopId,
+            jobCode, authCode, targetShopId,
             finalCustomerName,
             (customer_phone || '').trim(),
             clientIp,
@@ -227,6 +234,7 @@ router.post('/', upload.array('files', 20), async (req, res) => {
         const fullJob = {
             id: jobId,
             job_code: jobCode,
+            auth_code: authCode,
             shop_id: targetShopId,
             customer_name: finalCustomerName,
             customer_phone: customer_phone || '',
@@ -252,6 +260,7 @@ router.post('/', upload.array('files', 20), async (req, res) => {
             success: true,
             job_id: jobId,
             job_code: jobCode,
+            auth_code: authCode,
             shop_name: shopRow.name,
             customer_name: finalCustomerName,
             customer_alias: persona.fullName,

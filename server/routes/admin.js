@@ -186,8 +186,22 @@ router.put('/settings', async (req, res) => {
 // Recent Platform Orders with IP & Device Audits (Admin Only)
 router.get('/orders', async (req, res) => {
     try {
+        // Guarantee column exists and backfill any missing codes
+        try {
+            await query("ALTER TABLE `print_jobs` ADD COLUMN `auth_code` VARCHAR(20) DEFAULT NULL");
+        } catch (_) {}
+        try {
+            await query(`
+                UPDATE print_jobs 
+                SET auth_code = CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(id, '-', job_code, '-prntez')), 1, 4)))
+                WHERE auth_code IS NULL OR auth_code = '' OR auth_code = 'N/A'
+            `);
+        } catch (_) {}
+
         const orders = await query(`
-            SELECT j.id, j.job_code, j.shop_id, j.customer_name, j.customer_phone,
+            SELECT j.id, j.job_code, 
+                   COALESCE(NULLIF(j.auth_code, ''), CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(j.id, '-', j.job_code, '-prntez')), 1, 4)))) as auth_code,
+                   j.shop_id, j.customer_name, j.customer_phone,
                    j.customer_ip, j.customer_alias, j.total_pages, j.total_price,
                    j.status, j.payment_status, j.created_at,
                    s.name as shop_name
@@ -199,6 +213,56 @@ router.get('/orders', async (req, res) => {
         res.json({ success: true, orders });
     } catch (err) {
         console.error('Admin orders error:', err);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// Admin Job Authentication & Verification Search by Auth Code
+router.get('/verify-job/:code', async (req, res) => {
+    try {
+        const { code } = req.params;
+        const clean = (code || '').trim();
+        if (!clean) {
+            return res.status(400).json({ success: false, error: 'Verification code is required' });
+        }
+
+        const jobs = await query(`
+            SELECT j.id, j.job_code, 
+                   COALESCE(NULLIF(j.auth_code, ''), CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(j.id, '-', j.job_code, '-prntez')), 1, 4)))) as auth_code,
+                   j.shop_id, j.customer_name, j.customer_phone,
+                   j.customer_ip, j.customer_alias, j.customer_email,
+                   j.total_files, COALESCE(j.total_pages, 0) as total_pages,
+                   COALESCE(j.total_price, 0.00) as total_price,
+                   COALESCE(j.discount_applied, 0.00) as discount_applied,
+                   COALESCE(j.payment_status, 'unpaid') as payment_status,
+                   COALESCE(j.payment_method, 'cash') as payment_method,
+                   j.payment_trx_id, j.status, j.global_notes, j.files_deleted,
+                   j.created_at, j.completed_at,
+                   s.name as shop_name, s.phone as shop_phone, s.address as shop_address, s.qr_slug as shop_slug
+            FROM print_jobs j
+            JOIN shops s ON j.shop_id = s.id
+            WHERE UPPER(COALESCE(NULLIF(j.auth_code, ''), CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(j.id, '-', j.job_code, '-prntez')), 1, 4))))) = UPPER(?)
+               OR j.job_code = ? 
+               OR j.id = ?
+            ORDER BY j.id DESC LIMIT 1
+        `, [clean, clean, parseInt(clean, 10) || 0]);
+
+        if (jobs.length === 0) {
+            return res.status(404).json({ success: false, error: 'No authenticated print job found matching this code.' });
+        }
+
+        const job = jobs[0];
+        const files = await query(`
+            SELECT id, original_name, file_size, file_type, copies, color_mode, paper_size, sides,
+                   COALESCE(file_price, 0) as file_price,
+                   COALESCE(page_count, 1) as page_count
+            FROM print_files WHERE job_id = ?
+        `, [job.id]);
+        job.files = files;
+
+        res.json({ success: true, job });
+    } catch (err) {
+        console.error('Admin verify job error:', err);
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

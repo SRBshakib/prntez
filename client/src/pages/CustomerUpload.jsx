@@ -315,6 +315,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
         try {
           const newOrderEntry = {
             jobCode: data.job_code,
+            authCode: data.auth_code,
             shopName: shop.name,
             total: total,
             totalPages: totalPages,

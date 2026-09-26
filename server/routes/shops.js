@@ -20,7 +20,9 @@ router.get('/public', async (req, res) => {
                    COALESCE(discount_min_pages, 50) as discount_min_pages,
                    COALESCE(discount_percent, 10.00) as discount_percent,
                    COALESCE(discount_tier2_pages, 100) as discount_tier2_pages,
-                   COALESCE(discount_tier2_percent, 15.00) as discount_tier2_percent
+                   COALESCE(discount_tier2_percent, 15.00) as discount_tier2_percent,
+                   COALESCE(latitude, 23.8151) as latitude,
+                   COALESCE(longitude, 90.4255) as longitude
             FROM shops WHERE status = 'active'
             ORDER BY id ASC LIMIT 50
         `);

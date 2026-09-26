@@ -490,6 +490,7 @@ export default function ShopDashboard({ shop, onLogout }) {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (j.job_code || '').toLowerCase().includes(q) ||
+               (j.auth_code || '').toLowerCase().includes(q) ||
                (j.customer_name || '').toLowerCase().includes(q) ||
                (j.customer_phone || '').toLowerCase().includes(q);
       }
@@ -1076,6 +1077,20 @@ export default function ShopDashboard({ shop, onLogout }) {
                       <div className="space-y-1.5 min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
                           <span className="text-base font-extrabold text-blue-600 tracking-tight">#{job.job_code}</span>
+                          {job.auth_code && (
+                            <button
+                              type="button"
+                              className="font-mono text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-2 py-0.5 rounded-lg border border-slate-200 hover:border-indigo-200 transition flex items-center gap-1"
+                              title="Auth Verification Code - Share or use for customer verification requests (Click to copy)"
+                              onClick={() => {
+                                navigator.clipboard.writeText(job.auth_code);
+                                showToast(`Copied Verification Code: ${job.auth_code}`, 'info');
+                              }}
+                            >
+                              <span className="text-[8px] font-sans font-bold uppercase text-slate-400">Auth:</span>
+                              <span>{job.auth_code}</span>
+                            </button>
+                          )}
                           <span className="font-bold text-xs text-slate-800">{job.customer_name || 'Guest'}</span>
                           {job.customer_phone && (
                             <span className="text-[11px] text-slate-400 font-medium">{job.customer_phone}</span>
