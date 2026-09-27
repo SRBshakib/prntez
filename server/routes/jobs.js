@@ -438,5 +438,79 @@ router.get('/serve/:fileId', async (req, res) => {
         res.status(500).send('Internal server error');
     }
 });
+// ─────────────────────────────────────────────────────
+// Get Files for a specific Job
+// ─────────────────────────────────────────────────────
+router.get('/:id/files', async (req, res) => {
+    try {
+        const jobId = parseInt(req.params.id, 10);
+        const files = await query(`
+            SELECT id, job_id, original_name, stored_path, file_type, file_size,
+                   copies, color_mode, paper_size, sides,
+                   COALESCE(file_price, 0) as file_price,
+                   COALESCE(page_count, 1) as page_count,
+                   notes, upload_status
+            FROM print_files WHERE job_id = ?
+        `, [jobId]);
+        res.json({ success: true, data: files });
+    } catch (err) {
+        console.error('Get files error:', err);
+        res.status(500).json({ success: false, error: 'Failed to retrieve job files' });
+    }
+});
+
+// ─────────────────────────────────────────────────────
+// Direct Download Single File (Express res.download)
+// ─────────────────────────────────────────────────────
+router.get('/download/:fileId', async (req, res) => {
+    try {
+        const fileId = parseInt(req.params.fileId, 10);
+        const files = await query('SELECT * FROM print_files WHERE id = ?', [fileId]);
+
+        if (files.length === 0) return res.status(404).send('File not found');
+        const file = files[0];
+
+        if (!file.stored_path || !fs.existsSync(file.stored_path)) {
+            return res.status(404).send('File missing from disk storage');
+        }
+
+        res.download(file.stored_path, file.original_name);
+    } catch (err) {
+        console.error('Download file error:', err);
+        res.status(500).send('Internal server error');
+    }
+});
+
+router.get('/:id/download-zip', async (req, res) => {
+    try {
+        const jobId = parseInt(req.params.id, 10);
+        const jobs = await query('SELECT * FROM print_jobs WHERE id = ?', [jobId]);
+        if (jobs.length === 0) return res.status(404).send('Job not found');
+
+        const job = jobs[0];
+        if (job.files_deleted) return res.status(410).send('Files have been purged');
+
+        const files = await query('SELECT * FROM print_files WHERE job_id = ?', [jobId]);
+        if (files.length === 0) return res.status(404).send('No files found for this job');
+
+        const archive = archiver('zip', { zlib: { level: 9 } });
+        res.attachment(`Job_${job.job_code}_Files.zip`);
+        archive.pipe(res);
+
+        for (const f of files) {
+            if (f.stored_path && fs.existsSync(f.stored_path)) {
+                archive.file(f.stored_path, { name: f.original_name || `document_${f.id}.pdf` });
+            }
+        }
+
+        await archive.finalize();
+    } catch (err) {
+        console.error('Download ZIP error:', err);
+        if (!res.headersSent) {
+            res.status(500).send('Error generating ZIP archive');
+        }
+    }
+});
 
 module.exports = router;
+

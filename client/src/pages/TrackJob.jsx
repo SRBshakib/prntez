@@ -23,6 +23,7 @@ export default function TrackJob({ jobCode, onBack }) {
   const [brandSponsor, setBrandSponsor] = useState(null);
   const [adsenseConfig, setAdsenseConfig] = useState(null);
   const [dlRequest, setDlRequest] = useState(null);
+  const [reprintRequest, setReprintRequest] = useState(null);
 
   useEffect(() => {
     // Fetch announcement & adsense
@@ -101,12 +102,34 @@ export default function TrackJob({ jobCode, onBack }) {
       }, 60000);
     };
 
+    const handleReprintPermissionRequest = (req) => {
+      setReprintRequest(req);
+      playChime();
+      setTimeout(() => {
+        setReprintRequest(curr => {
+          if (curr && curr.job_id === req.job_id) {
+            socket.emit('reprint_permission_response', {
+              job_id: req.job_id,
+              job_code: req.job_code,
+              shop_id: req.shop_id,
+              file_id: req.file_id,
+              granted: false
+            });
+            return null;
+          }
+          return curr;
+        });
+      }, 60000);
+    };
+
     socket.on('status_changed', handleStatusChanged);
     socket.on('download_permission_request', handleDownloadPermissionRequest);
+    socket.on('reprint_permission_request', handleReprintPermissionRequest);
 
     return () => {
       socket.off('status_changed', handleStatusChanged);
       socket.off('download_permission_request', handleDownloadPermissionRequest);
+      socket.off('reprint_permission_request', handleReprintPermissionRequest);
     };
   }, [jobCode]);
 
@@ -473,6 +496,61 @@ export default function TrackJob({ jobCode, onBack }) {
                 >
                   <Download className="w-4 h-4" />
                   Allow
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">This request will expire in 60 seconds.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Reprint Permission Modal (Shop -> Customer) */}
+        {reprintRequest && (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-5 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 border-2 border-blue-200 text-blue-600 flex items-center justify-center mx-auto shadow-lg shadow-blue-100/50">
+                <Printer className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-extrabold text-slate-800">Reprint Permission</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  <span className="font-bold text-slate-700">{reprintRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to reprint your document.
+                </p>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 font-medium flex items-start gap-2 text-left">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
+                <span>An extra copy of your document will be printed at the counter.</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    socket.emit('reprint_permission_response', {
+                      job_id: reprintRequest.job_id,
+                      job_code: reprintRequest.job_code,
+                      shop_id: reprintRequest.shop_id,
+                      file_id: reprintRequest.file_id,
+                      granted: false
+                    });
+                    setReprintRequest(null);
+                  }}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition border border-slate-200 cursor-pointer"
+                >
+                  Deny
+                </button>
+                <button
+                  onClick={() => {
+                    socket.emit('reprint_permission_response', {
+                      job_id: reprintRequest.job_id,
+                      job_code: reprintRequest.job_code,
+                      shop_id: reprintRequest.shop_id,
+                      file_id: reprintRequest.file_id,
+                      granted: true
+                    });
+                    setReprintRequest(null);
+                  }}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  Allow Reprint
                 </button>
               </div>
               <p className="text-[10px] text-slate-400">This request will expire in 60 seconds.</p>

@@ -4,7 +4,7 @@ import {
   Eye, RefreshCw, Search, ArrowUpRight, LogOut, ChevronDown, ChevronUp,
   FileText, Image as ImageIcon, Volume2, VolumeX, Store, Check, AlertCircle, X,
   Command, Sparkles, Play, Layers, Copy, BarChart3, TrendingUp, MessageCircle,
-  CreditCard, ShieldCheck, Sun, Moon, Percent, Wrench
+  CreditCard, ShieldCheck, Sun, Moon, Percent, Wrench, Lock, Megaphone, Shield, KeyRound
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import { socket, playChime } from '../socket';
@@ -77,6 +77,11 @@ export default function ShopDashboard({ shop, onLogout }) {
   // Active Document Preview Modal
   const [activePreview, setActivePreview] = useState(null);
 
+  // Interactive Counter Calling & Customer Reprint/Download Approval States
+  const [callingJobId, setCallingJobId] = useState(null);
+  const [reprintModal, setReprintModal] = useState(null); // { job, authCode: '', error: '' }
+  const [downloadModal, setDownloadModal] = useState(null); // { job, authCode: '', error: '', waitingSocket: false }
+
   // Toast Notification
   const [toast, setToast] = useState(null);
 
@@ -136,12 +141,15 @@ export default function ShopDashboard({ shop, onLogout }) {
     };
 
     const onJobUpdated = (update) => {
-      setJobs(prev => prev.map(j => (j.id === update.id ? {
-        ...j,
-        ...update,
-        files_deleted: update.files_deleted !== undefined ? update.files_deleted : (update.status === 'done' ? 1 : j.files_deleted),
-        files: (update.files_deleted === 1 || update.status === 'done') ? [] : j.files
-      } : j)));
+      setJobs(prev => prev.map(j => {
+        if (j.id !== update.id) return j;
+        return {
+          ...j,
+          ...update,
+          files_deleted: update.files_deleted !== undefined ? update.files_deleted : j.files_deleted,
+          files: (update.files && update.files.length > 0) ? update.files : j.files
+        };
+      }));
     };
 
     const onPointsAwarded = (data) => {
@@ -156,18 +164,62 @@ export default function ShopDashboard({ shop, onLogout }) {
 
     const onDownloadGranted = (data) => {
       setPendingPermissionJobId(null);
-      showToast(`✓ Customer granted download permission for #${data.job_code}! Downloading...`, 'success');
-      const a = document.createElement('a');
-      a.href = `/api/jobs/${data.job_id}/download-zip`;
-      a.download = `Job_${data.job_code}_Files.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      setDownloadModal(null);
+      showToast(`✓ Customer granted download permission for #${data.job_code}! Downloading file(s)...`, 'success');
+      
+      // Fetch or locate target files to trigger direct file download (not zip)
+      fetch(`/api/jobs/${data.job_id}/files`)
+        .then(res => res.json())
+        .then(filesData => {
+          const fileList = filesData?.data || [];
+          if (fileList.length > 0) {
+            fileList.forEach((file, idx) => {
+              setTimeout(() => {
+                const a = document.createElement('a');
+                a.href = `/api/jobs/download/${file.id}`;
+                a.download = file.original_name || `document_${file.id}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              }, idx * 400);
+            });
+          }
+        })
+        .catch(err => {
+          console.error('Download error:', err);
+          showToast('Failed to download files', 'error');
+        });
     };
 
     const onDownloadDenied = (data) => {
       setPendingPermissionJobId(null);
+      setDownloadModal(null);
       showToast(`❌ Customer denied download permission for #${data.job_code}.`, 'error');
+    };
+
+    const onReprintGranted = (data) => {
+      setReprintModal(null);
+      showToast(`✓ Customer approved reprint for #${data.job_code}! Printing...`, 'success');
+      // Trigger reprint
+      fetch(`/api/jobs/${data.job_id}/files`)
+        .then(res => res.json())
+        .then(filesData => {
+          const fileList = filesData?.data || [];
+          if (fileList.length > 0) {
+            if (data.file_id) {
+              const targetF = fileList.find(f => f.id === data.file_id) || fileList[0];
+              handleQuickPrint(targetF, { id: data.job_id, job_code: data.job_code });
+            } else {
+              fileList.forEach(f => handleQuickPrint(f, { id: data.job_id, job_code: data.job_code }));
+            }
+          }
+        })
+        .catch(err => console.error('Reprint fetch error:', err));
+    };
+
+    const onReprintDenied = (data) => {
+      setReprintModal(null);
+      showToast(`❌ Customer denied reprint permission for #${data.job_code}.`, 'error');
     };
 
     socket.on('connect', onConnect);
@@ -177,6 +229,8 @@ export default function ShopDashboard({ shop, onLogout }) {
     socket.on('points_awarded', onPointsAwarded);
     socket.on('download_permission_granted', onDownloadGranted);
     socket.on('download_permission_denied', onDownloadDenied);
+    socket.on('reprint_permission_granted', onReprintGranted);
+    socket.on('reprint_permission_denied', onReprintDenied);
 
     return () => {
       clearInterval(bridgeInterval);
@@ -187,6 +241,8 @@ export default function ShopDashboard({ shop, onLogout }) {
       socket.off('points_awarded', onPointsAwarded);
       socket.off('download_permission_granted', onDownloadGranted);
       socket.off('download_permission_denied', onDownloadDenied);
+      socket.off('reprint_permission_granted', onReprintGranted);
+      socket.off('reprint_permission_denied', onReprintDenied);
     };
   }, [shop?.id, autoPrint, audioEnabled]);
 
@@ -405,7 +461,7 @@ export default function ShopDashboard({ shop, onLogout }) {
   };
 
   // 3. Print Actions (Browser Dialog Ctrl+P vs Hardware Spooler)
-  const handleBrowserPrint = (file, job) => {
+  const handleBrowserPrint = (file, job, markDone = true) => {
     if (!file) return;
 
     const fileUrl = `/api/jobs/serve/${file.id}`;
@@ -425,31 +481,35 @@ export default function ShopDashboard({ shop, onLogout }) {
       try {
         printFrame.contentWindow.focus();
         printFrame.contentWindow.print();
-        // Automatically mark done upon sending to printer
-        if (job?.id && job.status !== 'done') {
+        // Automatically mark done or printing upon sending to printer
+        if (markDone && job?.id && job.status !== 'done') {
           updateJobStatus(job.id, 'done');
+        } else if (job?.id && job.status === 'pending') {
+          updateJobStatus(job.id, 'printing');
         }
       } catch (_) {
         // Fallback: open in new tab so user can use Ctrl + P directly
         window.open(fileUrl, '_blank');
-        if (job?.id && job.status !== 'done') {
+        if (markDone && job?.id && job.status !== 'done') {
           updateJobStatus(job.id, 'done');
+        } else if (job?.id && job.status === 'pending') {
+          updateJobStatus(job.id, 'printing');
         }
       }
     };
   };
 
-  const handleQuickPrint = async (file, job) => {
+  const handleQuickPrint = async (file, job, markDone = true) => {
     if (!file) return;
 
     // If printMode is set to manual/browser (Default), use the browser print dialog
     if (printMode === 'browser') {
-      handleBrowserPrint(file, job);
+      handleBrowserPrint(file, job, markDone);
       return;
     }
 
     try {
-      const modeLabel = isSimulating ? '🖥️ Simulating print...' : `⚡ Spooling to ${defaultPrinter}...`;
+      const modeLabel = isSimulating ? '🖥️ Simulating print...' : `⚡ Spooling ${file.original_name} to ${defaultPrinter}...`;
       showToast(modeLabel, 'info');
 
       const res = await fetch('/api/jobs/spool', {
@@ -470,8 +530,10 @@ export default function ShopDashboard({ shop, onLogout }) {
           : `✅ Spooled in ${data.spoolTimeMs}ms → ${data.printer}`;
         showToast(label, 'success');
         // Automatically mark done upon spooling!
-        if (job?.id && job.status !== 'done') {
+        if (markDone && job?.id && job.status !== 'done') {
           await updateJobStatus(job.id, 'done');
+        } else if (job?.id && job.status === 'pending') {
+          await updateJobStatus(job.id, 'printing');
         }
         fetchSpoolLog();
         return;
@@ -481,15 +543,16 @@ export default function ShopDashboard({ shop, onLogout }) {
     }
 
     // Fallback: browser print
-    handleBrowserPrint(file, job);
+    handleBrowserPrint(file, job, markDone);
   };
 
   const handlePrintAll = (job) => {
     if (!job || !job.files || job.files.length === 0) return;
-    job.files.forEach(f => handleQuickPrint(f, job));
-    if (job.id && job.status !== 'done') {
-      updateJobStatus(job.id, 'done');
-    }
+    job.files.forEach((f, idx) => {
+      setTimeout(() => {
+        handleQuickPrint(f, job, idx === job.files.length - 1);
+      }, idx * 600);
+    });
   };
 
   // Batch action: Print ALL pending jobs
@@ -548,6 +611,77 @@ export default function ShopDashboard({ shop, onLogout }) {
     }
   };
 
+  // Customer-Confirmed Job Files Download (Direct files, real-time approval)
+  const handleRequestDownload = (job) => {
+    if (!job) return;
+    if (job.files_deleted) {
+      showToast('Files have been purged per retention policy.', 'error');
+      return;
+    }
+
+    // Emit live socket permission request to customer's tracking screen
+    socket.emit('download_permission_request', {
+      shop_id: shop?.id,
+      shop_name: shop?.name || 'Print Shop',
+      job_id: job.id,
+      job_code: job.job_code
+    });
+
+    setDownloadModal({ job });
+    showToast(`🔔 Requested download permission from customer for #${job.job_code}`, 'info');
+  };
+
+  // Interactive Counter Voice Announcement Callout
+  const handleCallCustomer = (job) => {
+    if (!job) return;
+    setCallingJobId(job.id);
+    try {
+      playChime();
+    } catch (_) {}
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const cleanCode = (job.job_code || '').replace(/^0+/, '') || job.job_code || '';
+        const nameText = job.customer_name ? `${job.customer_name}` : 'Customer';
+        const docNames = job.files && job.files.length > 0
+          ? (job.files.length === 1 ? job.files[0].original_name : `${job.files.length} documents`)
+          : 'prints';
+        const textToSpeak = `Token ${cleanCode}. ${nameText}, your ${docNames} are ready at the counter!`;
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.05;
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('Speech synthesis notice:', err);
+      }
+    }
+
+    showToast(`📢 Calling #${job.job_code} (${job.customer_name || 'Customer'}) to Counter!`, 'info');
+    setTimeout(() => setCallingJobId(null), 3500);
+  };
+
+  // Customer-Confirmed Reprint (Real-time approval)
+  const handleOpenReprintModal = (job, fileToReprint = null) => {
+    if (!job) return;
+    if (job.files_deleted) {
+      showToast('Files have been purged per retention policy.', 'error');
+      return;
+    }
+
+    // Emit live socket reprint permission request to customer's tracking screen
+    socket.emit('reprint_permission_request', {
+      shop_id: shop?.id,
+      shop_name: shop?.name || 'Print Shop',
+      job_id: job.id,
+      job_code: job.job_code,
+      file_id: fileToReprint?.id
+    });
+
+    setReprintModal({ job, fileToReprint });
+    showToast(`🔔 Requested reprint permission from customer for #${job.job_code}`, 'info');
+  };
+
   // Filtered & Searched Jobs
   const filteredJobs = useMemo(() => {
     return jobs.filter(j => {
@@ -569,6 +703,11 @@ export default function ShopDashboard({ shop, onLogout }) {
     done: jobs.filter(j => j.status === 'done').length,
     total: jobs.length
   }), [jobs]);
+
+  // Fresh Printed Jobs for Counter Handoff Display Card
+  const freshPrintedJobs = useMemo(() => {
+    return jobs.filter(j => j.status === 'done' || j.status === 'printing').slice(0, 6);
+  }, [jobs]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
@@ -897,11 +1036,11 @@ export default function ShopDashboard({ shop, onLogout }) {
         </div>
       )}
 
-      {/* Main Layout Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 w-full flex-1 flex flex-col md:flex-row gap-5">
+      {/* Main Layout Container (Extended Widescreen Layout) */}
+      <div className="max-w-[1720px] mx-auto px-3 sm:px-4 lg:px-6 py-4 w-full flex-1 flex flex-col lg:flex-row gap-4">
         
         {/* Left Sidebar: Counter QR & Local Folder Sync */}
-        <aside className="w-full md:w-64 shrink-0 space-y-4">
+        <aside className="w-full lg:w-56 xl:w-60 shrink-0 space-y-3.5">
           
           {/* Counter QR Card */}
           <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 text-center space-y-2.5">
@@ -1064,14 +1203,14 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveFilter(tab.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                     activeFilter === tab.id
                       ? 'bg-white text-slate-800 shadow-xs'
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   <span>{tab.label}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     activeFilter === tab.id ? 'bg-slate-100 text-slate-700' : 'bg-slate-200/60 text-slate-500'
                   }`}>
                     {tab.count}
@@ -1085,19 +1224,19 @@ export default function ShopDashboard({ shop, onLogout }) {
               {stats.pending > 0 && activeFilter === 'pending' && (
                 <button
                   onClick={handlePrintAllPending}
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95"
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95 cursor-pointer"
                 >
                   <Zap className="w-3.5 h-3.5" />
                   <span>Print All ({stats.pending})</span>
                 </button>
               )}
 
-              <div className="relative flex-1 sm:w-56">
+              <div className="relative flex-1 sm:w-64">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search #token, auth code, name... (/)"
+                  placeholder="Search token, auth, customer... (/)"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -1107,7 +1246,7 @@ export default function ShopDashboard({ shop, onLogout }) {
 
           </div>
 
-          {/* Jobs List */}
+          {/* Jobs List (Rich POS Queue Cards) */}
           {loading ? (
             <div className="bg-white rounded-2xl p-10 text-center border border-slate-200">
               <RefreshCw className="w-5 h-5 animate-spin text-blue-600 mx-auto mb-2" />
@@ -1120,290 +1259,479 @@ export default function ShopDashboard({ shop, onLogout }) {
               <p className="text-[11px] text-slate-400 mt-0.5">Incoming customer jobs appear automatically in real-time.</p>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {filteredJobs.map(job => {
-                const isExpanded = expandedJobId === job.id;
                 const hasFiles = job.files && job.files.length > 0;
-                const firstFile = hasFiles ? job.files[0] : null;
+                const isDone = job.status === 'done';
+                const canPreview = !isDone && !job.files_deleted && hasFiles;
+                const canDownload = !job.files_deleted && hasFiles;
 
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-2xl border transition shadow-xs hover:shadow-md ${
+                    className={`bg-white rounded-2xl border transition shadow-xs hover:shadow-md p-3.5 space-y-2.5 ${
                       job.status === 'pending' ? 'border-l-4 border-l-amber-500 border-slate-200' :
-                      job.status === 'printing' ? 'border-l-4 border-l-blue-500 border-slate-200' :
+                      job.status === 'printing' ? 'border-l-4 border-l-blue-500 border-slate-200 bg-blue-50/10' :
                       'border-l-4 border-l-emerald-500 border-slate-200'
                     }`}
                   >
-                    {/* Card Summary Header */}
-                    <div className="p-3.5 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    {/* Layer 1: Top Bar - Order Identification, Customer, Time, Status, Total & Payment */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
                       
-                      {/* Left: Job Code & Customer Info */}
-                      <div className="space-y-1.5 min-w-0">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <span className="text-base font-extrabold text-blue-600 tracking-tight">#{job.job_code}</span>
-                          {job.auth_code && (
-                            <button
-                              type="button"
-                              className="font-mono text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-2 py-0.5 rounded-lg border border-slate-200 hover:border-indigo-200 transition flex items-center gap-1"
-                              title="Auth Verification Code - Share or use for customer verification requests (Click to copy)"
-                              onClick={() => {
-                                navigator.clipboard.writeText(job.auth_code);
-                                showToast(`Copied Verification Code: ${job.auth_code}`, 'info');
-                              }}
-                            >
-                              <span className="text-[8px] font-sans font-bold uppercase text-slate-400">Auth:</span>
-                              <span>{job.auth_code}</span>
-                            </button>
-                          )}
-                          <span className="font-bold text-xs text-slate-800">{job.customer_name || 'Guest'}</span>
-                          {job.customer_phone && (
-                            <span className="text-[11px] text-slate-400 font-medium">{job.customer_phone}</span>
-                          )}
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {/* Token Number */}
+                        <span className="text-base font-black text-blue-600 font-mono tracking-tight bg-blue-50/70 border border-blue-200/80 px-2 py-0.5 rounded-lg shadow-2xs">
+                          #{job.job_code}
+                        </span>
 
-                          {/* Time of sending (created_at) and printing completion (completed_at) */}
-                          {job.created_at && (
-                            <span
-                              className="text-[11px] text-slate-400 font-medium flex items-center gap-1"
-                              title={`Ordered: ${new Date(job.created_at).toLocaleString()}${job.completed_at ? ` · Completed: ${new Date(job.completed_at).toLocaleString()}` : ''}`}
-                            >
-                              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span>{formatOrderDate(job.created_at)}</span>
-                              {job.status === 'done' && job.completed_at && (
-                                <span className="text-emerald-600 font-semibold text-[10px]">
-                                  (Done {formatOrderTime(job.completed_at)})
-                                </span>
-                              )}
-                            </span>
-                          )}
-
-                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
-                            job.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                            job.status === 'printing' ? 'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse' :
-                            'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}>
-                            {job.status}
-                          </span>
-                          <span className="text-xs font-extrabold text-slate-900 ml-auto lg:ml-0">
-                            ৳{parseFloat(job.total_price || 0).toFixed(2)}
-                          </span>
-
-                          {/* Bulk Discount Pill */}
-                          {parseFloat(job.discount_applied || 0) > 0 && (
-                            <span className="px-2 py-0.2 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              🏷️ -৳{parseFloat(job.discount_applied).toFixed(2)} off
-                            </span>
-                          )}
-
-                          {/* Payment Status Badge */}
-                          <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                            job.payment_status === 'paid' || job.payment_status === 'paid_cash' || job.payment_status === 'paid_bkash'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : job.payment_status === 'paid_online_pending_verify'
-                                ? 'bg-indigo-100 text-indigo-800 animate-pulse'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}>
-                            <CreditCard className="w-2.5 h-2.5" />
-                            <span>
-                              {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? 'Paid (Cash)' :
-                               job.payment_status === 'paid_bkash' ? 'Paid (bKash)' :
-                               job.payment_status === 'paid_online_pending_verify' ? `Verify ${job.payment_method?.toUpperCase()} (Trx: ${job.payment_trx_id || 'Yes'})` :
-                               'Unpaid'}
-                            </span>
-                          </span>
-                        </div>
-
-                        {/* Specs Pills */}
-                        {firstFile && (
-                          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                            <span className="font-medium text-slate-600 truncate max-w-xs">{firstFile.original_name}</span>
-                            <span className="px-1.5 py-0.2 bg-slate-100 text-slate-800 font-bold rounded">
-                              {firstFile.copies}x copy
-                            </span>
-                            <span className={`px-1.5 py-0.2 rounded font-bold ${
-                              firstFile.color_mode === 'color' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              {firstFile.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
-                            </span>
-                            <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 font-bold rounded">
-                              {firstFile.paper_size}
-                            </span>
-                            <span className="px-1.5 py-0.2 bg-amber-50 text-amber-800 font-bold rounded border border-amber-200">
-                              {firstFile.sides === 'double' ? 'Duplex' : '1-Sided'}
-                            </span>
-                            {job.files.length > 1 && (
-                              <span className="px-1.5 py-0.2 bg-purple-50 text-purple-700 font-bold rounded">
-                                +{job.files.length - 1} more
-                              </span>
-                            )}
-                          </div>
+                        {/* Customer Auth Code */}
+                        {job.auth_code && (
+                          <button
+                            type="button"
+                            className="font-mono text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-2 py-1 rounded-md border border-slate-200 transition flex items-center gap-1 cursor-pointer"
+                            title="Auth Verification Code (Click to copy)"
+                            onClick={() => {
+                              navigator.clipboard.writeText(job.auth_code);
+                              showToast(`Copied: ${job.auth_code}`, 'info');
+                            }}
+                          >
+                            <span className="text-[8px] uppercase text-slate-400 font-sans">AUTH:</span>
+                            <span>{job.auth_code}</span>
+                          </button>
                         )}
 
-                        {job.global_notes && (
-                          <p className="text-[11px] bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200 font-medium">
-                            📝 {job.global_notes}
-                          </p>
+                        {/* Customer Name */}
+                        <span className="font-extrabold text-xs text-slate-900 truncate max-w-[170px]" title={job.customer_name}>
+                          {job.customer_name || 'Guest Customer'}
+                        </span>
+
+                        {/* Submission & Done Time */}
+                        {job.created_at && (
+                          <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span>{formatOrderDate(job.created_at)}</span>
+                            {isDone && job.completed_at && (
+                              <span className="text-emerald-600 font-bold text-[10px]">
+                                (Done {formatOrderTime(job.completed_at)})
+                              </span>
+                            )}
+                          </span>
                         )}
                       </div>
 
-                      {/* Right: Quick Action Buttons */}
-                      <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end lg:self-center">
-                        
-                        {/* Quick WhatsApp Ready Message (Feature 1) */}
-                        {job.customer_phone && (
-                          <button
-                            onClick={() => handleSendWhatsApp(job)}
-                            className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold rounded-xl text-xs flex items-center gap-1 transition shadow-2xs"
-                            title="Send WhatsApp Ready Message to customer"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="hidden sm:inline">WhatsApp</span>
-                          </button>
-                        )}
+                      {/* Status, Price & Payment */}
+                      <div className="flex items-center gap-2">
+                        {/* Status Pill */}
+                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                          job.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          job.status === 'printing' ? 'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse' :
+                          'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        }`}>
+                          {job.status}
+                        </span>
 
-                        {/* Payment Quick Toggle Menu (Feature 4) */}
-                        <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[10px] font-bold">
-                          <button
-                            onClick={() => updatePaymentStatus(job.id, 'paid_cash', 'cash')}
-                            className={`px-2 py-1 rounded-lg transition ${
-                              job.payment_status === 'paid_cash' || job.payment_status === 'paid' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                            title="Mark Paid via Cash"
-                          >
-                            Cash
-                          </button>
-                          <button
-                            onClick={() => updatePaymentStatus(job.id, 'paid_bkash', 'bkash')}
-                            className={`px-2 py-1 rounded-lg transition ${
-                              job.payment_status === 'paid_bkash' ? 'bg-pink-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                            title="Mark Paid via bKash/Nagad"
-                          >
-                            bKash
-                          </button>
-                          <button
-                            onClick={() => updatePaymentStatus(job.id, 'unpaid', 'cash')}
-                            className={`px-1.5 py-1 rounded-lg transition ${
-                              job.payment_status === 'unpaid' ? 'bg-slate-300 text-slate-800' : 'text-slate-400 hover:text-rose-600'
-                            }`}
-                            title="Mark Unpaid"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        {/* Total Price */}
+                        <span className="text-sm font-black text-slate-900 font-mono">
+                          ৳{parseFloat(job.total_price || 0).toFixed(2)}
+                        </span>
 
-                        {/* 1-Click Print Directly */}
-                        {hasFiles && !job.files_deleted && (
-                          <button
-                            onClick={() => handlePrintAll(job)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-xs active:scale-95"
-                          >
-                            <Zap className="w-3.5 h-3.5" />
-                            <span>Print ({job.files.length})</span>
-                          </button>
-                        )}
-
-                        {/* Request Download Permission from Customer */}
-                        {hasFiles && !job.files_deleted && job.status !== 'done' && (
-                          <button
-                            onClick={() => handleRequestDownloadPermission(job)}
-                            disabled={pendingPermissionJobId === job.id}
-                            className={`p-1.5 font-bold rounded-xl text-xs transition cursor-pointer ${
-                              pendingPermissionJobId === job.id
-                                ? 'bg-amber-100 text-amber-700 animate-pulse'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                            }`}
-                            title="Request customer permission to download files"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-
-                        {/* Mark Done */}
-                        {job.status !== 'done' ? (
-                          <button
-                            onClick={() => updateJobStatus(job.id, 'done')}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 transition shadow-xs active:scale-95"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Done</span>
-                          </button>
-                        ) : (
-                          <span className="text-[11px] font-bold text-emerald-700 px-2 py-1 bg-emerald-50 rounded-lg">
-                            ✓ Done
+                        {/* Payment Status Pill */}
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                          job.payment_status === 'paid' || job.payment_status === 'paid_cash' || job.payment_status === 'paid_bkash'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : job.payment_status === 'paid_online_pending_verify'
+                              ? 'bg-indigo-100 text-indigo-800 animate-pulse'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}>
+                          <CreditCard className="w-2.5 h-2.5" />
+                          <span>
+                            {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? 'Paid (Cash)' :
+                             job.payment_status === 'paid_bkash' ? 'Paid (bKash)' :
+                             job.payment_status === 'paid_online_pending_verify' ? `Verify ${job.payment_method?.toUpperCase()}` :
+                             'Unpaid'}
                           </span>
-                        )}
-
-                        {/* Expand / Collapse Details */}
-                        <button
-                          onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
-                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"
-                        >
-                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
-
+                        </span>
                       </div>
 
                     </div>
 
-                    {/* Expanded Drawer: Per-File Details & Preview */}
-                    {isExpanded && (
-                      <div className="px-4 pb-3.5 pt-2 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl space-y-2.5">
-                        <div className="flex items-center justify-between text-[11px] text-slate-500">
-                          <span>
-                            Attached Files ({job.files?.length || 0})
-                            {job.created_at && (
-                              <span className="text-slate-400 font-normal"> · Ordered: {formatOrderDate(job.created_at)}</span>
-                            )}
-                            {job.completed_at && (
-                              <span className="text-emerald-600 font-medium"> · Completed: {formatOrderTime(job.completed_at)}</span>
-                            )}
+                    {/* Layer 2: Single File Command Bar OR Multi-File Individual Specification Rows */}
+                    {!hasFiles || job.files_deleted ? (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-400 italic">
+                        Files purged from storage.
+                      </div>
+                    ) : job.files.length === 1 ? (
+                      /* ---------------- Single File Job (Compact 1-Bar) ---------------- */
+                      <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-2 flex items-center justify-between gap-2.5 flex-nowrap overflow-x-auto">
+                        
+                        {/* Left: Document Info & Specs */}
+                        <div className="flex items-center gap-1.5 flex-nowrap min-w-0 flex-1 shrink">
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-800 shadow-2xs min-w-0 max-w-[130px] sm:max-w-[170px] md:max-w-[220px] shrink truncate" title={job.files[0]?.original_name}>
+                            <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                            <span className="truncate">{job.files[0]?.original_name}</span>
+                          </div>
+
+                          <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                            📄 {job.files[0]?.page_count || 1} {job.files[0]?.page_count === 1 ? 'Page' : 'Pages'}
                           </span>
-                          {!job.files_deleted && (
-                            <button
-                              onClick={() => deleteJobFiles(job)}
-                              className="text-rose-600 hover:underline flex items-center gap-1"
-                            >
-                              <Trash2 className="w-3 h-3" /> Purge Server Files
-                            </button>
+                          <span className="bg-blue-50/80 px-2 py-1 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                            🖨️ {job.files[0]?.copies || 1}x {job.files[0]?.copies === 1 ? 'Copy' : 'Copies'}
+                          </span>
+                          <span className={`px-2 py-1 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
+                            job.files[0]?.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-white text-slate-700 border-slate-200'
+                          }`}>
+                            {job.files[0]?.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                          </span>
+                          <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                            📐 {job.files[0]?.paper_size || 'A4'}
+                          </span>
+                          <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                            {job.files[0]?.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                          </span>
+
+                          {job.global_notes && (
+                            <span className="bg-amber-100/70 border border-amber-300 text-amber-900 text-[10px] font-semibold px-2 py-1 rounded-lg truncate max-w-[140px] shrink-0" title={`Note: ${job.global_notes}`}>
+                              📝 {job.global_notes}
+                            </span>
                           )}
                         </div>
 
-                        <div className="space-y-1.5">
-                          {job.files?.map((file, fIdx) => (
-                            <div
-                              key={fIdx}
-                              className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                        {/* Right: Payment Switcher & Actions in one beautifully aligned row */}
+                        <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+                          
+                          {/* Payment Mode Switcher */}
+                          <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold shadow-2xs">
+                            <button
+                              type="button"
+                              onClick={() => updatePaymentStatus(job.id, 'paid_cash', 'cash')}
+                              className={`px-2 py-1 rounded-md transition cursor-pointer ${
+                                job.payment_status === 'paid_cash' || job.payment_status === 'paid' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Mark Paid via Cash"
                             >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600 shrink-0">
-                                  {file.original_name.endsWith('.pdf') ? (
-                                    <FileText className="w-3.5 h-3.5 text-red-500" />
-                                  ) : (
-                                    <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
-                                  )}
+                              Cash
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updatePaymentStatus(job.id, 'paid_bkash', 'bkash')}
+                              className={`px-2 py-1 rounded-md transition cursor-pointer ${
+                                job.payment_status === 'paid_bkash' ? 'bg-pink-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Mark Paid via bKash/Nagad"
+                            >
+                              bKash
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updatePaymentStatus(job.id, 'unpaid', 'cash')}
+                              className={`px-1.5 py-1 rounded-md transition cursor-pointer ${
+                                job.payment_status === 'unpaid' ? 'bg-slate-300 text-slate-800' : 'text-slate-400 hover:text-rose-600'
+                              }`}
+                              title="Mark Unpaid"
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
+
+                          {/* Preview Button */}
+                          {canPreview ? (
+                            <button
+                              type="button"
+                              onClick={() => setActivePreview({ file: job.files[0], job })}
+                              className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
+                              title="Preview document"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Preview</span>
+                            </button>
+                          ) : isDone ? (
+                            <span
+                              className="px-2 py-1 bg-slate-100/90 text-slate-400 border border-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 select-none"
+                              title="Preview locked after printing for privacy"
+                            >
+                              <Lock className="w-3 h-3 text-slate-400" />
+                              <span>Locked</span>
+                            </span>
+                          ) : null}
+
+                          {/* Direct Download Button */}
+                          {canDownload && (
+                            <button
+                              type="button"
+                              onClick={() => handleRequestDownload(job)}
+                              className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
+                              title="Download files directly (Customer real-time confirmation required)"
+                            >
+                              <Download className="w-3.5 h-3.5 text-slate-600" />
+                              <span>Download</span>
+                            </button>
+                          )}
+
+                          {/* Print Button */}
+                          {!isDone && (
+                            <button
+                              type="button"
+                              onClick={() => handlePrintAll(job)}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <Zap className="w-3.5 h-3.5" />
+                              <span>Print</span>
+                            </button>
+                          )}
+
+                          {/* Reprint Button */}
+                          {isDone && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReprintModal(job)}
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold rounded-lg text-xs flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                              title="Reprint requires customer verification"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Reprint</span>
+                            </button>
+                          )}
+
+                          {/* Done Button */}
+                          {!isDone ? (
+                            <button
+                              type="button"
+                              onClick={() => updateJobStatus(job.id, 'done')}
+                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Done</span>
+                            </button>
+                          ) : (
+                            <span className="text-[11px] font-bold text-emerald-700 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Done</span>
+                            </span>
+                          )}
+
+                          {/* WhatsApp */}
+                          {job.customer_phone && (
+                            <button
+                              type="button"
+                              onClick={() => handleSendWhatsApp(job)}
+                              className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold rounded-lg text-xs transition cursor-pointer shadow-2xs"
+                              title="Send WhatsApp Ready Message"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            </button>
+                          )}
+
+                        </div>
+
+                      </div>
+                    ) : (
+                      /* ---------------- Multi-File Job (Master Control + File by File Rows) ---------------- */
+                      <div className="space-y-2">
+                        {/* Master Order Action Bar */}
+                        <div className="bg-slate-100/90 border border-slate-200/90 rounded-xl px-3 py-2 flex items-center justify-between gap-2.5 flex-nowrap overflow-x-auto">
+                          
+                          {/* Order Files Summary */}
+                          <div className="flex items-center gap-2 flex-nowrap min-w-0">
+                            <span className="text-xs font-black text-slate-800 flex items-center gap-1 whitespace-nowrap">
+                              <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                              <span>Multi-File Order ({job.files.length} Documents)</span>
+                            </span>
+                            {job.global_notes && (
+                              <span className="bg-amber-100/70 border border-amber-300 text-amber-900 text-[10px] font-semibold px-2 py-0.5 rounded-lg truncate max-w-[160px]" title={`Note: ${job.global_notes}`}>
+                                📝 {job.global_notes}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Master Actions */}
+                          <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+                            
+                            {/* Payment Mode Switcher */}
+                            <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => updatePaymentStatus(job.id, 'paid_cash', 'cash')}
+                                className={`px-2 py-1 rounded-md transition cursor-pointer ${
+                                  job.payment_status === 'paid_cash' || job.payment_status === 'paid' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Mark Paid via Cash"
+                              >
+                                Cash
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updatePaymentStatus(job.id, 'paid_bkash', 'bkash')}
+                                className={`px-2 py-1 rounded-md transition cursor-pointer ${
+                                  job.payment_status === 'paid_bkash' ? 'bg-pink-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Mark Paid via bKash/Nagad"
+                              >
+                                bKash
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updatePaymentStatus(job.id, 'unpaid', 'cash')}
+                                className={`px-1.5 py-1 rounded-md transition cursor-pointer ${
+                                  job.payment_status === 'unpaid' ? 'bg-slate-300 text-slate-800' : 'text-slate-400 hover:text-rose-600'
+                                }`}
+                                title="Mark Unpaid"
+                              >
+                                ✕
+                              </button>
+                            </div>
+
+                            <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
+
+                            {/* Download All */}
+                            {canDownload && (
+                              <button
+                                type="button"
+                                onClick={() => handleRequestDownload(job)}
+                                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
+                                title="Download all files directly (Customer approval required)"
+                              >
+                                <Download className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Download All</span>
+                              </button>
+                            )}
+
+                            {/* Print All Button */}
+                            {!isDone && (
+                              <button
+                                type="button"
+                                onClick={() => handlePrintAll(job)}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-lg text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+                              >
+                                <Zap className="w-3.5 h-3.5" />
+                                <span>Print All ({job.files.length})</span>
+                              </button>
+                            )}
+
+                            {/* Done Button */}
+                            {!isDone ? (
+                              <button
+                                type="button"
+                                onClick={() => updateJobStatus(job.id, 'done')}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Done</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] font-bold text-emerald-700 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1 shadow-2xs">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Done</span>
+                              </span>
+                            )}
+
+                            {/* WhatsApp */}
+                            {job.customer_phone && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendWhatsApp(job)}
+                                className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold rounded-lg text-xs transition cursor-pointer shadow-2xs"
+                                title="Send WhatsApp Ready Message"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              </button>
+                            )}
+
+                          </div>
+                        </div>
+
+                        {/* Individual File Rows (Print & Inspect One by One) */}
+                        <div className="space-y-1.5">
+                          {job.files.map((file, fIdx) => (
+                            <div
+                              key={file.id || fIdx}
+                              className="bg-white border border-slate-200/90 rounded-xl p-2 flex items-center justify-between gap-2 flex-nowrap overflow-x-auto shadow-2xs"
+                            >
+                              {/* Left: File Index & Specifications */}
+                              <div className="flex items-center gap-1.5 flex-nowrap min-w-0 flex-1 shrink">
+                                <span className="text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-md shrink-0">
+                                  #{fIdx + 1}
+                                </span>
+
+                                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-xs font-bold text-slate-800 shadow-2xs min-w-0 max-w-[130px] sm:max-w-[170px] md:max-w-[220px] shrink truncate" title={file.original_name}>
+                                  <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                  <span className="truncate">{file.original_name}</span>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="font-bold text-slate-800 truncate">{file.original_name}</p>
-                                  <p className="text-[10px] text-slate-400">
-                                    {file.copies}x · {file.color_mode.toUpperCase()} · {file.paper_size} · {file.sides}
-                                  </p>
-                                </div>
+
+                                <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                  📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                                </span>
+                                <span className="bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                  🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
+                                  file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                }`}>
+                                  {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                                </span>
+                                <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                  📐 {file.paper_size || 'A4'}
+                                </span>
+                                <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                  {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                                </span>
+
+                                {file.notes && (
+                                  <span className="bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[120px] shrink-0" title={file.notes}>
+                                    📝 {file.notes}
+                                  </span>
+                                )}
                               </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <button
-                                  onClick={() => setActivePreview({ file, job })}
-                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold flex items-center gap-1 text-[11px]"
-                                >
-                                  <Eye className="w-3 h-3" /> Preview
-                                </button>
-                                <button
-                                  onClick={() => handleQuickPrint(file, job)}
-                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1 text-[11px]"
-                                >
-                                  <Zap className="w-3 h-3" /> Print
-                                </button>
+                              {/* Right: Individual Preview & Print Actions */}
+                              <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+                                {/* Preview This File */}
+                                {canPreview ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActivePreview({ file, job })}
+                                    className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
+                                    title={`Preview ${file.original_name}`}
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Preview</span>
+                                  </button>
+                                ) : isDone ? (
+                                  <span
+                                    className="px-2 py-1 bg-slate-100/90 text-slate-400 border border-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 select-none"
+                                    title="Preview locked after printing for privacy"
+                                  >
+                                    <Lock className="w-3 h-3 text-slate-400" />
+                                    <span>Locked</span>
+                                  </span>
+                                ) : null}
+
+                                {/* Print This File (One by One) */}
+                                {!isDone && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickPrint(file, job, false)}
+                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-blue-200 shadow-2xs cursor-pointer active:scale-95"
+                                    title={`Print File #${fIdx + 1} (${file.color_mode === 'color' ? 'Color' : 'B&W'}, ${file.copies || 1}x, ${file.sides === 'double' ? '2-Sided' : '1-Sided'})`}
+                                  >
+                                    <Zap className="w-3 h-3" />
+                                    <span>Print File {fIdx + 1}</span>
+                                  </button>
+                                )}
+
+                                {/* Reprint This File (If Done) */}
+                                {isDone && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReprintModal(job)}
+                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold rounded-lg text-xs flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                                    title="Reprint requires customer verification"
+                                  >
+                                    <RefreshCw className="w-3 h-3 text-amber-600" />
+                                    <span>Reprint</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -1429,6 +1757,111 @@ export default function ShopDashboard({ shop, onLogout }) {
 
         </main>
 
+        {/* Right Sidebar: Freshly Printed Orders Panel (Counter Pickup) */}
+        <aside className="w-full lg:w-72 xl:w-80 shrink-0 space-y-3.5">
+          <div className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-xs border border-emerald-200/90 space-y-3 sticky top-20">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-100"></span>
+                <h3 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                  <span>✨ Freshly Printed</span>
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.2 rounded-full font-bold">
+                    {freshPrintedJobs.length} Ready
+                  </span>
+                </h3>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">Counter Pickup</span>
+            </div>
+
+            {/* List of Freshly Printed Cards */}
+            {freshPrintedJobs.length === 0 ? (
+              <div className="text-center py-6 text-slate-400 text-xs space-y-1">
+                <Printer className="w-6 h-6 text-slate-300 mx-auto mb-1" />
+                <p className="font-semibold text-slate-600">No printed orders yet</p>
+                <p className="text-[10px]">When you mark an order Done, it appears here for counter calling.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[75vh] overflow-y-auto pr-0.5">
+                {freshPrintedJobs.map(fj => {
+                  const hasMultiple = fj.files && fj.files.length > 1;
+                  return (
+                    <div
+                      key={fj.id}
+                      className="bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 space-y-2 transition shadow-2xs"
+                    >
+                      {/* Layer 1: Information (Token, Customer Name, Time, Ready Status & WhatsApp) */}
+                      <div className="flex items-center justify-between gap-1.5 flex-nowrap min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 shrink truncate">
+                          <span className="text-sm font-black text-blue-600 font-mono tracking-tight shrink-0">
+                            #{fj.job_code}
+                          </span>
+                          {fj.customer_name && (
+                            <span className="text-xs font-extrabold text-slate-800 truncate" title={fj.customer_name}>
+                              👤 {fj.customer_name}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {fj.completed_at && (
+                            <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                              {formatOrderTime(fj.completed_at)}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs shrink-0 whitespace-nowrap">
+                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                            <span>Ready</span>
+                          </span>
+                          {fj.customer_phone && (
+                            <button
+                              type="button"
+                              onClick={() => handleSendWhatsApp(fj)}
+                              className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition cursor-pointer shadow-2xs shrink-0"
+                              title="Send WhatsApp Ready Message"
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Layer 2: Uploaded Document / PDF Name(s) */}
+                      <div className="space-y-1">
+                        {fj.files && fj.files.length > 0 ? (
+                          fj.files.map((doc, docIdx) => (
+                            <div
+                              key={doc.id || docIdx}
+                              className="bg-white border border-emerald-200/90 rounded-lg px-2 py-1 text-xs flex items-center gap-1.5 text-slate-800 font-semibold shadow-2xs min-w-0"
+                              title={doc.original_name}
+                            >
+                              {hasMultiple && (
+                                <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-1 rounded shrink-0">
+                                  #{docIdx + 1}
+                                </span>
+                              )}
+                              <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                              <span className="truncate flex-1 min-w-0 text-[11px]">{doc.original_name}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="bg-white border border-emerald-200/90 rounded-lg px-2.5 py-1 text-xs flex items-center gap-1.5 text-slate-800 font-semibold shadow-2xs min-w-0">
+                            <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                            <span className="truncate flex-1 min-w-0 text-[11px]">Document</span>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+          </div>
+        </aside>
+
       </div>
 
       {/* Document Preview Modal */}
@@ -1443,6 +1876,98 @@ export default function ShopDashboard({ shop, onLogout }) {
             setActivePreview(null);
           }}
         />
+      )}
+
+      {/* Customer Reprint Real-Time Approval Modal */}
+      {reprintModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4 text-center">
+            
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-lg shadow-amber-100/50">
+              <RefreshCw className="w-7 h-7 animate-spin" style={{ animationDuration: '3s' }} />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-base text-slate-900">Requesting Customer Approval</h3>
+              <p className="text-xs text-slate-500">Order #{reprintModal.job?.job_code} {reprintModal.job?.customer_name ? `· ${reprintModal.job.customer_name}` : ''}</p>
+            </div>
+
+            {/* Waiting Radar Callout */}
+            <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5 space-y-2 text-left">
+              <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                <span>Waiting for Customer to Grant Reprint...</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                A reprint prompt has been sent in real-time to the customer's live tracking screen. When they tap <strong>Allow Reprint</strong>, printing will begin automatically.
+              </p>
+            </div>
+
+            {/* Documents preview */}
+            {reprintModal.job?.files && reprintModal.job.files.length > 0 && (
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[11px] text-slate-600 font-medium text-left truncate">
+                📄 {reprintModal.fileToReprint?.original_name || reprintModal.job.files[0]?.original_name}
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-slate-100 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setReprintModal(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                Cancel Request
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Customer Direct Download Real-Time Approval Modal */}
+      {downloadModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4 text-center">
+            
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 border-2 border-blue-200 text-blue-600 flex items-center justify-center mx-auto shadow-lg shadow-blue-100/50">
+              <Download className="w-7 h-7 animate-bounce" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-base text-slate-900">Requesting Download Permission</h3>
+              <p className="text-xs text-slate-500">Order #{downloadModal.job?.job_code} {downloadModal.job?.customer_name ? `· ${downloadModal.job.customer_name}` : ''}</p>
+            </div>
+
+            {/* Waiting Radar Callout */}
+            <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-3.5 space-y-2 text-left">
+              <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping"></span>
+                <span>Waiting for Customer Consent...</span>
+              </div>
+              <p className="text-[11px] text-blue-800 leading-relaxed">
+                A download permission request has been sent to the customer's live tracking screen. Once granted, the file(s) will download directly to your computer.
+              </p>
+            </div>
+
+            {/* Documents preview */}
+            {downloadModal.job?.files && downloadModal.job.files.length > 0 && (
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[11px] text-slate-600 font-medium text-left truncate">
+                📄 {downloadModal.job.files[0]?.original_name} {downloadModal.job.files.length > 1 ? `(+${downloadModal.job.files.length - 1} more)` : ''}
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-slate-100 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setDownloadModal(null)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                Cancel Request
+              </button>
+            </div>
+
+          </div>
+        </div>
       )}
 
       {/* Shop Rates & Customer Notice Editor Modal */}

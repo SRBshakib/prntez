@@ -185,6 +185,27 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Reprint Permission Request: Shop → Customer
+    socket.on('reprint_permission_request', (data) => {
+        if (data?.job_code) {
+            console.log(`[Socket] Shop #${data.shop_id} requesting reprint permission for job ${data.job_code}`);
+            io.to(`job_${data.job_code}`).emit('reprint_permission_request', data);
+        }
+    });
+
+    // Reprint Permission Response: Customer → Shop
+    socket.on('reprint_permission_response', (data) => {
+        if (data?.shop_id && data?.job_code) {
+            const eventName = data.granted ? 'reprint_permission_granted' : 'reprint_permission_denied';
+            console.log(`[Socket] Customer ${data.granted ? 'GRANTED' : 'DENIED'} reprint for job ${data.job_code}`);
+            io.to(`shop_${data.shop_id}`).emit(eventName, {
+                job_id: data.job_id,
+                job_code: data.job_code,
+                file_id: data.file_id
+            });
+        }
+    });
+
     socket.on('disconnect', () => {
         // cleaned automatically
     });
