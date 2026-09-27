@@ -4,7 +4,7 @@ import {
   KeyRound, LogOut, Check, Search, AlertCircle, Megaphone, Sparkles, ExternalLink,
   QrCode, BarChart3, TrendingUp, Layers, Ban, CheckCircle, Percent, Clock,
   FileText, Shield, Globe, Award, Zap, Phone, MessageCircle, AlertTriangle,
-  Eye, Image as ImageIcon, X, Copy
+  Eye, Image as ImageIcon, X, Copy, Info
 } from 'lucide-react';
 import ShopQrModal from '../components/ShopQrModal';
 
@@ -1385,6 +1385,71 @@ export default function AdminDashboard({ onLogout }) {
                     <option value="2880">48 Hours (2 Days)</option>
                     <option value="-1">Never auto-delete (Manual purge only)</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Google OAuth 2.0 Web Authentication Settings */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    Google OAuth 2.0 Sign-In & Registration
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Allow shop owners to register and sign in seamlessly using their Gmail / Google Account.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {settings.google_client_id ? 'Configured' : 'ID Required'}
+                  </span>
+                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-700 ml-2">
+                    <span className="text-xs font-semibold text-slate-600">Active</span>
+                    <input
+                      type="checkbox"
+                      checked={settings.google_auth_enabled !== '0'}
+                      onChange={e => setSettings({ ...settings, google_auth_enabled: e.target.checked ? '1' : '0' })}
+                      className="w-4 h-4 text-indigo-600 rounded"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1 flex items-center justify-between text-xs">
+                    <span>Google OAuth 2.0 Web Client ID</span>
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 hover:underline font-bold text-[10px] flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" /> Open Google Cloud Credentials Console
+                    </a>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 123456789012-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com"
+                    value={settings.google_client_id || ''}
+                    onChange={e => setSettings({ ...settings, google_client_id: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                  />
+                </div>
+
+                <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-[11px] text-blue-900 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-blue-600" />
+                    How to get your Google Client ID:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-0.5 text-blue-800/90 pl-1">
+                    <li>Go to <strong>Google Cloud Console → APIs & Services → Credentials</strong>.</li>
+                    <li>Click <strong>+ Create Credentials → OAuth client ID</strong> (Application type: <em>Web application</em>).</li>
+                    <li>Under <strong>Authorized JavaScript origins</strong>, add: <code className="bg-blue-100 px-1 py-0.2 rounded font-mono text-[10px]">https://prntez.com</code> and <code className="bg-blue-100 px-1 py-0.2 rounded font-mono text-[10px]">http://localhost:5000</code>.</li>
+                    <li>Copy the <strong>Client ID</strong>, paste it into the field above, and click <strong>Save System Settings</strong>.</li>
+                  </ol>
                 </div>
               </div>
             </div>

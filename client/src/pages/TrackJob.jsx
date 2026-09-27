@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2, Clock, Printer, Store, Phone, MapPin, Sparkles, Loader2,
-  ArrowLeft, Copy, Check, QrCode, Bell, BellRing, MessageCircle, CreditCard, Percent
+  ArrowLeft, Copy, Check, QrCode, Bell, BellRing, MessageCircle, CreditCard, Percent,
+  Download, AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { socket, playChime } from '../socket';
@@ -21,6 +22,7 @@ export default function TrackJob({ jobCode, onBack }) {
   const [promoAd, setPromoAd] = useState(null);
   const [brandSponsor, setBrandSponsor] = useState(null);
   const [adsenseConfig, setAdsenseConfig] = useState(null);
+  const [dlRequest, setDlRequest] = useState(null);
 
   useEffect(() => {
     // Fetch announcement & adsense
@@ -80,10 +82,31 @@ export default function TrackJob({ jobCode, onBack }) {
       });
     };
 
+    const handleDownloadPermissionRequest = (req) => {
+      setDlRequest(req);
+      playChime();
+      setTimeout(() => {
+        setDlRequest(curr => {
+          if (curr && curr.job_id === req.job_id) {
+            socket.emit('download_permission_response', {
+              job_id: req.job_id,
+              job_code: req.job_code,
+              shop_id: req.shop_id,
+              granted: false
+            });
+            return null;
+          }
+          return curr;
+        });
+      }, 60000);
+    };
+
     socket.on('status_changed', handleStatusChanged);
+    socket.on('download_permission_request', handleDownloadPermissionRequest);
 
     return () => {
       socket.off('status_changed', handleStatusChanged);
+      socket.off('download_permission_request', handleDownloadPermissionRequest);
     };
   }, [jobCode]);
 
@@ -402,6 +425,59 @@ export default function TrackJob({ jobCode, onBack }) {
             format="auto"
             className="pt-2"
           />
+        )}
+
+        {/* Download Permission Modal (Shop -> Customer) */}
+        {dlRequest && (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-5 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-lg shadow-amber-100/50">
+                <Download className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-extrabold text-slate-800">Download Permission</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  <span className="font-bold text-slate-700">{dlRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to download your uploaded files.
+                </p>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-medium flex items-start gap-2 text-left">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                <span>Your files will be downloaded to the shop's computer. Only allow if you trust this shop.</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    socket.emit('download_permission_response', {
+                      job_id: dlRequest.job_id,
+                      job_code: dlRequest.job_code,
+                      shop_id: dlRequest.shop_id,
+                      granted: false
+                    });
+                    setDlRequest(null);
+                  }}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition border border-slate-200 cursor-pointer"
+                >
+                  Deny
+                </button>
+                <button
+                  onClick={() => {
+                    socket.emit('download_permission_response', {
+                      job_id: dlRequest.job_id,
+                      job_code: dlRequest.job_code,
+                      shop_id: dlRequest.shop_id,
+                      granted: true
+                    });
+                    setDlRequest(null);
+                  }}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Allow
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">This request will expire in 60 seconds.</p>
+            </div>
+          </div>
         )}
 
       </div>

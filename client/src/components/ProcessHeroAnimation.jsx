@@ -272,7 +272,7 @@ export default function ProcessHeroAnimation({ onNavigate }) {
                     <div className="relative w-28 h-28 bg-slate-900 rounded-xl p-2 flex items-center justify-center overflow-hidden shadow-inner">
                       <QrCode className="w-24 h-24 text-white" />
                       {/* Laser Bar */}
-                      <div className="absolute left-0 right-0 h-1 bg-rose-500 shadow-[0_0_12px_#f43f5e] animate-laser" />
+                      <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-rose-500/20 via-rose-500 to-rose-500/20 shadow-[0_0_12px_#f43f5e] animate-laser pointer-events-none" />
                     </div>
 
                     <div className="mt-2 text-[10px] font-extrabold text-blue-600 uppercase tracking-wider">
@@ -305,9 +305,11 @@ export default function ProcessHeroAnimation({ onNavigate }) {
 
                   <div className="bg-slate-950 rounded-[20px] p-3 text-white relative overflow-hidden min-h-[170px] flex flex-col justify-between">
                     {/* Viewfinder crosshairs */}
-                    <div className="relative border border-dashed border-blue-400/60 rounded-lg p-2 text-center my-auto">
+                    <div className="relative border border-dashed border-blue-400/60 rounded-lg p-2 text-center my-auto overflow-hidden">
                       <QrCode className="w-12 h-12 text-blue-300 mx-auto opacity-70" />
                       <div className="text-[9px] font-bold text-blue-300 mt-1">QR Detected</div>
+                      {/* Viewfinder Active Scan Laser */}
+                      <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_8px_#22d3ee] animate-phone-scan pointer-events-none" />
                     </div>
 
                     {/* Connected Toast */}

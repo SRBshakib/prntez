@@ -207,3 +207,96 @@
 .animate-shred-particle {
   animation: shred-particle 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
+
+/* Process Hero Simulation Animations */
+@keyframes laser-sweep {
+  0% {
+    top: 4px;
+    opacity: 0.85;
+  }
+  50% {
+    top: calc(100% - 8px);
+    opacity: 1;
+  }
+  100% {
+    top: 4px;
+    opacity: 0.85;
+  }
+}
+
+.animate-laser {
+  animation: laser-sweep 2s ease-in-out infinite;
+}
+
+@keyframes phone-scan {
+  0% {
+    top: 2px;
+    opacity: 0.4;
+  }
+  50% {
+    top: calc(100% - 4px);
+    opacity: 1;
+  }
+  100% {
+    top: 2px;
+    opacity: 0.4;
+  }
+}
+
+.animate-phone-scan {
+  animation: phone-scan 2.2s ease-in-out infinite;
+}
+
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.animate-radar {
+  animation: radar-pulse 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes beam-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.animate-beam-dash {
+  animation: beam-dash 1s linear infinite;
+}
+
+@keyframes paper-eject {
+  0% {
+    transform: translateY(-16px);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(4px);
+    opacity: 1;
+  }
+}
+
+.animate-paper-eject {
+  animation: paper-eject 2.5s ease-in-out infinite alternate;
+}
+

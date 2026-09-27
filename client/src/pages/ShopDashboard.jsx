@@ -15,6 +15,24 @@ import ShopToolsModal from '../components/ShopToolsModal';
 import ShopProfileModal from '../components/ShopProfileModal';
 import ShopPointsModal from '../components/ShopPointsModal';
 
+// Formatting helpers for order timestamps (e.g. "Sep 21, 11:49 PM" and "(Done 11:49 PM)")
+function formatOrderDate(dateString) {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
+  const month = d.toLocaleString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const time = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return `${month} ${day}, ${time}`;
+}
+
+function formatOrderTime(dateString) {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
 export default function ShopDashboard({ shop, onLogout }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +71,7 @@ export default function ShopDashboard({ shop, onLogout }) {
   // Editable Shop Profile & Pricing
   const [currentShopData, setCurrentShopData] = useState(shop);
   const [savingShopSettings, setSavingShopSettings] = useState(false);
+  const [pendingPermissionJobId, setPendingPermissionJobId] = useState(null);
   const searchInputRef = useRef(null);
 
   // Active Document Preview Modal
@@ -135,11 +154,29 @@ export default function ShopDashboard({ shop, onLogout }) {
       showToast(`⭐ +${data.points} Points Earned! (Total: ${data.points_balance ?? ''} pts)`, 'success');
     };
 
+    const onDownloadGranted = (data) => {
+      setPendingPermissionJobId(null);
+      showToast(`✓ Customer granted download permission for #${data.job_code}! Downloading...`, 'success');
+      const a = document.createElement('a');
+      a.href = `/api/jobs/${data.job_id}/download-zip`;
+      a.download = `Job_${data.job_code}_Files.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    const onDownloadDenied = (data) => {
+      setPendingPermissionJobId(null);
+      showToast(`❌ Customer denied download permission for #${data.job_code}.`, 'error');
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('new_job', onNewJob);
     socket.on('job_updated', onJobUpdated);
     socket.on('points_awarded', onPointsAwarded);
+    socket.on('download_permission_granted', onDownloadGranted);
+    socket.on('download_permission_denied', onDownloadDenied);
 
     return () => {
       clearInterval(bridgeInterval);
@@ -148,6 +185,8 @@ export default function ShopDashboard({ shop, onLogout }) {
       socket.off('new_job', onNewJob);
       socket.off('job_updated', onJobUpdated);
       socket.off('points_awarded', onPointsAwarded);
+      socket.off('download_permission_granted', onDownloadGranted);
+      socket.off('download_permission_denied', onDownloadDenied);
     };
   }, [shop?.id, autoPrint, audioEnabled]);
 
@@ -337,6 +376,32 @@ export default function ShopDashboard({ shop, onLogout }) {
     } catch (_) {
       showToast('Failed to download QR image', 'error');
     }
+  };
+
+  // 2.10 Request Customer Download Permission (Privacy-first file acquisition)
+  const handleRequestDownloadPermission = (job) => {
+    if (!job || !job.job_code) return;
+    if (pendingPermissionJobId === job.id) {
+      showToast('Already waiting for customer permission...', 'info');
+      return;
+    }
+    setPendingPermissionJobId(job.id);
+    showToast(`📩 Requesting download permission from customer #${job.job_code}...`, 'info');
+    socket.emit('download_permission_request', {
+      job_id: job.id,
+      job_code: job.job_code,
+      shop_id: shop?.id,
+      shop_name: shop?.name
+    });
+    setTimeout(() => {
+      setPendingPermissionJobId(curr => {
+        if (curr === job.id) {
+          showToast(`⏱️ Download request for #${job.job_code} timed out.`, 'error');
+          return null;
+        }
+        return curr;
+      });
+    }, 60000);
   };
 
   // 3. Print Actions (Browser Dialog Ctrl+P vs Hardware Spooler)
@@ -1032,7 +1097,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search code/name... (/)"
+                  placeholder="Search #token, auth code, name... (/)"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -1095,6 +1160,23 @@ export default function ShopDashboard({ shop, onLogout }) {
                           {job.customer_phone && (
                             <span className="text-[11px] text-slate-400 font-medium">{job.customer_phone}</span>
                           )}
+
+                          {/* Time of sending (created_at) and printing completion (completed_at) */}
+                          {job.created_at && (
+                            <span
+                              className="text-[11px] text-slate-400 font-medium flex items-center gap-1"
+                              title={`Ordered: ${new Date(job.created_at).toLocaleString()}${job.completed_at ? ` · Completed: ${new Date(job.completed_at).toLocaleString()}` : ''}`}
+                            >
+                              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span>{formatOrderDate(job.created_at)}</span>
+                              {job.status === 'done' && job.completed_at && (
+                                <span className="text-emerald-600 font-semibold text-[10px]">
+                                  (Done {formatOrderTime(job.completed_at)})
+                                </span>
+                              )}
+                            </span>
+                          )}
+
                           <span className={`px-2 py-0.2 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
                             job.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                             job.status === 'printing' ? 'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse' :
@@ -1221,16 +1303,20 @@ export default function ShopDashboard({ shop, onLogout }) {
                           </button>
                         )}
 
-                        {/* ZIP Download */}
-                        {hasFiles && !job.files_deleted && (
-                          <a
-                            href={`/api/jobs/${job.id}/download-zip`}
-                            download
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition"
-                            title="Download all files as ZIP"
+                        {/* Request Download Permission from Customer */}
+                        {hasFiles && !job.files_deleted && job.status !== 'done' && (
+                          <button
+                            onClick={() => handleRequestDownloadPermission(job)}
+                            disabled={pendingPermissionJobId === job.id}
+                            className={`p-1.5 font-bold rounded-xl text-xs transition cursor-pointer ${
+                              pendingPermissionJobId === job.id
+                                ? 'bg-amber-100 text-amber-700 animate-pulse'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                            }`}
+                            title="Request customer permission to download files"
                           >
                             <Download className="w-3.5 h-3.5" />
-                          </a>
+                          </button>
                         )}
 
                         {/* Mark Done */}
@@ -1264,7 +1350,15 @@ export default function ShopDashboard({ shop, onLogout }) {
                     {isExpanded && (
                       <div className="px-4 pb-3.5 pt-2 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl space-y-2.5">
                         <div className="flex items-center justify-between text-[11px] text-slate-500">
-                          <span>Attached Files ({job.files?.length || 0})</span>
+                          <span>
+                            Attached Files ({job.files?.length || 0})
+                            {job.created_at && (
+                              <span className="text-slate-400 font-normal"> · Ordered: {formatOrderDate(job.created_at)}</span>
+                            )}
+                            {job.completed_at && (
+                              <span className="text-emerald-600 font-medium"> · Completed: {formatOrderTime(job.completed_at)}</span>
+                            )}
+                          </span>
                           {!job.files_deleted && (
                             <button
                               onClick={() => deleteJobFiles(job)}
