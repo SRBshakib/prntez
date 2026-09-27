@@ -74,6 +74,57 @@ export default function ShopDashboard({ shop, onLogout }) {
   const [pendingPermissionJobId, setPendingPermissionJobId] = useState(null);
   const searchInputRef = useRef(null);
 
+  // Admin File Retention Policy & Live Countdown Clock
+  const [cleanupSettings, setCleanupSettings] = useState({ enabled: true, success_minutes: 30, unsuccess_minutes: 1440 });
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculate small countdown timer for file auto-deletion
+  const getJobDeleteCountdown = (job) => {
+    if (!job) return null;
+    if (job.files_deleted) {
+      return { status: 'deleted', text: 'Purged', isUrgent: false };
+    }
+    if (!cleanupSettings?.enabled) {
+      return { status: 'disabled', text: 'Manual Retention', isUrgent: false };
+    }
+
+    let deadlineMs = null;
+    if (job.status === 'done' && (job.completed_at || job.updated_at)) {
+      const completedTime = new Date(job.completed_at || job.updated_at).getTime();
+      deadlineMs = completedTime + ((cleanupSettings.success_minutes || 30) * 60 * 1000);
+    } else if (job.created_at) {
+      const createdTime = new Date(job.created_at).getTime();
+      deadlineMs = createdTime + ((cleanupSettings.unsuccess_minutes || 1440) * 60 * 1000);
+    }
+
+    if (!deadlineMs || isNaN(deadlineMs)) return null;
+
+    const diffMs = deadlineMs - now;
+    if (diffMs <= 0) {
+      return { status: 'expired', text: 'Purging...', isUrgent: true };
+    }
+
+    const totalSecs = Math.floor(diffMs / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    const hours = Math.floor(totalSecs / 3600);
+
+    let text = '';
+    if (hours > 0) {
+      text = `Exp in ${hours}h ${mins % 60}m`;
+    } else {
+      text = `Purges in ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    const isUrgent = diffMs < 5 * 60 * 1000;
+    return { status: 'active', text, isUrgent };
+  };
+
   // Active Document Preview Modal
   const [activePreview, setActivePreview] = useState(null);
 
@@ -81,6 +132,9 @@ export default function ShopDashboard({ shop, onLogout }) {
   const [callingJobId, setCallingJobId] = useState(null);
   const [reprintModal, setReprintModal] = useState(null); // { job, authCode: '', error: '' }
   const [downloadModal, setDownloadModal] = useState(null); // { job, authCode: '', error: '', waitingSocket: false }
+  
+  // Real-time per-file printed tracking (keeps multi-file orders in Pending until all done)
+  const [printedFileIds, setPrintedFileIds] = useState(new Set());
 
   // Toast Notification
   const [toast, setToast] = useState(null);
@@ -165,30 +219,40 @@ export default function ShopDashboard({ shop, onLogout }) {
     const onDownloadGranted = (data) => {
       setPendingPermissionJobId(null);
       setDownloadModal(null);
-      showToast(`✓ Customer granted download permission for #${data.job_code}! Downloading file(s)...`, 'success');
+      showToast(`✓ Customer granted download permission for #${data.job_code}! Downloading...`, 'success');
       
-      // Fetch or locate target files to trigger direct file download (not zip)
-      fetch(`/api/jobs/${data.job_id}/files`)
-        .then(res => res.json())
-        .then(filesData => {
-          const fileList = filesData?.data || [];
-          if (fileList.length > 0) {
-            fileList.forEach((file, idx) => {
-              setTimeout(() => {
-                const a = document.createElement('a');
-                a.href = `/api/jobs/download/${file.id}`;
-                a.download = file.original_name || `document_${file.id}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-              }, idx * 400);
-            });
-          }
-        })
-        .catch(err => {
-          console.error('Download error:', err);
-          showToast('Failed to download files', 'error');
-        });
+      // If single file permission was granted, download that specific file directly
+      if (data.file_id) {
+        const a = document.createElement('a');
+        a.href = `/api/jobs/download/${data.file_id}`;
+        a.download = data.file_name || `document_${data.file_id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        // Otherwise download all files in the order sequentially
+        fetch(`/api/jobs/${data.job_id}/files`)
+          .then(res => res.json())
+          .then(filesData => {
+            const fileList = filesData?.data || [];
+            if (fileList.length > 0) {
+              fileList.forEach((file, idx) => {
+                setTimeout(() => {
+                  const a = document.createElement('a');
+                  a.href = `/api/jobs/download/${file.id}`;
+                  a.download = file.original_name || `document_${file.id}.pdf`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                }, idx * 400);
+              });
+            }
+          })
+          .catch(err => {
+            console.error('Download error:', err);
+            showToast('Failed to download files', 'error');
+          });
+      }
     };
 
     const onDownloadDenied = (data) => {
@@ -200,7 +264,7 @@ export default function ShopDashboard({ shop, onLogout }) {
     const onReprintGranted = (data) => {
       setReprintModal(null);
       showToast(`✓ Customer approved reprint for #${data.job_code}! Printing...`, 'success');
-      // Trigger reprint
+      // Trigger reprint for the specific file or all files
       fetch(`/api/jobs/${data.job_id}/files`)
         .then(res => res.json())
         .then(filesData => {
@@ -208,9 +272,9 @@ export default function ShopDashboard({ shop, onLogout }) {
           if (fileList.length > 0) {
             if (data.file_id) {
               const targetF = fileList.find(f => f.id === data.file_id) || fileList[0];
-              handleQuickPrint(targetF, { id: data.job_id, job_code: data.job_code });
+              handleQuickPrint(targetF, { id: data.job_id, job_code: data.job_code }, false);
             } else {
-              fileList.forEach(f => handleQuickPrint(f, { id: data.job_id, job_code: data.job_code }));
+              fileList.forEach(f => handleQuickPrint(f, { id: data.job_id, job_code: data.job_code }, false));
             }
           }
         })
@@ -265,11 +329,10 @@ export default function ShopDashboard({ shop, onLogout }) {
         return;
       }
 
-      // Tab Switching: 1=Pending, 2=Printing, 3=Done, 4=All
+      // Tab Switching: 1=Pending, 2=Done, 3=All
       if (e.key === '1') { setActiveFilter('pending'); showToast('Filter: Pending', 'info'); }
-      else if (e.key === '2') { setActiveFilter('printing'); showToast('Filter: Printing', 'info'); }
-      else if (e.key === '3') { setActiveFilter('done'); showToast('Filter: Done', 'info'); }
-      else if (e.key === '4') { setActiveFilter('all'); showToast('Filter: All Jobs', 'info'); }
+      else if (e.key === '2') { setActiveFilter('done'); showToast('Filter: Done', 'info'); }
+      else if (e.key === '3') { setActiveFilter('all'); showToast('Filter: All Orders', 'info'); }
 
       // Toggle shortcuts help with '?'
       else if (e.key === '?') {
@@ -294,6 +357,9 @@ export default function ShopDashboard({ shop, onLogout }) {
       const data = await res.json();
       if (data.success) {
         setJobs(data.data || []);
+        if (data.cleanup_settings) {
+          setCleanupSettings(data.cleanup_settings);
+        }
       }
     } catch (err) {
       console.error('Fetch jobs error:', err);
@@ -434,30 +500,37 @@ export default function ShopDashboard({ shop, onLogout }) {
     }
   };
 
-  // 2.10 Request Customer Download Permission (Privacy-first file acquisition)
-  const handleRequestDownloadPermission = (job) => {
+  // 2.10 Request Customer Download Permission (Privacy-first direct file acquisition)
+  const handleRequestDownload = (job, file = null) => {
     if (!job || !job.job_code) return;
-    if (pendingPermissionJobId === job.id) {
-      showToast('Already waiting for customer permission...', 'info');
-      return;
-    }
-    setPendingPermissionJobId(job.id);
-    showToast(`📩 Requesting download permission from customer #${job.job_code}...`, 'info');
+    const fileName = file?.original_name || (job.files && job.files.length > 1 ? `All ${job.files.length} Documents` : job.files?.[0]?.original_name || 'Document');
+    setDownloadModal({ job, fileToDownload: file, fileName });
+    showToast(`📩 Requesting download permission for ${fileName}...`, 'info');
     socket.emit('download_permission_request', {
       job_id: job.id,
       job_code: job.job_code,
       shop_id: shop?.id,
-      shop_name: shop?.name
+      shop_name: shop?.name,
+      file_id: file?.id || null,
+      file_name: fileName
     });
-    setTimeout(() => {
-      setPendingPermissionJobId(curr => {
-        if (curr === job.id) {
-          showToast(`⏱️ Download request for #${job.job_code} timed out.`, 'error');
-          return null;
-        }
-        return curr;
-      });
-    }, 60000);
+  };
+
+  // 2.11 Request Customer Reprint Permission
+  const handleOpenReprintModal = (job, file = null) => {
+    if (!job || !job.job_code) return;
+    const targetFile = file || (job.files && job.files.length > 0 ? job.files[0] : null);
+    const fileName = targetFile?.original_name || 'Document';
+    setReprintModal({ job, fileToReprint: targetFile, fileName });
+    showToast(`📩 Requesting reprint permission for ${fileName}...`, 'info');
+    socket.emit('reprint_permission_request', {
+      job_id: job.id,
+      job_code: job.job_code,
+      shop_id: shop?.id,
+      shop_name: shop?.name,
+      file_id: targetFile?.id || null,
+      file_name: fileName
+    });
   };
 
   // 3. Print Actions (Browser Dialog Ctrl+P vs Hardware Spooler)
@@ -481,19 +554,15 @@ export default function ShopDashboard({ shop, onLogout }) {
       try {
         printFrame.contentWindow.focus();
         printFrame.contentWindow.print();
-        // Automatically mark done or printing upon sending to printer
+        // Automatically mark order done ONLY when markDone is explicitly true
         if (markDone && job?.id && job.status !== 'done') {
           updateJobStatus(job.id, 'done');
-        } else if (job?.id && job.status === 'pending') {
-          updateJobStatus(job.id, 'printing');
         }
       } catch (_) {
         // Fallback: open in new tab so user can use Ctrl + P directly
         window.open(fileUrl, '_blank');
         if (markDone && job?.id && job.status !== 'done') {
           updateJobStatus(job.id, 'done');
-        } else if (job?.id && job.status === 'pending') {
-          updateJobStatus(job.id, 'printing');
         }
       }
     };
@@ -529,11 +598,9 @@ export default function ShopDashboard({ shop, onLogout }) {
           ? `✅ Simulated: ${file.original_name} (${file.copies || 1}x, ${file.color_mode || 'bw'})`
           : `✅ Spooled in ${data.spoolTimeMs}ms → ${data.printer}`;
         showToast(label, 'success');
-        // Automatically mark done upon spooling!
+        // Automatically mark done ONLY when markDone is explicitly true
         if (markDone && job?.id && job.status !== 'done') {
           await updateJobStatus(job.id, 'done');
-        } else if (job?.id && job.status === 'pending') {
-          await updateJobStatus(job.id, 'printing');
         }
         fetchSpoolLog();
         return;
@@ -546,8 +613,31 @@ export default function ShopDashboard({ shop, onLogout }) {
     handleBrowserPrint(file, job, markDone);
   };
 
+  // Print a single file inside a multi-file job (keeps job in pending until all files are printed)
+  const handlePrintFile = (file, job) => {
+    if (!file || !job) return;
+
+    const unprintedOthers = (job.files || []).filter(f => f.id !== file.id && !printedFileIds.has(f.id));
+    const isLastFile = unprintedOthers.length === 0;
+
+    // Mark this file ID as printed in state
+    setPrintedFileIds(prev => new Set(prev).add(file.id));
+
+    // If it's the last file of the order, mark whole order DONE!
+    // Otherwise keep in pending queue without switching tabs
+    handleQuickPrint(file, job, isLastFile);
+  };
+
   const handlePrintAll = (job) => {
     if (!job || !job.files || job.files.length === 0) return;
+    
+    // Mark all files of this job as printed
+    setPrintedFileIds(prev => {
+      const next = new Set(prev);
+      job.files.forEach(f => next.add(f.id));
+      return next;
+    });
+
     job.files.forEach((f, idx) => {
       setTimeout(() => {
         handleQuickPrint(f, job, idx === job.files.length - 1);
@@ -557,7 +647,7 @@ export default function ShopDashboard({ shop, onLogout }) {
 
   // Batch action: Print ALL pending jobs
   const handlePrintAllPending = () => {
-    const pendingJobs = jobs.filter(j => j.status === 'pending');
+    const pendingJobs = jobs.filter(j => j.status === 'pending' && !j.files_deleted);
     if (pendingJobs.length === 0) {
       showToast('No pending jobs to print.', 'info');
       return;
@@ -611,26 +701,6 @@ export default function ShopDashboard({ shop, onLogout }) {
     }
   };
 
-  // Customer-Confirmed Job Files Download (Direct files, real-time approval)
-  const handleRequestDownload = (job) => {
-    if (!job) return;
-    if (job.files_deleted) {
-      showToast('Files have been purged per retention policy.', 'error');
-      return;
-    }
-
-    // Emit live socket permission request to customer's tracking screen
-    socket.emit('download_permission_request', {
-      shop_id: shop?.id,
-      shop_name: shop?.name || 'Print Shop',
-      job_id: job.id,
-      job_code: job.job_code
-    });
-
-    setDownloadModal({ job });
-    showToast(`🔔 Requested download permission from customer for #${job.job_code}`, 'info');
-  };
-
   // Interactive Counter Voice Announcement Callout
   const handleCallCustomer = (job) => {
     if (!job) return;
@@ -661,31 +731,15 @@ export default function ShopDashboard({ shop, onLogout }) {
     setTimeout(() => setCallingJobId(null), 3500);
   };
 
-  // Customer-Confirmed Reprint (Real-time approval)
-  const handleOpenReprintModal = (job, fileToReprint = null) => {
-    if (!job) return;
-    if (job.files_deleted) {
-      showToast('Files have been purged per retention policy.', 'error');
-      return;
-    }
-
-    // Emit live socket reprint permission request to customer's tracking screen
-    socket.emit('reprint_permission_request', {
-      shop_id: shop?.id,
-      shop_name: shop?.name || 'Print Shop',
-      job_id: job.id,
-      job_code: job.job_code,
-      file_id: fileToReprint?.id
-    });
-
-    setReprintModal({ job, fileToReprint });
-    showToast(`🔔 Requested reprint permission from customer for #${job.job_code}`, 'info');
-  };
-
   // Filtered & Searched Jobs
   const filteredJobs = useMemo(() => {
     return jobs.filter(j => {
-      if (activeFilter !== 'all' && j.status !== activeFilter) return false;
+      if (activeFilter === 'pending') {
+        // Exclude purged files from pending queue
+        if (j.status !== 'pending' || j.files_deleted) return false;
+      } else if (activeFilter !== 'all' && j.status !== activeFilter) {
+        return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (j.job_code || '').toLowerCase().includes(q) ||
@@ -697,12 +751,20 @@ export default function ShopDashboard({ shop, onLogout }) {
     });
   }, [jobs, activeFilter, searchQuery]);
 
-  const stats = useMemo(() => ({
-    pending: jobs.filter(j => j.status === 'pending').length,
-    printing: jobs.filter(j => j.status === 'printing').length,
-    done: jobs.filter(j => j.status === 'done').length,
-    total: jobs.length
-  }), [jobs]);
+  const stats = useMemo(() => {
+    const pending = jobs.filter(j => j.status === 'pending' && !j.files_deleted).length;
+    const printing = jobs.filter(j => j.status === 'printing').length;
+    const done = jobs.filter(j => j.status === 'done').length;
+    const total = jobs.length;
+    const todayRevenue = jobs.reduce((sum, j) => sum + (parseFloat(j.total_price) || 0), 0);
+    return {
+      pending,
+      printing,
+      done,
+      total,
+      todayRevenue
+    };
+  }, [jobs]);
 
   // Fresh Printed Jobs for Counter Handoff Display Card
   const freshPrintedJobs = useMemo(() => {
@@ -823,6 +885,15 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <Zap className="w-3.5 h-3.5" />
                 <span>{autoPrint ? 'Auto: ON' : 'Auto: OFF'}</span>
               </button>
+            </div>
+
+            {/* Admin File Retention Timer Badge */}
+            <div 
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-700 rounded-xl text-xs font-bold border border-slate-200/80 shadow-2xs"
+              title={`Admin Policy: Auto-deletes printed files after ${cleanupSettings?.success_minutes || 30} mins, unprinted after ${cleanupSettings?.unsuccess_minutes >= 60 ? `${Math.round(cleanupSettings.unsuccess_minutes / 60)}h` : `${cleanupSettings.unsuccess_minutes}m`}`}
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+              <span>Retention: <strong className="text-slate-900">{cleanupSettings?.enabled ? `${cleanupSettings?.success_minutes || 30}m` : 'Off'}</strong></span>
             </div>
 
             {/* Shop Loyalty Rewards Points Pill */}
@@ -1016,16 +1087,12 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <kbd className="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-mono font-bold border border-slate-200">1</kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                <span>Printing tab</span>
+                <span>Done tab</span>
                 <kbd className="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-mono font-bold border border-slate-200">2</kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                <span>Done tab</span>
-                <kbd className="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-mono font-bold border border-slate-200">3</kbd>
-              </div>
-              <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <span>All Orders tab</span>
-                <kbd className="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-mono font-bold border border-slate-200">4</kbd>
+                <kbd className="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-mono font-bold border border-slate-200">3</kbd>
               </div>
               <div className="flex items-center justify-between py-1">
                 <span>Close preview / panels</span>
@@ -1136,6 +1203,7 @@ export default function ShopDashboard({ shop, onLogout }) {
 
           {/* Top Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Card 1: Pending Orders */}
             <div
               onClick={() => setActiveFilter('pending')}
               className={`bg-white rounded-2xl p-3.5 shadow-xs border cursor-pointer transition ${
@@ -1146,22 +1214,13 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <span className="text-[11px] font-semibold text-slate-400">Pending</span>
                 <Clock className="w-4 h-4 text-amber-500" />
               </div>
-              <h3 className="text-xl font-extrabold text-amber-600 mt-1">{stats.pending}</h3>
-            </div>
-
-            <div
-              onClick={() => setActiveFilter('printing')}
-              className={`bg-white rounded-2xl p-3.5 shadow-xs border cursor-pointer transition ${
-                activeFilter === 'printing' ? 'ring-2 ring-blue-500 border-blue-300' : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400">Printing</span>
-                <Printer className="w-4 h-4 text-blue-500" />
+              <div className="flex items-baseline justify-between mt-1">
+                <h3 className="text-xl font-extrabold text-amber-600">{stats.pending}</h3>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">In Queue</span>
               </div>
-              <h3 className="text-xl font-extrabold text-blue-600 mt-1">{stats.printing}</h3>
             </div>
 
+            {/* Card 2: Done Today */}
             <div
               onClick={() => setActiveFilter('done')}
               className={`bg-white rounded-2xl p-3.5 shadow-xs border cursor-pointer transition ${
@@ -1172,9 +1231,13 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <span className="text-[11px] font-semibold text-slate-400">Done Today</span>
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
               </div>
-              <h3 className="text-xl font-extrabold text-emerald-600 mt-1">{stats.done}</h3>
+              <div className="flex items-baseline justify-between mt-1">
+                <h3 className="text-xl font-extrabold text-emerald-600">{stats.done}</h3>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Completed</span>
+              </div>
             </div>
 
+            {/* Card 3: Today's Revenue */}
             <div
               onClick={() => setActiveFilter('all')}
               className={`bg-white rounded-2xl p-3.5 shadow-xs border cursor-pointer transition ${
@@ -1182,10 +1245,34 @@ export default function ShopDashboard({ shop, onLogout }) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400">Total Today</span>
-                <Layers className="w-4 h-4 text-slate-500" />
+                <span className="text-[11px] font-semibold text-slate-400">Today's Revenue</span>
+                <CreditCard className="w-4 h-4 text-blue-600" />
               </div>
-              <h3 className="text-xl font-extrabold text-slate-800 mt-1">{stats.total}</h3>
+              <div className="flex items-baseline justify-between mt-1">
+                <h3 className="text-xl font-extrabold text-slate-900 font-mono">৳{stats.todayRevenue.toFixed(2)}</h3>
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                  {stats.total} {stats.total === 1 ? 'Order' : 'Orders'}
+                </span>
+              </div>
+            </div>
+
+            {/* Card 4: Admin Auto-Delete Timer Policy */}
+            <div
+              className="bg-white rounded-2xl p-3.5 shadow-xs border border-slate-200 transition"
+              title={`Admin configured file deletion: Automatically wipes completed files after ${cleanupSettings?.success_minutes || 30} mins to protect customer privacy.`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-slate-400">Auto-Delete Timer</span>
+                <Trash2 className="w-4 h-4 text-rose-500" />
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <h3 className="text-xl font-extrabold text-slate-800">
+                  {cleanupSettings?.enabled ? `${cleanupSettings?.success_minutes || 30}m` : 'Off'}
+                </h3>
+                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded">
+                  Admin Policy
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1196,9 +1283,8 @@ export default function ShopDashboard({ shop, onLogout }) {
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
               {[
                 { id: 'pending', label: 'Pending', count: stats.pending, key: '1' },
-                { id: 'printing', label: 'Printing', count: stats.printing, key: '2' },
-                { id: 'done', label: 'Done', count: stats.done, key: '3' },
-                { id: 'all', label: 'All', count: stats.total, key: '4' }
+                { id: 'done', label: 'Done', count: stats.done, key: '2' },
+                { id: 'all', label: 'All Orders', count: stats.total, key: '3' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1269,14 +1355,18 @@ export default function ShopDashboard({ shop, onLogout }) {
                 return (
                   <div
                     key={job.id}
-                    className={`bg-white rounded-2xl border transition shadow-xs hover:shadow-md p-3.5 space-y-2.5 ${
+                    className={`bg-white rounded-2xl border transition shadow-xs hover:shadow-md ${
+                      job.files_deleted ? 'p-2.5' : 'p-3.5 space-y-2.5'
+                    } ${
                       job.status === 'pending' ? 'border-l-4 border-l-amber-500 border-slate-200' :
                       job.status === 'printing' ? 'border-l-4 border-l-blue-500 border-slate-200 bg-blue-50/10' :
                       'border-l-4 border-l-emerald-500 border-slate-200'
                     }`}
                   >
                     {/* Layer 1: Top Bar - Order Identification, Customer, Time, Status, Total & Payment */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                    <div className={`flex flex-wrap items-center justify-between gap-2 ${
+                      job.files_deleted ? '' : 'pb-2 border-b border-slate-100'
+                    }`}>
                       
                       <div className="flex items-center gap-2.5 flex-wrap">
                         {/* Token Number */}
@@ -1317,6 +1407,33 @@ export default function ShopDashboard({ shop, onLogout }) {
                             )}
                           </span>
                         )}
+
+                        {/* Small Auto-Delete Countdown Pill */}
+                        {(() => {
+                          const cd = getJobDeleteCountdown(job);
+                          if (!cd) return null;
+                          if (cd.status === 'deleted') {
+                            return (
+                              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 shrink-0" title="Files purged from server storage">
+                                <Lock className="w-2.5 h-2.5 text-slate-400" />
+                                <span>Purged</span>
+                              </span>
+                            );
+                          }
+                          return (
+                            <span 
+                              className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 shadow-2xs ${
+                                cd.isUrgent 
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-300 animate-pulse' 
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}
+                              title={isDone ? `Auto-deletes from storage ${cleanupSettings?.success_minutes || 30}m after completion` : 'Auto-expires unprinted files'}
+                            >
+                              <Clock className="w-2.5 h-2.5 text-rose-500" />
+                              <span>{cd.text}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* Status, Price & Payment */}
@@ -1356,11 +1473,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                     </div>
 
                     {/* Layer 2: Single File Command Bar OR Multi-File Individual Specification Rows */}
-                    {!hasFiles || job.files_deleted ? (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-400 italic">
-                        Files purged from storage.
-                      </div>
-                    ) : job.files.length === 1 ? (
+                    {!hasFiles || job.files_deleted ? null : job.files.length === 1 ? (
                       /* ---------------- Single File Job (Compact 1-Bar) ---------------- */
                       <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-2 flex items-center justify-between gap-2.5 flex-nowrap overflow-x-auto">
                         
@@ -1532,12 +1645,24 @@ export default function ShopDashboard({ shop, onLogout }) {
                         {/* Master Order Action Bar */}
                         <div className="bg-slate-100/90 border border-slate-200/90 rounded-xl px-3 py-2 flex items-center justify-between gap-2.5 flex-nowrap overflow-x-auto">
                           
-                          {/* Order Files Summary */}
+                          {/* Order Files Summary & Print Progress */}
                           <div className="flex items-center gap-2 flex-nowrap min-w-0">
-                            <span className="text-xs font-black text-slate-800 flex items-center gap-1 whitespace-nowrap">
-                              <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                              <span>Multi-File Order ({job.files.length} Documents)</span>
-                            </span>
+                            {(() => {
+                              const printedCount = (job.files || []).filter(f => isDone || printedFileIds.has(f.id)).length;
+                              return (
+                                <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
+                                  <span className={`w-2 h-2 rounded-full ${isDone ? 'bg-emerald-500' : 'bg-blue-600'}`}></span>
+                                  <span>Multi-File Order ({job.files.length} Documents)</span>
+                                  {!isDone && (
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      printedCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
+                                    }`}>
+                                      {printedCount}/{job.files.length} Printed
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })()}
                             {job.global_notes && (
                               <span className="bg-amber-100/70 border border-amber-300 text-amber-900 text-[10px] font-semibold px-2 py-0.5 rounded-lg truncate max-w-[160px]" title={`Note: ${job.global_notes}`}>
                                 📝 {job.global_notes}
@@ -1643,98 +1768,135 @@ export default function ShopDashboard({ shop, onLogout }) {
 
                         {/* Individual File Rows (Print & Inspect One by One) */}
                         <div className="space-y-1.5">
-                          {job.files.map((file, fIdx) => (
-                            <div
-                              key={file.id || fIdx}
-                              className="bg-white border border-slate-200/90 rounded-xl p-2 flex items-center justify-between gap-2 flex-nowrap overflow-x-auto shadow-2xs"
-                            >
-                              {/* Left: File Index & Specifications */}
-                              <div className="flex items-center gap-1.5 flex-nowrap min-w-0 flex-1 shrink">
-                                <span className="text-[10px] font-black bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-md shrink-0">
-                                  #{fIdx + 1}
-                                </span>
+                          {job.files.map((file, fIdx) => {
+                            const isFilePrinted = isDone || printedFileIds.has(file.id);
+                            return (
+                              <div
+                                key={file.id || fIdx}
+                                className={`border rounded-xl p-2 flex items-center justify-between gap-2 flex-nowrap overflow-x-auto shadow-2xs transition ${
+                                  isFilePrinted ? 'bg-emerald-50/40 border-emerald-200' : 'bg-white border-slate-200/90'
+                                }`}
+                              >
+                                {/* Left: File Index & Specifications */}
+                                <div className="flex items-center gap-1.5 flex-nowrap min-w-0 flex-1 shrink">
+                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0 border ${
+                                    isFilePrinted ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-700 border-slate-200'
+                                  }`}>
+                                    #{fIdx + 1}
+                                  </span>
 
-                                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-xs font-bold text-slate-800 shadow-2xs min-w-0 max-w-[130px] sm:max-w-[170px] md:max-w-[220px] shrink truncate" title={file.original_name}>
-                                  <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                  <span className="truncate">{file.original_name}</span>
+                                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-xs font-bold text-slate-800 shadow-2xs min-w-0 max-w-[130px] sm:max-w-[170px] md:max-w-[220px] shrink truncate" title={file.original_name}>
+                                    <FileText className={`w-3.5 h-3.5 shrink-0 ${isFilePrinted ? 'text-emerald-600' : 'text-rose-500'}`} />
+                                    <span className="truncate">{file.original_name}</span>
+                                  </div>
+
+                                  <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                    📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                                  </span>
+                                  <span className="bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                    🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
+                                    file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                  }`}>
+                                    {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                                  </span>
+                                  <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                    📐 {file.paper_size || 'A4'}
+                                  </span>
+                                  <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                    {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                                  </span>
+
+                                  {file.notes && (
+                                    <span className="bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[120px] shrink-0" title={file.notes}>
+                                      💬 {file.notes}
+                                    </span>
+                                  )}
                                 </div>
 
-                                <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                                  📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
-                                </span>
-                                <span className="bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
-                                  🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
-                                  file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
-                                }`}>
-                                  {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
-                                </span>
-                                <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                                  📐 {file.paper_size || 'A4'}
-                                </span>
-                                <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                                  {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
-                                </span>
+                                {/* Right: Individual Preview, Download & Print Actions */}
+                                <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
+                                  {/* Preview This File */}
+                                  {canPreview ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setActivePreview({ file, job })}
+                                      className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
+                                      title={`Preview ${file.original_name}`}
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>Preview</span>
+                                    </button>
+                                  ) : isDone ? (
+                                    <span
+                                      className="px-2 py-1 bg-slate-100/90 text-slate-400 border border-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 select-none"
+                                      title="Preview locked after printing for privacy"
+                                    >
+                                      <Lock className="w-3 h-3 text-slate-400" />
+                                      <span>Locked</span>
+                                    </span>
+                                  ) : null}
 
-                                {file.notes && (
-                                  <span className="bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[120px] shrink-0" title={file.notes}>
-                                    📝 {file.notes}
-                                  </span>
-                                )}
+                                  {/* Download This File */}
+                                  {canDownload && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRequestDownload(job, file)}
+                                      className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
+                                      title={`Download ${file.original_name} (Customer approval required)`}
+                                    >
+                                      <Download className="w-3.5 h-3.5 text-slate-600" />
+                                      <span>Download</span>
+                                    </button>
+                                  )}
+
+                                  {/* Print This File (One by One - Stay in Pending until all done) */}
+                                  {!isDone && !isFilePrinted && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePrintFile(file, job)}
+                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                                      title={`Print File #${fIdx + 1} (${file.color_mode === 'color' ? 'Color' : 'B&W'}, ${file.copies || 1}x, ${file.sides === 'double' ? '2-Sided' : '1-Sided'})`}
+                                    >
+                                      <Zap className="w-3.5 h-3.5" />
+                                      <span>Print File {fIdx + 1}</span>
+                                    </button>
+                                  )}
+
+                                  {!isDone && isFilePrinted && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 border border-emerald-300 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                        <span>Printed</span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickPrint(file, job, false)}
+                                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition cursor-pointer"
+                                        title="Print again"
+                                      >
+                                        <RefreshCw className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* Reprint This File (If Done) */}
+                                  {isDone && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenReprintModal(job, file)}
+                                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold rounded-lg text-xs flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                                      title="Reprint requires customer verification"
+                                    >
+                                      <RefreshCw className="w-3 h-3 text-amber-600" />
+                                      <span>Reprint</span>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-
-                              {/* Right: Individual Preview & Print Actions */}
-                              <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
-                                {/* Preview This File */}
-                                {canPreview ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setActivePreview({ file, job })}
-                                    className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-800 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
-                                    title={`Preview ${file.original_name}`}
-                                  >
-                                    <Eye className="w-3.5 h-3.5 text-blue-600" />
-                                    <span>Preview</span>
-                                  </button>
-                                ) : isDone ? (
-                                  <span
-                                    className="px-2 py-1 bg-slate-100/90 text-slate-400 border border-slate-200 rounded-lg text-[10px] font-semibold flex items-center gap-1 select-none"
-                                    title="Preview locked after printing for privacy"
-                                  >
-                                    <Lock className="w-3 h-3 text-slate-400" />
-                                    <span>Locked</span>
-                                  </span>
-                                ) : null}
-
-                                {/* Print This File (One by One) */}
-                                {!isDone && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleQuickPrint(file, job, false)}
-                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-blue-200 shadow-2xs cursor-pointer active:scale-95"
-                                    title={`Print File #${fIdx + 1} (${file.color_mode === 'color' ? 'Color' : 'B&W'}, ${file.copies || 1}x, ${file.sides === 'double' ? '2-Sided' : '1-Sided'})`}
-                                  >
-                                    <Zap className="w-3 h-3" />
-                                    <span>Print File {fIdx + 1}</span>
-                                  </button>
-                                )}
-
-                                {/* Reprint This File (If Done) */}
-                                {isDone && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenReprintModal(job)}
-                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold rounded-lg text-xs flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                                    title="Reprint requires customer verification"
-                                  >
-                                    <RefreshCw className="w-3 h-3 text-amber-600" />
-                                    <span>Reprint</span>
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -1810,6 +1972,28 @@ export default function ShopDashboard({ shop, onLogout }) {
                               {formatOrderTime(fj.completed_at)}
                             </span>
                           )}
+
+                          {/* Small Countdown Pill */}
+                          {(() => {
+                            const cd = getJobDeleteCountdown(fj);
+                            if (!cd) return null;
+                            return (
+                              <span 
+                                className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 ${
+                                  cd.status === 'deleted' 
+                                    ? 'bg-slate-100 text-slate-400' 
+                                    : cd.isUrgent 
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse' 
+                                      : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                }`}
+                                title={cd.status === 'deleted' ? 'Files purged' : 'File retention countdown'}
+                              >
+                                <Clock className="w-2.5 h-2.5 text-rose-500" />
+                                <span>{cd.text}</span>
+                              </span>
+                            );
+                          })()}
+
                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs shrink-0 whitespace-nowrap">
                             <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                             <span>Ready</span>
@@ -1872,7 +2056,7 @@ export default function ShopDashboard({ shop, onLogout }) {
           preview={activePreview}
           onClose={() => setActivePreview(null)}
           onPrint={(f, j) => {
-            handleQuickPrint(f, j);
+            handlePrintFile(f, j);
             setActivePreview(null);
           }}
         />
@@ -1903,12 +2087,11 @@ export default function ShopDashboard({ shop, onLogout }) {
               </p>
             </div>
 
-            {/* Documents preview */}
-            {reprintModal.job?.files && reprintModal.job.files.length > 0 && (
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[11px] text-slate-600 font-medium text-left truncate">
-                📄 {reprintModal.fileToReprint?.original_name || reprintModal.job.files[0]?.original_name}
-              </div>
-            )}
+            {/* Specific document being reprinted */}
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-800 text-left truncate flex items-center gap-2">
+              <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+              <span className="truncate">{reprintModal.fileName || reprintModal.fileToReprint?.original_name || 'Document'}</span>
+            </div>
 
             <div className="pt-2 border-t border-slate-100 flex justify-center">
               <button
@@ -1945,16 +2128,15 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <span>Waiting for Customer Consent...</span>
               </div>
               <p className="text-[11px] text-blue-800 leading-relaxed">
-                A download permission request has been sent to the customer's live tracking screen. Once granted, the file(s) will download directly to your computer.
+                A download permission request has been sent to the customer's live tracking screen. Once granted, the file will download directly to your computer.
               </p>
             </div>
 
-            {/* Documents preview */}
-            {downloadModal.job?.files && downloadModal.job.files.length > 0 && (
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[11px] text-slate-600 font-medium text-left truncate">
-                📄 {downloadModal.job.files[0]?.original_name} {downloadModal.job.files.length > 1 ? `(+${downloadModal.job.files.length - 1} more)` : ''}
-              </div>
-            )}
+            {/* Specific document being downloaded */}
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-800 text-left truncate flex items-center gap-2">
+              <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+              <span className="truncate">{downloadModal.fileName || downloadModal.fileToDownload?.original_name || 'Document'}</span>
+            </div>
 
             <div className="pt-2 border-t border-slate-100 flex justify-center">
               <button

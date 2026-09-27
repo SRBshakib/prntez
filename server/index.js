@@ -167,7 +167,7 @@ io.on('connection', (socket) => {
     // Shop emits this; server relays to the customer tracking room for that job
     socket.on('download_permission_request', (data) => {
         if (data?.job_code) {
-            console.log(`[Socket] Shop #${data.shop_id} requesting download permission for job ${data.job_code}`);
+            console.log(`[Socket] Shop #${data.shop_id} requesting download permission for job ${data.job_code} (${data.file_name || 'all'})`);
             io.to(`job_${data.job_code}`).emit('download_permission_request', data);
         }
     });
@@ -177,10 +177,12 @@ io.on('connection', (socket) => {
     socket.on('download_permission_response', (data) => {
         if (data?.shop_id && data?.job_code) {
             const eventName = data.granted ? 'download_permission_granted' : 'download_permission_denied';
-            console.log(`[Socket] Customer ${data.granted ? 'GRANTED' : 'DENIED'} download for job ${data.job_code}`);
+            console.log(`[Socket] Customer ${data.granted ? 'GRANTED' : 'DENIED'} download for job ${data.job_code} (${data.file_name || ''})`);
             io.to(`shop_${data.shop_id}`).emit(eventName, {
                 job_id: data.job_id,
-                job_code: data.job_code
+                job_code: data.job_code,
+                file_id: data.file_id,
+                file_name: data.file_name
             });
         }
     });
@@ -188,7 +190,7 @@ io.on('connection', (socket) => {
     // Reprint Permission Request: Shop → Customer
     socket.on('reprint_permission_request', (data) => {
         if (data?.job_code) {
-            console.log(`[Socket] Shop #${data.shop_id} requesting reprint permission for job ${data.job_code}`);
+            console.log(`[Socket] Shop #${data.shop_id} requesting reprint permission for job ${data.job_code} (${data.file_name || 'document'})`);
             io.to(`job_${data.job_code}`).emit('reprint_permission_request', data);
         }
     });
@@ -197,11 +199,12 @@ io.on('connection', (socket) => {
     socket.on('reprint_permission_response', (data) => {
         if (data?.shop_id && data?.job_code) {
             const eventName = data.granted ? 'reprint_permission_granted' : 'reprint_permission_denied';
-            console.log(`[Socket] Customer ${data.granted ? 'GRANTED' : 'DENIED'} reprint for job ${data.job_code}`);
+            console.log(`[Socket] Customer ${data.granted ? 'GRANTED' : 'DENIED'} reprint for job ${data.job_code} (${data.file_name || ''})`);
             io.to(`shop_${data.shop_id}`).emit(eventName, {
                 job_id: data.job_id,
                 job_code: data.job_code,
-                file_id: data.file_id
+                file_id: data.file_id,
+                file_name: data.file_name
             });
         }
     });

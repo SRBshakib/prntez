@@ -353,7 +353,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/80 pb-36 pt-6 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50/80 pb-28 sm:pb-36 pt-4 sm:pt-6 px-3 sm:px-6 lg:px-8">
       
       {/* Uploading Time Modal with AdSense Space */}
       {uploading && (
@@ -742,9 +742,10 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
         )}
 
         {/* Customer Information & Notes */}
-        <div className="bg-white rounded-2xl p-5 shadow-xs border border-slate-200 space-y-3">
+        {/* Customer Information & Notes */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 space-y-2.5 sm:space-y-3">
           <h4 className="font-bold text-xs text-slate-700">Customer Details (Optional)</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
             <div>
               <input
                 type="text"
@@ -776,44 +777,44 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
         </div>
 
         {/* Payment Selection & bKash / Nagad Number Box (Feature 4) */}
-        <div className="bg-white rounded-2xl p-5 shadow-xs border border-slate-200 space-y-3">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
               <CreditCard className="w-4 h-4 text-blue-600" />
               Payment Preference
             </h4>
-            <span className="text-[11px] font-semibold text-slate-400">Pay at counter or online</span>
+            <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400">Pay at counter or online</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
             {[
-              { id: 'cash', label: '💵 Cash at Counter', desc: 'Pay when picking up' },
-              { id: 'bkash', label: '🌸 bKash', desc: shop?.bkash_number ? 'Direct mobile pay' : 'Counter bKash' },
-              { id: 'nagad', label: '🟠 Nagad', desc: shop?.nagad_number ? 'Direct mobile pay' : 'Counter Nagad' }
+              { id: 'cash', label: '💵 Cash', desc: 'At counter' },
+              { id: 'bkash', label: '🌸 bKash', desc: shop?.bkash_number ? 'Direct pay' : 'At counter' },
+              { id: 'nagad', label: '🟠 Nagad', desc: shop?.nagad_number ? 'Direct pay' : 'At counter' }
             ].map(p => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => setPaymentMethod(p.id)}
-                className={`p-2.5 rounded-xl border text-left transition ${
+                className={`p-2 sm:p-2.5 rounded-xl border text-left transition cursor-pointer ${
                   paymentMethod === p.id
-                    ? 'border-blue-600 bg-blue-50/60 font-bold text-blue-900 ring-1 ring-blue-500'
+                    ? 'border-blue-600 bg-blue-50/60 font-bold text-blue-900 ring-1 ring-blue-500 shadow-2xs'
                     : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                 }`}
               >
-                <div className="text-[11px]">{p.label}</div>
-                <div className="text-[9px] text-slate-400 mt-0.5">{p.desc}</div>
+                <div className="text-[10px] sm:text-[11px] font-bold truncate leading-tight">{p.label}</div>
+                <div className="text-[8px] sm:text-[9px] text-slate-400 mt-0.5 truncate">{p.desc}</div>
               </button>
             ))}
           </div>
 
           {/* bKash / Nagad Payment Instructions */}
           {(paymentMethod === 'bkash' || paymentMethod === 'nagad') && (
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 animate-in fade-in">
+            <div className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 animate-in fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Shop {paymentMethod.toUpperCase()} Number</p>
-                  <p className="text-sm font-mono font-extrabold text-slate-800">
+                  <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Shop {paymentMethod.toUpperCase()} Number</p>
+                  <p className="text-xs sm:text-sm font-mono font-extrabold text-slate-800">
                     {paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone || '017XXXXXXXX') : (shop?.nagad_number || shop?.phone || '018XXXXXXXX')}
                   </p>
                 </div>
@@ -825,7 +826,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                     setCopiedNumber(true);
                     setTimeout(() => setCopiedNumber(false), 2000);
                   }}
-                  className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1 shadow-2xs"
+                  className="px-2 sm:px-2.5 py-1 sm:py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-[10px] sm:text-xs font-bold text-slate-700 flex items-center gap-1 shadow-2xs"
                 >
                   {copiedNumber ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedNumber ? 'Copied!' : 'Copy'}</span>
@@ -833,7 +834,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 block mb-1">
                   Transaction ID / Sender Phone (Optional)
                 </label>
                 <input
@@ -848,23 +849,23 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           )}
         </div>
 
-        {/* Sticky Floating Bottom Checkout Bar */}
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sticky bottom-4 z-20">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimated Total</span>
+        {/* Sticky Floating Bottom Checkout Bar (Clean Mobile Optimized) */}
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl p-3 sm:p-4 shadow-xl border border-slate-200/90 flex flex-row items-center justify-between gap-3 sticky bottom-3 sm:bottom-4 z-20">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">Estimated Total</span>
               {discount > 0 && (
-                <span className="px-2 py-0.2 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
-                  🎉 {discountPercent}% Bulk Discount (-৳{discount.toFixed(2)})
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 truncate">
+                  -{discountPercent}%
                 </span>
               )}
             </div>
-            <div className="flex items-baseline gap-2 mt-0.5">
-              <span className="text-xl font-extrabold text-slate-900 leading-tight">
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
                 ৳{total.toFixed(2)}
               </span>
               {discount > 0 && (
-                <span className="text-xs text-slate-400 line-through">
+                <span className="text-[10px] sm:text-xs text-slate-400 line-through">
                   ৳{subtotal.toFixed(2)}
                 </span>
               )}
@@ -874,7 +875,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           <button
             onClick={handleSubmit}
             disabled={uploading || files.length === 0}
-            className="flex-1 max-w-sm py-3 px-5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 active:scale-98"
+            className="py-2.5 sm:py-3 px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5 sm:gap-2 active:scale-98 shrink-0 cursor-pointer"
           >
             {uploading ? (
               <>
@@ -884,7 +885,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
             ) : (
               <>
                 <span>Send to Print Counter</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </>
             )}
           </button>

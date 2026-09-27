@@ -7,6 +7,29 @@ const { query } = require('../db');
 const { printSilent } = require('../spooler');
 
 // ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────
+// Helper: Get File Cleanup Settings configured by Admin
+// ─────────────────────────────────────────────────────
+async function getCleanupSettings() {
+    try {
+        const cleanupRows = await query("SELECT `key`, `value` FROM settings WHERE `key` IN ('file_cleanup_enabled', 'file_cleanup_success_minutes', 'file_cleanup_unsuccess_minutes')");
+        const settings = {
+            enabled: true,
+            success_minutes: 30,
+            unsuccess_minutes: 1440
+        };
+        cleanupRows.forEach(r => {
+            if (r.key === 'file_cleanup_enabled') settings.enabled = r.value !== '0';
+            if (r.key === 'file_cleanup_success_minutes') settings.success_minutes = parseInt(r.value, 10) || 30;
+            if (r.key === 'file_cleanup_unsuccess_minutes') settings.unsuccess_minutes = parseInt(r.value, 10) || 1440;
+        });
+        return settings;
+    } catch (_) {
+        return { enabled: true, success_minutes: 30, unsuccess_minutes: 1440 };
+    }
+}
+
+// ─────────────────────────────────────────────────────
 // List Jobs for a Shop (all or filtered by status)
 // ─────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -40,7 +63,10 @@ router.get('/', async (req, res) => {
         }
         sql += ' ORDER BY id DESC LIMIT 100';
 
-        const jobs = await query(sql, params);
+        const [jobs, cleanupSettings] = await Promise.all([
+            query(sql, params),
+            getCleanupSettings()
+        ]);
 
         // Batch fetch all files for non-deleted jobs in a single query (fixes N+1)
         const activeJobIds = jobs.filter(j => !j.files_deleted).map(j => j.id);
@@ -67,7 +93,7 @@ router.get('/', async (req, res) => {
             job.files = filesMap[job.id] || [];
         }
 
-        res.json({ success: true, data: jobs });
+        res.json({ success: true, data: jobs, cleanup_settings: cleanupSettings });
     } catch (err) {
         console.error('List jobs error:', err);
         res.status(500).json({ success: false, error: 'Internal server error' });
@@ -106,15 +132,19 @@ router.get('/track/:jobCode', async (req, res) => {
         }
 
         const job = jobs[0];
-        const files = await query(`
-            SELECT id, original_name, file_size, file_type, copies, color_mode, paper_size, sides,
-                   COALESCE(file_price, 0) as file_price,
-                   COALESCE(page_count, 1) as page_count
-            FROM print_files WHERE job_id = ?
-        `, [job.id]);
+        const [files, cleanupSettings] = await Promise.all([
+            query(`
+                SELECT id, original_name, file_size, file_type, copies, color_mode, paper_size, sides,
+                       COALESCE(file_price, 0) as file_price,
+                       COALESCE(page_count, 1) as page_count
+                FROM print_files WHERE job_id = ?
+            `, [job.id]),
+            getCleanupSettings()
+        ]);
         job.files = files;
+        job.cleanup_settings = cleanupSettings;
 
-        res.json({ success: true, job });
+        res.json({ success: true, job, cleanup_settings: cleanupSettings });
     } catch (err) {
         console.error('Track job error:', err);
         res.status(500).json({ success: false, error: 'Internal server error' });

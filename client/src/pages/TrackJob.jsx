@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2, Clock, Printer, Store, Phone, MapPin, Sparkles, Loader2,
   ArrowLeft, Copy, Check, QrCode, Bell, BellRing, MessageCircle, CreditCard, Percent,
-  Download, AlertTriangle
+  Download, AlertTriangle, FileText, ShieldCheck, Lock, Trash2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { socket, playChime } from '../socket';
@@ -24,6 +24,62 @@ export default function TrackJob({ jobCode, onBack }) {
   const [adsenseConfig, setAdsenseConfig] = useState(null);
   const [dlRequest, setDlRequest] = useState(null);
   const [reprintRequest, setReprintRequest] = useState(null);
+  const [now, setNow] = useState(Date.now());
+
+  // Live ticking clock for auto-delete countdown
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getDeleteCountdown = () => {
+    if (!job) return null;
+    if (job.files_deleted) {
+      return { status: 'deleted', label: 'Purged', desc: 'Uploaded documents have been securely purged from the server for privacy.' };
+    }
+    const settings = job.cleanup_settings || { enabled: true, success_minutes: 30, unsuccess_minutes: 1440 };
+    if (settings.enabled === false) {
+      return { status: 'disabled', label: 'Manual Cleanup', desc: 'Managed according to shop retention policy.' };
+    }
+
+    let deadlineMs = null;
+    if (job.status === 'done' && (job.completed_at || job.updated_at)) {
+      const completedTime = new Date(job.completed_at || job.updated_at).getTime();
+      deadlineMs = completedTime + ((settings.success_minutes || 30) * 60 * 1000);
+    } else if (job.created_at) {
+      const createdTime = new Date(job.created_at).getTime();
+      deadlineMs = createdTime + ((settings.unsuccess_minutes || 1440) * 60 * 1000);
+    }
+
+    if (!deadlineMs || isNaN(deadlineMs)) return null;
+
+    const diffMs = deadlineMs - now;
+    if (diffMs <= 0) {
+      return { status: 'expired', label: 'Auto-Purging...', desc: 'Files are being purged from server storage.' };
+    }
+
+    const totalSecs = Math.floor(diffMs / 1000);
+    const hours = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+
+    let timeString = '';
+    if (hours > 0) {
+      timeString = `${hours}h ${mins}m ${secs}s`;
+    } else {
+      timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    return {
+      status: 'active',
+      timeString,
+      label: `Auto-Purge in ${timeString}`,
+      isUrgent: diffMs < 5 * 60 * 1000,
+      desc: job.status === 'done'
+        ? `Files automatically purge ${settings.success_minutes || 30}m after printing to protect your data privacy.`
+        : `Unprinted files auto-expire in ${settings.unsuccess_minutes >= 60 ? `${Math.round(settings.unsuccess_minutes / 60)}h` : `${settings.unsuccess_minutes}m`}`
+    };
+  };
 
   useEffect(() => {
     // Fetch announcement & adsense
@@ -340,6 +396,99 @@ export default function TrackJob({ jobCode, onBack }) {
             )}
           </div>
 
+          {/* Uploaded Documents List */}
+          {job.files && job.files.length > 0 && (
+            <div className="bg-slate-50/90 rounded-2xl p-3.5 border border-slate-200/80 text-left space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Your Documents ({job.files.length} {job.files.length === 1 ? 'file' : 'files'})</span>
+                </span>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {job.total_pages || job.files.reduce((acc, f) => acc + (f.page_count || 1) * (f.copies || 1), 0)} Total Pages
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                {job.files.map((file, fIdx) => (
+                  <div
+                    key={file.id || fIdx}
+                    className="bg-white border border-slate-200 rounded-xl p-2.5 shadow-2xs space-y-1.5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[9px] font-black bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                        #{fIdx + 1}
+                      </span>
+                      <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                      <p className="font-bold text-xs text-slate-800 truncate flex-1 min-w-0" title={file.original_name}>
+                        {file.original_name}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      <span className="bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
+                        📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                      </span>
+                      <span className="bg-blue-50/80 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
+                        🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-md border font-bold ${
+                        file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                      }`}>
+                        {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                      </span>
+                      <span className="bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
+                        📐 {file.paper_size || 'A4'}
+                      </span>
+                      <span className="bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
+                        {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Privacy & File Auto-Deletion Countdown Card */}
+          {(() => {
+            const cd = getDeleteCountdown();
+            if (!cd) return null;
+            return (
+              <div className={`rounded-2xl p-3 border text-left flex items-start gap-2.5 transition shadow-2xs ${
+                cd.status === 'deleted'
+                  ? 'bg-slate-50 border-slate-200 text-slate-600'
+                  : cd.isUrgent
+                    ? 'bg-rose-50 border-rose-200 text-rose-900'
+                    : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+              }`}>
+                <div className={`p-1.5 rounded-xl shrink-0 mt-0.5 ${
+                  cd.status === 'deleted' ? 'bg-slate-200 text-slate-600' :
+                  cd.isUrgent ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {cd.status === 'deleted' ? <Lock className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-extrabold text-xs flex items-center gap-1.5">
+                      <span>{cd.status === 'deleted' ? 'Files Purged (Privacy Protected)' : 'Privacy & Auto-Deletion'}</span>
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shrink-0 shadow-2xs ${
+                      cd.status === 'deleted'
+                        ? 'bg-slate-200 text-slate-700'
+                        : cd.isUrgent
+                          ? 'bg-rose-600 text-white animate-pulse'
+                          : 'bg-emerald-700 text-white'
+                    }`}>
+                      {cd.status === 'deleted' ? '🔒 Purged' : `⏳ ${cd.timeString || cd.label}`}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">{cd.desc}</p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Stepper Progress */}
           <div className="py-2 space-y-3">
             {[
@@ -453,32 +602,39 @@ export default function TrackJob({ jobCode, onBack }) {
         {/* Download Permission Modal (Shop -> Customer) */}
         {dlRequest && (
           <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-5 text-center">
+            <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4 text-center">
               <div className="w-14 h-14 rounded-2xl bg-amber-50 border-2 border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-lg shadow-amber-100/50">
                 <Download className="w-7 h-7" />
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-extrabold text-slate-800">Download Permission</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">
-                  <span className="font-bold text-slate-700">{dlRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to download your uploaded files.
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  <span className="font-bold text-slate-700">{dlRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to download:
                 </p>
+                {/* Specific Document Name Badge */}
+                <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 truncate text-left flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span className="truncate">{dlRequest.file_name || 'Uploaded Document(s)'}</span>
+                </div>
               </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-medium flex items-start gap-2 text-left">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-800 font-medium flex items-start gap-2 text-left">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-                <span>Your files will be downloaded to the shop's computer. Only allow if you trust this shop.</span>
+                <span>This document will be downloaded to the shop computer.</span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2.5 pt-1">
                 <button
                   onClick={() => {
                     socket.emit('download_permission_response', {
                       job_id: dlRequest.job_id,
                       job_code: dlRequest.job_code,
                       shop_id: dlRequest.shop_id,
+                      file_id: dlRequest.file_id,
+                      file_name: dlRequest.file_name,
                       granted: false
                     });
                     setDlRequest(null);
                   }}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition border border-slate-200 cursor-pointer"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition border border-slate-200 cursor-pointer"
                 >
                   Deny
                 </button>
@@ -488,17 +644,19 @@ export default function TrackJob({ jobCode, onBack }) {
                       job_id: dlRequest.job_id,
                       job_code: dlRequest.job_code,
                       shop_id: dlRequest.shop_id,
+                      file_id: dlRequest.file_id,
+                      file_name: dlRequest.file_name,
                       granted: true
                     });
                     setDlRequest(null);
                   }}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition shadow-md shadow-emerald-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
-                  Allow
+                  Allow Download
                 </button>
               </div>
-              <p className="text-[10px] text-slate-400">This request will expire in 60 seconds.</p>
+              <p className="text-[10px] text-slate-400">Expires in 60 seconds.</p>
             </div>
           </div>
         )}
@@ -506,21 +664,26 @@ export default function TrackJob({ jobCode, onBack }) {
         {/* Reprint Permission Modal (Shop -> Customer) */}
         {reprintRequest && (
           <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-5 text-center">
+            <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4 text-center">
               <div className="w-14 h-14 rounded-2xl bg-blue-50 border-2 border-blue-200 text-blue-600 flex items-center justify-center mx-auto shadow-lg shadow-blue-100/50">
                 <Printer className="w-7 h-7" />
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-extrabold text-slate-800">Reprint Permission</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">
-                  <span className="font-bold text-slate-700">{reprintRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to reprint your document.
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  <span className="font-bold text-slate-700">{reprintRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to reprint:
                 </p>
+                {/* Specific Document Name Badge */}
+                <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 truncate text-left flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span className="truncate">{reprintRequest.file_name || 'Uploaded Document'}</span>
+                </div>
               </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 font-medium flex items-start gap-2 text-left">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-[11px] text-blue-800 font-medium flex items-start gap-2 text-left">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
-                <span>An extra copy of your document will be printed at the counter.</span>
+                <span>An extra copy of this document will be printed at the counter.</span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2.5 pt-1">
                 <button
                   onClick={() => {
                     socket.emit('reprint_permission_response', {
@@ -528,11 +691,12 @@ export default function TrackJob({ jobCode, onBack }) {
                       job_code: reprintRequest.job_code,
                       shop_id: reprintRequest.shop_id,
                       file_id: reprintRequest.file_id,
+                      file_name: reprintRequest.file_name,
                       granted: false
                     });
                     setReprintRequest(null);
                   }}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition border border-slate-200 cursor-pointer"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition border border-slate-200 cursor-pointer"
                 >
                   Deny
                 </button>
@@ -543,17 +707,18 @@ export default function TrackJob({ jobCode, onBack }) {
                       job_code: reprintRequest.job_code,
                       shop_id: reprintRequest.shop_id,
                       file_id: reprintRequest.file_id,
+                      file_name: reprintRequest.file_name,
                       granted: true
                     });
                     setReprintRequest(null);
                   }}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
                   Allow Reprint
                 </button>
               </div>
-              <p className="text-[10px] text-slate-400">This request will expire in 60 seconds.</p>
+              <p className="text-[10px] text-slate-400">Expires in 60 seconds.</p>
             </div>
           </div>
         )}
