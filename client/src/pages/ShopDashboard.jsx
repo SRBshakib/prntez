@@ -534,10 +534,14 @@ export default function ShopDashboard({ shop, onLogout }) {
   };
 
   // 3. Print Actions (Browser Dialog Ctrl+P vs Hardware Spooler)
-  const handleBrowserPrint = (file, job, markDone = true) => {
+  const handleBrowserPrint = async (file, job, markDone = true) => {
     if (!file) return;
 
     const fileUrl = `/api/jobs/serve/${file.id}`;
+    const ext = (file.original_name || '').split('.').pop().toLowerCase();
+    const isDocx = ['docx', 'doc'].includes(ext);
+    const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext);
+
     showToast(`🖨️ Opening print dialog for ${file.original_name}...`, 'info');
 
     // Create or reuse hidden iframe to invoke native browser print dialog (Ctrl + P)
@@ -548,7 +552,103 @@ export default function ShopDashboard({ shop, onLogout }) {
       printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
       document.body.appendChild(printFrame);
     }
-    
+
+    // For Word documents (.docx, .doc), render directly into HTML in iframe so browser print opens without downloading!
+    if (isDocx) {
+      try {
+        const res = await fetch(fileUrl);
+        const arrayBuffer = await res.arrayBuffer();
+
+        const doc = printFrame.contentDocument || printFrame.contentWindow.document;
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>${file.original_name}</title>
+              <style>
+                @page { size: auto; margin: 15mm; }
+                body { margin: 0; padding: 15px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #fff; color: #000; }
+                .docx-wrapper { background: #fff !important; padding: 0 !important; }
+                .docx { box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+                table { border-collapse: collapse; width: 100%; }
+                td, th { border: 1px solid #ccc; padding: 4px 8px; }
+                @media print {
+                  body { padding: 0 !important; }
+                }
+              </style>
+            </head>
+            <body>
+              <div id="docx-root"></div>
+            </body>
+          </html>
+        `);
+        doc.close();
+
+        const container = doc.getElementById('docx-root');
+        try {
+          const { renderAsync } = await import('docx-preview');
+          await renderAsync(arrayBuffer, container, null, {
+            className: 'docx',
+            inWrapper: false,
+            ignoreWidth: false,
+            ignoreHeight: false
+          });
+        } catch (docxErr) {
+          const mammoth = await import('mammoth');
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          container.innerHTML = result.value;
+        }
+
+        setTimeout(() => {
+          printFrame.contentWindow.focus();
+          printFrame.contentWindow.print();
+          if (markDone && job?.id && job.status !== 'done') {
+            updateJobStatus(job.id, 'done');
+          }
+        }, 400);
+      } catch (err) {
+        console.error('DOCX print error:', err);
+        showToast('Error formatting DOCX for print dialog', 'error');
+      }
+      return;
+    }
+
+    // For Images
+    if (isImage) {
+      const doc = printFrame.contentDocument || printFrame.contentWindow.document;
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${file.original_name}</title>
+            <style>
+              @page { size: auto; margin: 0; }
+              body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
+              img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+            </style>
+          </head>
+          <body>
+            <img src="${fileUrl}" id="print-img" />
+          </body>
+        </html>
+      `);
+      doc.close();
+      const img = doc.getElementById('print-img');
+      img.onload = () => {
+        setTimeout(() => {
+          printFrame.contentWindow.focus();
+          printFrame.contentWindow.print();
+          if (markDone && job?.id && job.status !== 'done') {
+            updateJobStatus(job.id, 'done');
+          }
+        }, 200);
+      };
+      return;
+    }
+
+    // Default: PDF (Native browser PDF engine in iframe)
     printFrame.src = fileUrl;
     printFrame.onload = () => {
       try {
@@ -1370,7 +1470,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                       
                       <div className="flex items-center gap-2.5 flex-wrap">
                         {/* Token Number */}
-                        <span className="text-base font-black text-blue-600 font-mono tracking-tight bg-blue-50/70 border border-blue-200/80 px-2 py-0.5 rounded-lg shadow-2xs">
+                        <span className="text-base font-black text-blue-700 font-mono tracking-tight bg-blue-100/70 border border-blue-200 px-2 py-0.5 rounded-lg shadow-2xs shrink-0">
                           #{job.job_code}
                         </span>
 
@@ -1378,7 +1478,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                         {job.auth_code && (
                           <button
                             type="button"
-                            className="font-mono text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-2 py-1 rounded-md border border-slate-200 transition flex items-center gap-1 cursor-pointer"
+                            className="font-mono text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 px-2 py-1 rounded-md border border-slate-200 transition flex items-center gap-1 cursor-pointer shrink-0"
                             title="Auth Verification Code (Click to copy)"
                             onClick={() => {
                               navigator.clipboard.writeText(job.auth_code);
@@ -1391,8 +1491,9 @@ export default function ShopDashboard({ shop, onLogout }) {
                         )}
 
                         {/* Customer Name */}
-                        <span className="font-extrabold text-xs text-slate-900 truncate max-w-[170px]" title={job.customer_name}>
-                          {job.customer_name || 'Guest Customer'}
+                        <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1 shrink-0" title={job.customer_name}>
+                          <span>👤</span>
+                          <span className="truncate max-w-[200px]">{job.customer_name || 'Guest Customer'}</span>
                         </span>
 
                         {/* Submission & Done Time */}
@@ -1953,47 +2054,21 @@ export default function ShopDashboard({ shop, onLogout }) {
                       key={fj.id}
                       className="bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 space-y-2 transition shadow-2xs"
                     >
-                      {/* Layer 1: Information (Token, Customer Name, Time, Ready Status & WhatsApp) */}
-                      <div className="flex items-center justify-between gap-1.5 flex-nowrap min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0 shrink truncate">
-                          <span className="text-sm font-black text-blue-600 font-mono tracking-tight shrink-0">
+                      {/* Layer 1: Main Header - Token Number, Customer Name, Status & WhatsApp */}
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          {/* Token Number - always prominent & never shrinking */}
+                          <span className="text-xs font-black text-blue-700 font-mono tracking-tight bg-blue-100/70 border border-blue-200 px-1.5 py-0.5 rounded-md shrink-0 shadow-2xs">
                             #{fj.job_code}
                           </span>
-                          {fj.customer_name && (
-                            <span className="text-xs font-extrabold text-slate-800 truncate" title={fj.customer_name}>
-                              👤 {fj.customer_name}
-                            </span>
-                          )}
+                          {/* Customer Name */}
+                          <span className="text-xs font-extrabold text-slate-800 truncate" title={fj.customer_name || 'Guest'}>
+                            👤 {fj.customer_name || 'Guest'}
+                          </span>
                         </div>
 
+                        {/* Ready Badge & WhatsApp Button */}
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {fj.completed_at && (
-                            <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                              {formatOrderTime(fj.completed_at)}
-                            </span>
-                          )}
-
-                          {/* Small Countdown Pill */}
-                          {(() => {
-                            const cd = getJobDeleteCountdown(fj);
-                            if (!cd) return null;
-                            return (
-                              <span 
-                                className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 ${
-                                  cd.status === 'deleted' 
-                                    ? 'bg-slate-100 text-slate-400' 
-                                    : cd.isUrgent 
-                                      ? 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse' 
-                                      : 'bg-amber-50 text-amber-800 border border-amber-200'
-                                }`}
-                                title={cd.status === 'deleted' ? 'Files purged' : 'File retention countdown'}
-                              >
-                                <Clock className="w-2.5 h-2.5 text-rose-500" />
-                                <span>{cd.text}</span>
-                              </span>
-                            );
-                          })()}
-
                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs shrink-0 whitespace-nowrap">
                             <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
                             <span>Ready</span>
@@ -2009,6 +2084,37 @@ export default function ShopDashboard({ shop, onLogout }) {
                             </button>
                           )}
                         </div>
+                      </div>
+
+                      {/* Layer 1.5: Metadata Sub-row - Timestamp & Purge Countdown */}
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500 pt-1 border-t border-emerald-100/80">
+                        {fj.completed_at ? (
+                          <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1 shrink-0">
+                            <Clock className="w-2.5 h-2.5 text-slate-400" />
+                            <span>{formatOrderTime(fj.completed_at)}</span>
+                          </span>
+                        ) : <span />}
+
+                        {/* Auto-Delete / Purge Countdown Pill */}
+                        {(() => {
+                          const cd = getJobDeleteCountdown(fj);
+                          if (!cd) return null;
+                          return (
+                            <span 
+                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 shadow-2xs ${
+                                cd.status === 'deleted' 
+                                  ? 'bg-slate-100 text-slate-500 border border-slate-200' 
+                                  : cd.isUrgent 
+                                    ? 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse' 
+                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}
+                              title={cd.status === 'deleted' ? 'Files purged from server storage' : 'File retention countdown'}
+                            >
+                              <Clock className="w-2.5 h-2.5 text-rose-500" />
+                              <span>{cd.text}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* Layer 2: Uploaded Document / PDF Name(s) */}

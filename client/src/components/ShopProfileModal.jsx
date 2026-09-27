@@ -27,7 +27,16 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
     price_legal: shop?.price_legal || '3.00',
     price_a3: shop?.price_a3 || '15.00',
     bkash_number: shop?.bkash_number || '',
+    bkash_type: shop?.bkash_type || 'merchant',
+    bkash_qr_image: shop?.bkash_qr_image || '',
+    bkash_app_key: shop?.bkash_app_key || '',
+    bkash_app_secret: shop?.bkash_app_secret || '',
+    bkash_username: shop?.bkash_username || '',
+    bkash_password: shop?.bkash_password || '',
     nagad_number: shop?.nagad_number || '',
+    nagad_type: shop?.nagad_type || 'merchant',
+    nagad_qr_image: shop?.nagad_qr_image || '',
+    uddoktapay_api_key: shop?.uddoktapay_api_key || '',
     discount_min_pages: shop?.discount_min_pages || 50,
     discount_percent: shop?.discount_percent || 10,
     discount_tier2_pages: shop?.discount_tier2_pages || 100,
@@ -38,9 +47,13 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState(null);
+  const [showAdvancedBkash, setShowAdvancedBkash] = useState(false);
+  const [showAdvancedUddoktapay, setShowAdvancedUddoktapay] = useState(false);
 
   const shopImageInputRef = useRef(null);
   const tradeLicenseInputRef = useRef(null);
+  const bkashQrInputRef = useRef(null);
+  const nagadQrInputRef = useRef(null);
 
   // Helper to read and compress image to base64 DataURL
   const handleImageUpload = (e, field) => {
@@ -117,7 +130,7 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden font-sans">
         
-        {/* Hidden File Inputs for Shop Photo & Trade License */}
+        {/* Hidden File Inputs for Shop Photo, Trade License & MFS QR Codes */}
         <input
           type="file"
           ref={shopImageInputRef}
@@ -132,6 +145,20 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
           accept="image/*"
           capture="environment"
           onChange={e => handleImageUpload(e, 'trade_license_image')}
+          className="hidden"
+        />
+        <input
+          type="file"
+          ref={bkashQrInputRef}
+          accept="image/*"
+          onChange={e => handleImageUpload(e, 'bkash_qr_image')}
+          className="hidden"
+        />
+        <input
+          type="file"
+          ref={nagadQrInputRef}
+          accept="image/*"
+          onChange={e => handleImageUpload(e, 'nagad_qr_image')}
           className="hidden"
         />
 
@@ -563,34 +590,270 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
             </div>
           )}
 
-          {/* TAB 4: bKash & Nagad Accounts */}
+          {/* TAB 4: Shop bKash & Nagad Merchant Account Setup */}
           {activeTab === 'payment' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-4 bg-pink-50 rounded-2xl border border-pink-200 space-y-2">
-                  <label className="font-extrabold text-pink-900 block">bKash Personal / Merchant Number</label>
-                  <input
-                    type="text"
-                    placeholder="017XXXXXXXX"
-                    value={formData.bkash_number}
-                    onChange={e => setFormData({ ...formData, bkash_number: e.target.value })}
-                    className="w-full bg-white border border-pink-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800"
-                  />
-                  <p className="text-[10px] text-pink-700">Customers can copy this directly on checkout</p>
-                </div>
-
-                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-200 space-y-2">
-                  <label className="font-extrabold text-orange-900 block">Nagad Personal / Merchant Number</label>
-                  <input
-                    type="text"
-                    placeholder="018XXXXXXXX"
-                    value={formData.nagad_number}
-                    onChange={e => setFormData({ ...formData, nagad_number: e.target.value })}
-                    className="w-full bg-white border border-orange-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800"
-                  />
-                  <p className="text-[10px] text-orange-700">Shown in payment method selector</p>
+              
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl text-blue-950 flex items-start gap-2.5 text-xs">
+                <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-extrabold text-blue-900">Direct Shop Merchant Payouts</p>
+                  <p className="text-[11px] text-blue-800/90 leading-relaxed mt-0.5">
+                    Payments from your customers go <strong>directly to your own bKash / Nagad merchant account</strong>. Configure your merchant numbers and upload your counter QR code below.
+                  </p>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                
+                {/* 1. bKash Merchant Setup */}
+                <div className="p-4 bg-pink-50/70 rounded-2xl border border-pink-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-pink-900 text-xs flex items-center gap-1.5">
+                      <CreditCard className="w-4 h-4 text-pink-600" />
+                      bKash Merchant Account
+                    </span>
+                    <select
+                      value={formData.bkash_type}
+                      onChange={e => setFormData({ ...formData, bkash_type: e.target.value })}
+                      className="bg-white border border-pink-300 text-[10px] font-bold text-pink-900 rounded-lg px-2 py-1"
+                    >
+                      <option value="merchant">Merchant (Make Payment / পেমেন্ট)</option>
+                      <option value="personal">Personal (Send Money)</option>
+                      <option value="agent">Agent Cash Out</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-pink-900 uppercase block mb-1">
+                      Shop bKash {formData.bkash_type === 'merchant' ? 'Merchant' : 'Account'} Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 017XXXXXXXX"
+                      value={formData.bkash_number}
+                      onChange={e => setFormData({ ...formData, bkash_number: e.target.value })}
+                      className="w-full bg-white border border-pink-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800 text-xs"
+                    />
+                    <p className="text-[10px] text-pink-700 mt-1">
+                      Customers paying for orders at your shop will send/make payment to this number.
+                    </p>
+                  </div>
+
+                  {/* bKash Standee / Merchant QR Upload */}
+                  <div className="pt-2 border-t border-pink-200/80">
+                    <label className="text-[10px] font-bold text-pink-900 uppercase block mb-1.5">
+                      bKash Counter Standee QR Code (Optional)
+                    </label>
+                    {formData.bkash_qr_image ? (
+                      <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-pink-200">
+                        <img
+                          src={formData.bkash_qr_image}
+                          alt="bKash QR"
+                          className="w-14 h-14 object-contain rounded-lg border border-slate-200 bg-white"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800">Counter QR Uploaded</p>
+                          <p className="text-[10px] text-slate-400">Shown to customers on checkout</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImageModal(formData.bkash_qr_image)}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs"
+                            title="Preview QR"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, bkash_qr_image: '' })}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs"
+                            title="Remove QR"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => bkashQrInputRef.current?.click()}
+                        className="w-full py-2.5 px-3 bg-white hover:bg-pink-100/60 border border-dashed border-pink-300 rounded-xl text-center transition flex items-center justify-center gap-1.5 text-pink-800 font-bold text-xs cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-pink-600" />
+                        <span>Upload bKash Standee QR Image</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Advanced Direct bKash Tokenized Gateway (Collapsible) */}
+                  <div className="pt-2 border-t border-pink-200/80">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedBkash(!showAdvancedBkash)}
+                      className="text-[11px] font-bold text-pink-800 hover:underline flex items-center justify-between w-full"
+                    >
+                      <span>⚡ Direct bKash Tokenized PGW API (Optional)</span>
+                      <span>{showAdvancedBkash ? '▲ Hide' : '▼ Setup'}</span>
+                    </button>
+
+                    {showAdvancedBkash && (
+                      <div className="mt-2.5 space-y-2 bg-white/80 p-3 rounded-xl border border-pink-200 animate-in fade-in">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-500 block mb-0.5">bKash App Key</label>
+                          <input
+                            type="text"
+                            placeholder="Your bKash App Key"
+                            value={formData.bkash_app_key}
+                            onChange={e => setFormData({ ...formData, bkash_app_key: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-500 block mb-0.5">bKash App Secret</label>
+                          <input
+                            type="password"
+                            placeholder="Your bKash App Secret"
+                            value={formData.bkash_app_secret}
+                            onChange={e => setFormData({ ...formData, bkash_app_secret: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-500 block mb-0.5">bKash Username</label>
+                            <input
+                              type="text"
+                              value={formData.bkash_username}
+                              onChange={e => setFormData({ ...formData, bkash_username: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-500 block mb-0.5">bKash Password</label>
+                            <input
+                              type="password"
+                              value={formData.bkash_password}
+                              onChange={e => setFormData({ ...formData, bkash_password: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Nagad Merchant Setup */}
+                <div className="p-4 bg-orange-50/70 rounded-2xl border border-orange-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-orange-900 text-xs flex items-center gap-1.5">
+                      <CreditCard className="w-4 h-4 text-orange-600" />
+                      Nagad Merchant Account
+                    </span>
+                    <select
+                      value={formData.nagad_type}
+                      onChange={e => setFormData({ ...formData, nagad_type: e.target.value })}
+                      className="bg-white border border-orange-300 text-[10px] font-bold text-orange-900 rounded-lg px-2 py-1"
+                    >
+                      <option value="merchant">Merchant (Payment / পেমেন্ট)</option>
+                      <option value="personal">Personal (Send Money)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-orange-900 uppercase block mb-1">
+                      Shop Nagad {formData.nagad_type === 'merchant' ? 'Merchant' : 'Account'} Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 018XXXXXXXX"
+                      value={formData.nagad_number}
+                      onChange={e => setFormData({ ...formData, nagad_number: e.target.value })}
+                      className="w-full bg-white border border-orange-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800 text-xs"
+                    />
+                    <p className="text-[10px] text-orange-700 mt-1">
+                      Customers selecting Nagad will send or make payment directly to this number.
+                    </p>
+                  </div>
+
+                  {/* Nagad QR Upload */}
+                  <div className="pt-2 border-t border-orange-200/80">
+                    <label className="text-[10px] font-bold text-orange-900 uppercase block mb-1.5">
+                      Nagad Counter QR Code (Optional)
+                    </label>
+                    {formData.nagad_qr_image ? (
+                      <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-orange-200">
+                        <img
+                          src={formData.nagad_qr_image}
+                          alt="Nagad QR"
+                          className="w-14 h-14 object-contain rounded-lg border border-slate-200 bg-white"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800">Nagad QR Uploaded</p>
+                          <p className="text-[10px] text-slate-400">Shown to customers on checkout</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImageModal(formData.nagad_qr_image)}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs"
+                            title="Preview QR"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, nagad_qr_image: '' })}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs"
+                            title="Remove QR"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => nagadQrInputRef.current?.click()}
+                        className="w-full py-2.5 px-3 bg-white hover:bg-orange-100/60 border border-dashed border-orange-300 rounded-xl text-center transition flex items-center justify-center gap-1.5 text-orange-800 font-bold text-xs cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-orange-600" />
+                        <span>Upload Nagad Standee QR Image</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* UddoktaPay Merchant API (Optional) */}
+                  <div className="pt-2 border-t border-orange-200/80">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedUddoktapay(!showAdvancedUddoktapay)}
+                      className="text-[11px] font-bold text-orange-800 hover:underline flex items-center justify-between w-full"
+                    >
+                      <span>🚀 UddoktaPay Merchant API Key (Optional)</span>
+                      <span>{showAdvancedUddoktapay ? '▲ Hide' : '▼ Setup'}</span>
+                    </button>
+
+                    {showAdvancedUddoktapay && (
+                      <div className="mt-2.5 bg-white/80 p-3 rounded-xl border border-orange-200 animate-in fade-in">
+                        <label className="text-[9px] font-bold text-slate-500 block mb-0.5">Your Shop UddoktaPay API Key</label>
+                        <input
+                          type="password"
+                          placeholder="Your Shop API Key"
+                          value={formData.uddoktapay_api_key}
+                          onChange={e => setFormData({ ...formData, uddoktapay_api_key: e.target.value })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono"
+                        />
+                        <p className="text-[9px] text-slate-500 mt-1">If set, automated online payments will settle directly into your UddoktaPay merchant account.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           )}
 

@@ -4,7 +4,7 @@ import {
   KeyRound, LogOut, Check, Search, AlertCircle, Megaphone, Sparkles, ExternalLink,
   QrCode, BarChart3, TrendingUp, Layers, Ban, CheckCircle, Percent, Clock,
   FileText, Shield, Globe, Award, Zap, Phone, MessageCircle, AlertTriangle,
-  Eye, Image as ImageIcon, X, Copy, Info
+  Eye, Image as ImageIcon, X, Copy, Info, CreditCard, Wallet
 } from 'lucide-react';
 import ShopQrModal from '../components/ShopQrModal';
 
@@ -12,7 +12,7 @@ export default function AdminDashboard({ onLogout }) {
   const [stats, setStats] = useState(null);
   const [shops, setShops] = useState([]);
   const [settings, setSettings] = useState({});
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'verify' | 'charts' | 'shops' | 'future' | 'ads' | 'settings'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'verify' | 'charts' | 'shops' | 'future' | 'ads' | 'payment' | 'settings'
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -29,6 +29,10 @@ export default function AdminDashboard({ onLogout }) {
   const [authError, setAuthError] = useState('');
   const [ordersList, setOrdersList] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // Payment Gateways & Transactions states
+  const [paymentTransactions, setPaymentTransactions] = useState([]);
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -80,6 +84,26 @@ export default function AdminDashboard({ onLogout }) {
       setOrdersLoading(false);
     }
   };
+
+  const fetchPaymentTransactions = async () => {
+    setPaymentLoading(true);
+    try {
+      const res = await fetch('/api/payment/transactions');
+      const data = await res.json();
+      if (data.success) {
+        setPaymentTransactions(data.transactions || []);
+      }
+    } catch (_) {
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'payment') {
+      fetchPaymentTransactions();
+    }
+  }, [activeTab]);
 
   const handleLookupAuth = async (lookupCode) => {
     const code = (lookupCode || authSearchCode || '').trim();
@@ -229,6 +253,7 @@ export default function AdminDashboard({ onLogout }) {
             { id: 'shops', label: `Shops (${shops.length})`, icon: Store },
             { id: 'future', label: '⚡ Future Options & Controls', icon: Sparkles },
             { id: 'ads', label: '📢 Ad & Promo Engine', icon: Megaphone },
+            { id: 'payment', label: '💳 Payment Gateways (bKash/Nagad)', icon: CreditCard },
             { id: 'settings', label: 'System Settings', icon: Settings }
           ].map(t => {
             const Icon = t.icon;
@@ -1286,6 +1311,370 @@ export default function AdminDashboard({ onLogout }) {
               >
                 {savingSettings ? 'Saving...' : '✓ Save Ad & Brand Settings'}
               </button>
+            </div>
+
+          </form>
+        )}
+
+        {/* Tab: Payment Gateways (bKash, Nagad, UddoktaPay, SSLCommerz) */}
+        {activeTab === 'payment' && (
+          <form onSubmit={handleSaveSettings} className="space-y-5 text-xs animate-in fade-in duration-150">
+            {/* Top Gateway Master Control Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-gradient-to-br from-pink-500 to-rose-600 text-white rounded-2xl shadow-md shadow-pink-500/20">
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                      Automated Payment Gateways & MFS Checkout
+                      <span className="px-2 py-0.5 bg-pink-100 text-pink-700 font-extrabold rounded-full text-[10px]">
+                        bKash · Nagad · Rocket
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Accept automated instant payments from customers. Orders are automatically marked as paid upon verification.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 self-end sm:self-auto">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                    <span className="text-xs">Master Gateway</span>
+                    <input
+                      type="checkbox"
+                      checked={settings.pgw_enabled !== '0'}
+                      onChange={e => setSettings({ ...settings, pgw_enabled: e.target.checked ? '1' : '0' })}
+                      className="w-4 h-4 text-pink-600 rounded cursor-pointer"
+                    />
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+                    <span className="text-xs">Sandbox / Test Mode</span>
+                    <input
+                      type="checkbox"
+                      checked={settings.pgw_sandbox_mode !== '0'}
+                      onChange={e => setSettings({ ...settings, pgw_sandbox_mode: e.target.checked ? '1' : '0' })}
+                      className="w-4 h-4 text-amber-600 rounded cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Active Provider Selector */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-2">
+                  Active Payment Processor
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                  {[
+                    { id: 'simulator', title: '🧪 Interactive Simulator', badge: 'Recommended for Dev', desc: 'Full OTP & PIN simulator for bKash & Nagad test runs without API keys.' },
+                    { id: 'uddoktapay', title: '🚀 UddoktaPay PGW', badge: 'bKash + Nagad + Rocket', desc: 'All-in-one payment gateway with instant webhooks & auto verification.' },
+                    { id: 'bkash', title: '🌸 bKash Tokenized Direct', badge: 'Official bKash PGW', desc: 'Direct bKash Tokenized Checkout API integration.' },
+                    { id: 'sslcommerz', title: '💳 SSLCommerz', badge: 'Cards + MFS + NetBanking', desc: 'Traditional multi-channel gateway for cards and MFS.' }
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, pgw_active_provider: p.id })}
+                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                        (settings.pgw_active_provider || 'simulator') === p.id
+                          ? 'border-pink-500 bg-pink-50/60 ring-2 ring-pink-500/20 text-slate-900 shadow-xs'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="font-extrabold text-xs">{p.title}</span>
+                          {(settings.pgw_active_provider || 'simulator') === p.id && (
+                            <CheckCircle className="w-3.5 h-3.5 text-pink-600 shrink-0" />
+                          )}
+                        </div>
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-slate-100 text-slate-600 mb-1.5">
+                          {p.badge}
+                        </span>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">{p.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Provider Configuration Details */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              
+              {/* Option 1: UddoktaPay (Recommended All-in-One for bKash & Nagad) */}
+              <div className={`bg-white p-5 rounded-3xl border transition shadow-xs space-y-3.5 ${
+                settings.pgw_active_provider === 'uddoktapay' ? 'border-indigo-400 ring-2 ring-indigo-500/10' : 'border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                    <h4 className="font-extrabold text-xs text-slate-800">UddoktaPay Configuration</h4>
+                  </div>
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                    Supports bKash, Nagad, Rocket
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">API Key</label>
+                  <input
+                    type="password"
+                    placeholder="e.g. 983e42f73c40d117d4397d4fae711ae5..."
+                    value={settings.uddoktapay_api_key || ''}
+                    onChange={e => setSettings({ ...settings, uddoktapay_api_key: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">API Endpoint URL</label>
+                  <input
+                    type="text"
+                    placeholder="https://sandbox.uddoktapay.com/api/checkout-v2"
+                    value={settings.uddoktapay_api_url || 'https://sandbox.uddoktapay.com/api/checkout-v2'}
+                    onChange={e => setSettings({ ...settings, uddoktapay_api_url: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Live Endpoint: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">https://pay.uddoktapay.com/api/checkout-v2</code></p>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <p className="text-[10px] font-bold text-slate-600">Automated Webhook Callback URL:</p>
+                  <code className="text-[10px] text-indigo-700 bg-white px-2 py-1 rounded border border-slate-200 block font-mono break-all select-all">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/payment/webhook/uddoktapay` : '/api/payment/webhook/uddoktapay'}
+                  </code>
+                </div>
+              </div>
+
+              {/* Option 2: bKash Tokenized Direct API */}
+              <div className={`bg-white p-5 rounded-3xl border transition shadow-xs space-y-3.5 ${
+                settings.pgw_active_provider === 'bkash' ? 'border-pink-400 ring-2 ring-pink-500/10' : 'border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-pink-600" />
+                    <h4 className="font-extrabold text-xs text-slate-800">bKash Tokenized API</h4>
+                  </div>
+                  <span className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded-full border border-pink-200">
+                    Direct Merchant API
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">App Key</label>
+                    <input
+                      type="text"
+                      placeholder="bKash App Key"
+                      value={settings.bkash_app_key || ''}
+                      onChange={e => setSettings({ ...settings, bkash_app_key: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">App Secret</label>
+                    <input
+                      type="password"
+                      placeholder="bKash App Secret"
+                      value={settings.bkash_app_secret || ''}
+                      onChange={e => setSettings({ ...settings, bkash_app_secret: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Username</label>
+                    <input
+                      type="text"
+                      placeholder="bKash Username"
+                      value={settings.bkash_username || ''}
+                      onChange={e => setSettings({ ...settings, bkash_username: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Password</label>
+                    <input
+                      type="password"
+                      placeholder="bKash Password"
+                      value={settings.bkash_password || ''}
+                      onChange={e => setSettings({ ...settings, bkash_password: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-pink-50/60 border border-pink-200 rounded-xl text-[10px] text-pink-900 leading-relaxed">
+                  bKash tokenized checkout redirects customer to bKash portal, executes grant token, and confirms payment callback automatically.
+                </div>
+              </div>
+
+              {/* Option 3: SSLCommerz Gateway */}
+              <div className={`bg-white p-5 rounded-3xl border transition shadow-xs space-y-3.5 ${
+                settings.pgw_active_provider === 'sslcommerz' ? 'border-blue-400 ring-2 ring-blue-500/10' : 'border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                    <h4 className="font-extrabold text-xs text-slate-800">SSLCommerz Credentials</h4>
+                  </div>
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                    Cards & NetBanking
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Store ID</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. testbox"
+                      value={settings.sslcommerz_store_id || ''}
+                      onChange={e => setSettings({ ...settings, sslcommerz_store_id: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Store Password</label>
+                    <input
+                      type="password"
+                      placeholder="Store Password"
+                      value={settings.sslcommerz_store_passwd || ''}
+                      onChange={e => setSettings({ ...settings, sslcommerz_store_passwd: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 4: Interactive Sandbox Simulator */}
+              <div className={`bg-white p-5 rounded-3xl border transition shadow-xs space-y-3.5 ${
+                settings.pgw_active_provider === 'simulator' ? 'border-emerald-400 ring-2 ring-emerald-500/10' : 'border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+                    <h4 className="font-extrabold text-xs text-slate-800">Interactive Sandbox Simulator</h4>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Local & Staging Safe
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  The Simulator allows you and your team to fully test the bKash and Nagad payment flow end-to-end. When customers or testers submit an order with bKash/Nagad, an authentic mobile PIN/OTP screen appears and verifies the transaction.
+                </p>
+
+                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-[10px] text-emerald-900 space-y-1">
+                  <p className="font-bold">✓ Test PIN for Simulator: <span className="font-mono text-slate-800 bg-white px-1.5 py-0.5 rounded border border-emerald-300">12345</span></p>
+                  <p className="font-bold">✓ Test OTP for Simulator: <span className="font-mono text-slate-800 bg-white px-1.5 py-0.5 rounded border border-emerald-300">123456</span></p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Save Button Bar */}
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={savingSettings}
+                className="px-6 py-2.5 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl text-xs shadow-md shadow-pink-500/25 transition active:scale-95 cursor-pointer"
+              >
+                {savingSettings ? 'Saving...' : '✓ Save Payment Gateway Settings'}
+              </button>
+            </div>
+
+            {/* Live Transactions Audit Table */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-slate-100 text-slate-700 rounded-xl">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-800">Recent Payment Transactions</h4>
+                    <p className="text-[10px] text-slate-400">Live audit log of all online and MFS payments received through the platform</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={fetchPaymentTransactions}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${paymentLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh Log</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Trx ID</th>
+                      <th className="py-2.5 px-3">Order ID / Code</th>
+                      <th className="py-2.5 px-3">Gateway</th>
+                      <th className="py-2.5 px-3">Method</th>
+                      <th className="py-2.5 px-3">Amount</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paymentTransactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
+                          No online payment transactions recorded yet. Completed test payments will appear here in real-time.
+                        </td>
+                      </tr>
+                    ) : (
+                      paymentTransactions.map(tx => (
+                        <tr key={tx.id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-800">
+                            {tx.trx_id || tx.payment_id || 'N/A'}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-blue-600">
+                            #{tx.job_id}
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-700 capitalize">
+                            {tx.provider}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                              tx.payment_method === 'bkash' ? 'bg-pink-100 text-pink-800' :
+                              tx.payment_method === 'nagad' ? 'bg-amber-100 text-amber-800' :
+                              'bg-slate-100 text-slate-700'
+                            }`}>
+                              {tx.payment_method || 'MFS'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-extrabold text-slate-900">
+                            ৳{parseFloat(tx.amount || 0).toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                              tx.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' :
+                              tx.status === 'FAILED' ? 'bg-rose-100 text-rose-800' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-400 text-[10px]">
+                            {new Date(tx.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
           </form>

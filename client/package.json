@@ -11,8 +11,10 @@
   "dependencies": {
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
+    "docx-preview": "^0.4.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
+    "mammoth": "^1.13.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

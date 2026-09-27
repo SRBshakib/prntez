@@ -18,6 +18,8 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
   const [customerPhone, setCustomerPhone] = useState('');
   const [globalNotes, setGlobalNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash' | 'bkash' | 'nagad'
+  const [onlinePayMode, setOnlinePayMode] = useState('gateway'); // 'gateway' | 'manual'
+  const [pgwConfig, setPgwConfig] = useState({ enabled: true, activeProvider: 'simulator' });
   const [paymentTrxId, setPaymentTrxId] = useState('');
   const [copiedNumber, setCopiedNumber] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
@@ -53,6 +55,16 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
         if (data.success) {
           if (data.customerAd?.enabled) setCustomerAd(data.customerAd);
           if (data.adsense?.enabled) setAdsenseConfig(data.adsense);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch payment gateway configuration
+    fetch('/api/payment/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setPgwConfig(data);
         }
       })
       .catch(() => {});
@@ -310,7 +322,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
 
       setUploadProgress(100);
 
-      if (data.success) {
+        if (data.success) {
         // Save Order to Local History for Returning Customer (Feature 5)
         try {
           const newOrderEntry = {
@@ -325,6 +337,27 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           const updated = [newOrderEntry, ...existing.filter(x => x.jobCode !== data.job_code)].slice(0, 10);
           localStorage.setItem('prntez_customer_orders', JSON.stringify(updated));
         } catch (_) {}
+
+        // Automated Online Payment Redirect (bKash / Nagad / UddoktaPay)
+        if (paymentMethod !== 'cash' && onlinePayMode === 'gateway' && pgwConfig.enabled !== false && data.job_id) {
+          try {
+            const payRes = await fetch('/api/payment/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                job_id: data.job_id,
+                method: paymentMethod
+              })
+            });
+            const payData = await payRes.json();
+            if (payData.success && payData.paymentUrl) {
+              window.location.href = payData.paymentUrl;
+              return;
+            }
+          } catch (payErr) {
+            console.warn('Auto payment redirect fallback:', payErr);
+          }
+        }
 
         if (onJobCreated) {
           onJobCreated(data.job_code);
@@ -808,43 +841,121 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
             ))}
           </div>
 
-          {/* bKash / Nagad Payment Instructions */}
+          {/* bKash / Nagad Payment Instructions & Mode Selector */}
           {(paymentMethod === 'bkash' || paymentMethod === 'nagad') && (
-            <div className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 animate-in fade-in">
+            <div className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3 animate-in fade-in">
+              
+              {/* Shop Merchant Badge */}
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Shop {paymentMethod.toUpperCase()} Number</p>
-                  <p className="text-xs sm:text-sm font-mono font-extrabold text-slate-800">
-                    {paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone || '017XXXXXXXX') : (shop?.nagad_number || shop?.phone || '018XXXXXXXX')}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const num = paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone) : (shop?.nagad_number || shop?.phone);
-                    if (num) navigator.clipboard.writeText(num);
-                    setCopiedNumber(true);
-                    setTimeout(() => setCopiedNumber(false), 2000);
-                  }}
-                  className="px-2 sm:px-2.5 py-1 sm:py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-[10px] sm:text-xs font-bold text-slate-700 flex items-center gap-1 shadow-2xs"
-                >
-                  {copiedNumber ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedNumber ? 'Copied!' : 'Copy'}</span>
-                </button>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                  {shop?.name || 'Print Shop'} · Direct Payout
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
+                  paymentMethod === 'bkash'
+                    ? (shop?.bkash_type === 'merchant' ? 'bg-pink-100 text-pink-800 border border-pink-200' : 'bg-slate-100 text-slate-700')
+                    : (shop?.nagad_type === 'merchant' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700')
+                }`}>
+                  {paymentMethod === 'bkash'
+                    ? (shop?.bkash_type === 'merchant' ? 'bKash Merchant (Make Payment)' : 'bKash Personal')
+                    : (shop?.nagad_type === 'merchant' ? 'Nagad Merchant (Payment)' : 'Nagad Personal')}
+                </span>
               </div>
 
-              <div>
-                <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 block mb-1">
-                  Transaction ID / Sender Phone (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 9JA2K1L5 or 017XXXXXXXX"
-                  value={paymentTrxId}
-                  onChange={e => setPaymentTrxId(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono"
-                />
-              </div>
+              {pgwConfig.enabled !== false && (
+                <div className="flex items-center gap-1.5 p-1 bg-white rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setOnlinePayMode('gateway')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                      onlinePayMode === 'gateway'
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>⚡ Instant Auto Checkout</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOnlinePayMode('manual')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                      onlinePayMode === 'manual'
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>📱 bKash App / TrxID</span>
+                  </button>
+                </div>
+              )}
+
+              {onlinePayMode === 'gateway' && pgwConfig.enabled !== false ? (
+                <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-blue-900 space-y-1">
+                  <p className="font-extrabold text-[11px] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    Automated Checkout to {shop?.name || 'Shop'}
+                  </p>
+                  <p className="text-[10px] text-blue-800 leading-relaxed">
+                    Clicking submit will redirect you to secure {paymentMethod.toUpperCase()} checkout. Money is credited directly to {shop?.name || 'this shop'}'s merchant account, and your print queue is confirmed immediately.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {/* Shop QR Code if uploaded by shopkeeper */}
+                  {((paymentMethod === 'bkash' && shop?.bkash_qr_image) || (paymentMethod === 'nagad' && shop?.nagad_qr_image)) && (
+                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <img
+                        src={paymentMethod === 'bkash' ? shop.bkash_qr_image : shop.nagad_qr_image}
+                        alt="Shop QR"
+                        className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white shrink-0"
+                      />
+                      <div className="text-[10px] text-slate-600 space-y-0.5">
+                        <p className="font-extrabold text-slate-800 text-xs flex items-center gap-1">
+                          <QrCode className="w-3.5 h-3.5 text-blue-600" />
+                          Scan Shop Standee QR
+                        </p>
+                        <p className="text-slate-500">Open {paymentMethod.toUpperCase()} App → Scan QR Code → Enter amount <strong>৳{total.toFixed(2)}</strong></p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">
+                        Shop {paymentMethod.toUpperCase()} {paymentMethod === 'bkash' && shop?.bkash_type === 'merchant' ? 'Merchant' : 'Account'} Number
+                      </p>
+                      <p className="text-xs sm:text-sm font-mono font-extrabold text-slate-800">
+                        {paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone || '017XXXXXXXX') : (shop?.nagad_number || shop?.phone || '018XXXXXXXX')}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone) : (shop?.nagad_number || shop?.phone);
+                        if (num) navigator.clipboard.writeText(num);
+                        setCopiedNumber(true);
+                        setTimeout(() => setCopiedNumber(false), 2000);
+                      }}
+                      className="px-2 sm:px-2.5 py-1 sm:py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-[10px] sm:text-xs font-bold text-slate-700 flex items-center gap-1 shadow-2xs"
+                    >
+                      {copiedNumber ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedNumber ? 'Copied!' : 'Copy'}</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 block mb-1">
+                      bKash Transaction ID / Sender Phone
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 9JA2K1L5 or 017XXXXXXXX"
+                      value={paymentTrxId}
+                      onChange={e => setPaymentTrxId(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -875,16 +986,26 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           <button
             onClick={handleSubmit}
             disabled={uploading || files.length === 0}
-            className="py-2.5 sm:py-3 px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5 sm:gap-2 active:scale-98 shrink-0 cursor-pointer"
+            className={`py-2.5 sm:py-3 px-4 sm:px-6 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md flex items-center justify-center gap-1.5 sm:gap-2 active:scale-98 shrink-0 cursor-pointer ${
+              paymentMethod !== 'cash' && onlinePayMode === 'gateway'
+                ? paymentMethod === 'bkash'
+                  ? 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 shadow-pink-500/25'
+                  : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-amber-500/25'
+                : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/25'
+            }`}
           >
             {uploading ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Sending ({uploadProgress}%)...</span>
+                <span>Processing ({uploadProgress}%)...</span>
               </>
             ) : (
               <>
-                <span>Send to Print Counter</span>
+                <span>
+                  {paymentMethod !== 'cash' && onlinePayMode === 'gateway'
+                    ? `Pay with ${paymentMethod === 'bkash' ? '🌸 bKash' : '🟠 Nagad'}`
+                    : 'Send to Print Counter'}
+                </span>
                 <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </>
             )}

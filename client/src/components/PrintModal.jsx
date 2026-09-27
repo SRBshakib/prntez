@@ -24,15 +24,51 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
   const fileExt = fileName.split('.').pop().toLowerCase();
   const isPdf = fileExt === 'pdf' || (activeFile?.file_type || '').toLowerCase() === 'pdf';
   const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(fileExt);
+  const isDocx = ['docx', 'doc'].includes(fileExt);
   const fileUrl = activeFile?.id ? `/api/jobs/serve/${activeFile.id}` : null;
+  const docxContainerRef = useRef(null);
 
-  // 1. Initial Load of PDF Document
+  // 1. Initial Load of PDF / DOCX Document
   useEffect(() => {
     if (!activeFile || !fileUrl) return;
 
     let isMounted = true;
     setLoading(true);
     setPageNumber(1);
+
+    if (isDocx) {
+      fetch(fileUrl)
+        .then(res => res.arrayBuffer())
+        .then(async (buffer) => {
+          if (!isMounted) return;
+          try {
+            const { renderAsync } = await import('docx-preview');
+            if (docxContainerRef.current) {
+              docxContainerRef.current.innerHTML = '';
+              await renderAsync(buffer, docxContainerRef.current, null, {
+                className: 'docx-preview-content',
+                inWrapper: false
+              });
+            }
+          } catch (e) {
+            try {
+              const mammoth = await import('mammoth');
+              const res = await mammoth.convertToHtml({ arrayBuffer: buffer });
+              if (docxContainerRef.current) {
+                docxContainerRef.current.innerHTML = res.value;
+              }
+            } catch (mErr) {
+              console.warn('DOCX preview failed:', mErr);
+            }
+          } finally {
+            if (isMounted) setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setLoading(false);
+        });
+      return () => { isMounted = false; };
+    }
 
     if (isPdf && !useNativeViewer) {
       if (window.pdfjsLib) {
@@ -69,7 +105,7 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
       }
       pdfDocRef.current = null;
     };
-  }, [activeFile, useNativeViewer]);
+  }, [activeFile, useNativeViewer, isDocx]);
 
   // 2. Render Page on Canvas whenever pageNumber, scale, or doc changes
   const renderCurrentPage = () => {
@@ -248,8 +284,15 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
             </div>
           )}
 
-          {/* 4. Word Document / Generic Fallback */}
-          {!loading && !isPdf && !isImage && (
+          {/* 3.5 Word Document Live Preview */}
+          {!loading && isDocx && (
+            <div className="w-full bg-white rounded-xl shadow-lg p-6 sm:p-10 border border-slate-200 overflow-auto my-auto max-w-4xl max-h-[75vh]">
+              <div ref={docxContainerRef} className="text-slate-800" />
+            </div>
+          )}
+
+          {/* 4. Other Non-PDF / Non-Image Fallback */}
+          {!loading && !isPdf && !isImage && !isDocx && (
             <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center max-w-md space-y-4 my-auto">
               <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
                 <FileText className="w-8 h-8" />
@@ -257,7 +300,7 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
               <div>
                 <h4 className="font-bold text-slate-800 text-sm">{activeFile.original_name}</h4>
                 <p className="text-xs text-slate-500 mt-1">
-                  Office documents (.docx/.doc) print directly via the hardware spooler.
+                  Document format preview not supported directly.
                 </p>
               </div>
               <div className="flex gap-2 justify-center pt-2">

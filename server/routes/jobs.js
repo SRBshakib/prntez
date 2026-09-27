@@ -120,7 +120,8 @@ router.get('/track/:jobCode', async (req, res) => {
                    j.payment_trx_id,
                    j.status, j.global_notes, j.files_deleted, j.created_at, j.completed_at,
                    s.name as shop_name, s.phone as shop_phone, s.address as shop_address,
-                   s.bkash_number as shop_bkash, s.nagad_number as shop_nagad
+                   s.bkash_number as shop_bkash, s.bkash_type as shop_bkash_type, s.bkash_qr_image as shop_bkash_qr,
+                   s.nagad_number as shop_nagad, s.nagad_type as shop_nagad_type, s.nagad_qr_image as shop_nagad_qr
             FROM print_jobs j
             JOIN shops s ON j.shop_id = s.id
             WHERE j.job_code = ? OR UPPER(COALESCE(NULLIF(j.auth_code, ''), CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(j.id, '-', j.job_code, '-prntez')), 1, 4))))) = UPPER(?)

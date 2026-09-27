@@ -48,7 +48,16 @@ async function migrate() {
     await ensureColumn('shops', 'closing_time', "VARCHAR(10) DEFAULT '22:00'");
     await ensureColumn('shops', 'is_closed', 'TINYINT(1) DEFAULT 0');
     await ensureColumn('shops', 'bkash_number', "VARCHAR(20) DEFAULT ''");
+    await ensureColumn('shops', 'bkash_type', "VARCHAR(20) DEFAULT 'merchant'");
+    await ensureColumn('shops', 'bkash_qr_image', 'LONGTEXT DEFAULT NULL');
+    await ensureColumn('shops', 'bkash_app_key', 'VARCHAR(255) DEFAULT NULL');
+    await ensureColumn('shops', 'bkash_app_secret', 'VARCHAR(255) DEFAULT NULL');
+    await ensureColumn('shops', 'bkash_username', 'VARCHAR(100) DEFAULT NULL');
+    await ensureColumn('shops', 'bkash_password', 'VARCHAR(255) DEFAULT NULL');
     await ensureColumn('shops', 'nagad_number', "VARCHAR(20) DEFAULT ''");
+    await ensureColumn('shops', 'nagad_type', "VARCHAR(20) DEFAULT 'merchant'");
+    await ensureColumn('shops', 'nagad_qr_image', 'LONGTEXT DEFAULT NULL');
+    await ensureColumn('shops', 'uddoktapay_api_key', 'VARCHAR(255) DEFAULT NULL');
     await ensureColumn('shops', 'discount_min_pages', 'INT DEFAULT 50');
     await ensureColumn('shops', 'discount_percent', 'DECIMAL(5,2) DEFAULT 10.00');
     await ensureColumn('shops', 'discount_tier2_pages', 'INT DEFAULT 100');
@@ -72,9 +81,11 @@ async function migrate() {
     await ensureColumn('print_jobs', 'total_pages', 'INT DEFAULT 0');
     await ensureColumn('print_jobs', 'total_price', 'DECIMAL(10,2) DEFAULT 0.00');
     await ensureColumn('print_jobs', 'discount_applied', 'DECIMAL(10,2) DEFAULT 0.00');
-    await ensureColumn('print_jobs', 'payment_status', "VARCHAR(20) DEFAULT 'unpaid'");
-    await ensureColumn('print_jobs', 'payment_method', "VARCHAR(20) DEFAULT 'cash'");
-    await ensureColumn('print_jobs', 'payment_trx_id', 'VARCHAR(50) DEFAULT NULL');
+    await ensureColumn('print_jobs', 'payment_status', "VARCHAR(30) DEFAULT 'unpaid'");
+    await ensureColumn('print_jobs', 'payment_method', "VARCHAR(30) DEFAULT 'cash'");
+    await ensureColumn('print_jobs', 'payment_trx_id', 'VARCHAR(100) DEFAULT NULL');
+    await ensureColumn('print_jobs', 'payment_provider', 'VARCHAR(50) DEFAULT NULL');
+    await ensureColumn('print_jobs', 'pgw_payment_id', 'VARCHAR(100) DEFAULT NULL');
     await ensureColumn('print_jobs', 'customer_email', 'VARCHAR(191) DEFAULT NULL');
     await ensureColumn('print_jobs', 'customer_ip', 'VARCHAR(45) DEFAULT NULL');
     await ensureColumn('print_jobs', 'customer_alias', 'VARCHAR(100) DEFAULT NULL');
@@ -123,6 +134,35 @@ async function migrate() {
         console.error('[DB] Error creating shop_points_ledger table:', e);
     }
 
+    // Ensure payment_transactions table exists for Multi-Gateway audits
+    try {
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS \`payment_transactions\` (
+                \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+                \`job_id\` INT NOT NULL,
+                \`job_code\` VARCHAR(20) NOT NULL,
+                \`shop_id\` INT NOT NULL,
+                \`provider\` VARCHAR(50) NOT NULL,
+                \`payment_method\` VARCHAR(50) DEFAULT 'bkash',
+                \`amount\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                \`payment_id\` VARCHAR(100) DEFAULT NULL,
+                \`trx_id\` VARCHAR(100) DEFAULT NULL,
+                \`status\` VARCHAR(50) DEFAULT 'pending',
+                \`customer_name\` VARCHAR(100) DEFAULT '',
+                \`customer_phone\` VARCHAR(50) DEFAULT '',
+                \`raw_response\` LONGTEXT DEFAULT NULL,
+                \`created_at\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                \`updated_at\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX \`idx_pt_job\` (\`job_id\`),
+                INDEX \`idx_pt_shop\` (\`shop_id\`),
+                INDEX \`idx_pt_payment_id\` (\`payment_id\`),
+                INDEX \`idx_pt_trx_id\` (\`trx_id\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        `);
+    } catch (e) {
+        console.error('[DB] Error creating payment_transactions table:', e);
+    }
+
     // For the v2 system, set known plaintext passwords for existing shops in the `password` column
     try {
         await pool.execute(`
@@ -156,6 +196,21 @@ async function migrate() {
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('adsense_slot_shop_top', '')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('adsense_slot_shop_side', '')");
     await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('adsense_slot_shop_bottom', '')");
+
+    // Payment Gateway Settings Defaults
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('pgw_enabled', '1')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('pgw_active_provider', 'simulator')"); // 'simulator' | 'bkash' | 'uddoktapay' | 'sslcommerz'
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('pgw_sandbox_mode', '1')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('bkash_app_key', '')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('bkash_app_secret', '')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('bkash_username', '')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('bkash_password', '')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('bkash_base_url', 'https://tokenized.sandbox.bka.sh/v1.2.0-beta')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('uddoktapay_api_key', '')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('uddoktapay_base_url', 'https://sandbox.uddoktapay.com/api/checkout-v2')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('sslcommerz_store_id', '')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('sslcommerz_store_passwd', '')");
+    await pool.execute("INSERT IGNORE INTO `settings` (`key`, `value`) VALUES ('sslcommerz_sandbox_mode', '1')");
 
     console.log('[DB] Schema migration v2 complete.');
 }

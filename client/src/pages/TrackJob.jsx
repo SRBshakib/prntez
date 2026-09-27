@@ -16,6 +16,9 @@ export default function TrackJob({ jobCode, onBack }) {
   const [copied, setCopied] = useState(false);
   const [copiedAuth, setCopiedAuth] = useState(false);
   const [copiedBkash, setCopiedBkash] = useState(false);
+  const [payingMethod, setPayingMethod] = useState(null); // 'bkash' | 'nagad' | null
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentSuccessTrx, setPaymentSuccessTrx] = useState(null);
   const [notifGranted, setNotifGranted] = useState(
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
   );
@@ -31,6 +34,32 @@ export default function TrackJob({ jobCode, onBack }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const handleInitiateOnlinePay = async (method) => {
+    if (!job || !job.id) return;
+    setPayingMethod(method);
+    setPaymentError('');
+    try {
+      const res = await fetch('/api/payment/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: job.id,
+          method: method
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        setPaymentError(data.error || 'Unable to create payment session.');
+      }
+    } catch (err) {
+      setPaymentError('Connection error. Please check server.');
+    } finally {
+      setPayingMethod(null);
+    }
+  };
 
   const getDeleteCountdown = () => {
     if (!job) return null;
@@ -82,6 +111,16 @@ export default function TrackJob({ jobCode, onBack }) {
   };
 
   useEffect(() => {
+    // Check for payment query parameters
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('payment') === 'success') {
+        const trx = urlParams.get('trx') || 'Confirmed';
+        setPaymentSuccessTrx(trx);
+        fireConfetti();
+      }
+    } catch (_) {}
+
     // Fetch announcement & adsense
     fetch('/api/announcements')
       .then(res => res.json())
@@ -356,42 +395,117 @@ export default function TrackJob({ jobCode, onBack }) {
             </div>
           </div>
 
+          {/* Payment Success Banner */}
+          {paymentSuccessTrx && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 flex items-center gap-2.5 text-left animate-in fade-in">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <p className="font-extrabold text-xs">Payment Received Successfully!</p>
+                <p className="text-[10px] text-emerald-700 mt-0.5">
+                  Trx ID: <span className="font-mono font-bold">{paymentSuccessTrx}</span> · Order marked as Paid
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Payment Status Info & bKash Option (Feature 4) */}
-          <div className="p-3 rounded-2xl border text-xs text-left space-y-1.5 bg-slate-50/70 border-slate-200">
+          <div className="p-3.5 rounded-2xl border text-xs text-left space-y-2 bg-slate-50/70 border-slate-200">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 flex items-center gap-1">
                 <CreditCard className="w-3.5 h-3.5 text-blue-600" />
                 <span>Payment Status</span>
               </span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                 job.payment_status === 'paid' || job.payment_status === 'paid_cash' || job.payment_status === 'paid_bkash'
                   ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-rose-50 text-rose-700 border border-rose-200'
               }`}>
                 {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? '✓ Paid (Cash)' :
-                 job.payment_status === 'paid_bkash' ? '✓ Paid (bKash/Nagad)' :
+                 job.payment_status === 'paid_bkash' ? '✓ Paid (Online / MFS)' :
                  '● Unpaid'}
               </span>
             </div>
 
-            {/* If unpaid, show easy payment number */}
-            {job.payment_status !== 'paid' && job.payment_status !== 'paid_cash' && job.payment_status !== 'paid_bkash' && shopBkashNumber && (
-              <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] text-slate-500">Pay via bKash / Nagad:</p>
-                  <p className="font-mono font-bold text-slate-800">{shopBkashNumber}</p>
+            {/* Instant Automated Online Payment Buttons if unpaid */}
+            {job.payment_status !== 'paid' && job.payment_status !== 'paid_cash' && job.payment_status !== 'paid_bkash' && (
+              <div className="pt-2.5 border-t border-slate-200/80 space-y-2.5">
+                
+                {/* Shop Standee QR if uploaded */}
+                {(job.shop_bkash_qr || job.shop_nagad_qr) && (
+                  <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    <img
+                      src={job.shop_bkash_qr || job.shop_nagad_qr}
+                      alt="Shop Standee QR"
+                      className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white shrink-0"
+                    />
+                    <div className="text-[10px] text-slate-600 space-y-0.5">
+                      <p className="font-extrabold text-slate-800 text-xs flex items-center gap-1">
+                        <QrCode className="w-3.5 h-3.5 text-blue-600" />
+                        Scan {job.shop_name || 'Shop'} Counter QR
+                      </p>
+                      <p className="text-slate-500">Scan using bKash / Nagad App to pay directly to this shop's merchant account.</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Pay Online to {job.shop_name || 'Shop'}:
+                  </span>
+                  <span className="text-[9px] font-extrabold text-pink-700 bg-pink-50 px-1.5 py-0.2 rounded border border-pink-200">
+                    {job.shop_bkash_type === 'merchant' ? 'bKash Merchant' : 'bKash'}
+                  </span>
                 </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(shopBkashNumber);
-                    setCopiedBkash(true);
-                    setTimeout(() => setCopiedBkash(false), 2000);
-                  }}
-                  className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg font-bold text-[10px] text-slate-700 flex items-center gap-1 shadow-2xs"
-                >
-                  {copiedBkash ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedBkash ? 'Copied' : 'Copy'}</span>
-                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleInitiateOnlinePay('bkash')}
+                    disabled={payingMethod !== null}
+                    className="py-2 px-3 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/20 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    {payingMethod === 'bkash' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <span>🌸 Pay with bKash</span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleInitiateOnlinePay('nagad')}
+                    disabled={payingMethod !== null}
+                    className="py-2 px-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    {payingMethod === 'nagad' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <span>🟠 Pay with Nagad</span>
+                    )}
+                  </button>
+                </div>
+
+                {paymentError && (
+                  <p className="text-[10px] font-bold text-rose-600 mt-1">{paymentError}</p>
+                )}
+
+                {shopBkashNumber && (
+                  <div className="pt-1.5 flex items-center justify-between text-[10px] text-slate-500">
+                    <span>
+                      {job.shop_bkash_type === 'merchant' ? 'Merchant No:' : 'Shop MFS:'} <strong className="font-mono text-slate-800">{shopBkashNumber}</strong>
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(shopBkashNumber);
+                        setCopiedBkash(true);
+                        setTimeout(() => setCopiedBkash(false), 2000);
+                      }}
+                      className="text-blue-600 font-bold hover:underline"
+                    >
+                      {copiedBkash ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
