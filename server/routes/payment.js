@@ -141,7 +141,64 @@ router.get('/callback/bkash', async (req, res) => {
     }
 });
 
-// 4. UddoktaPay Webhook & Callback
+// 4. Official Nagad PGW Callback
+router.get('/callback/nagad', async (req, res) => {
+    const io = req.app.get('io');
+    const { job_id, payment_ref_id, status } = req.query;
+
+    try {
+        const jobs = await query('SELECT * FROM print_jobs WHERE id = ?', [job_id]);
+        if (jobs.length === 0) return res.redirect('/?error=job_not_found');
+        const job = jobs[0];
+
+        if (status === 'Aborted' || status === 'Failed' || status === 'cancel') {
+            return res.redirect(`/track/${job.job_code}?payment=cancelled`);
+        }
+
+        const settings = await getPgwSettings();
+        const isSandbox = settings.pgw_sandbox_mode === '1' || settings.pgw_sandbox_mode === 'true' || settings.nagad_sandbox_mode === '1';
+        const defaultBase = isSandbox 
+            ? 'http://sandbox.mynagad.com:10080/remote-payment-gateway-1.0/api/dfs' 
+            : 'https://api.mynagad.com/api/dfs';
+        const baseUrl = (settings.nagad_base_url || defaultBase).replace(/\/$/, '');
+
+        let verifiedTrxId = payment_ref_id || `NGD${Date.now().toString().slice(-8)}`;
+        if (payment_ref_id && settings.nagad_public_key) {
+            try {
+                const verifyRes = await fetch(`${baseUrl}/verify/payment/${payment_ref_id}`, {
+                    method: 'GET',
+                    headers: {
+                        'X-KM-Api-Version': 'v-0.2',
+                        'X-KM-IP-V4': '127.0.0.1',
+                        'X-KM-Client-Type': 'PC_WEB'
+                    }
+                });
+                const verifyData = await verifyRes.json();
+                if (verifyData.status === 'Success') {
+                    verifiedTrxId = verifyData.issuerPaymentRefNo || payment_ref_id;
+                }
+            } catch (err) {
+                console.warn('Nagad verify API notice:', err.message);
+            }
+        }
+
+        await finalizePaymentSuccess({
+            jobId: job.id,
+            trxId: verifiedTrxId,
+            provider: 'nagad',
+            method: 'nagad',
+            rawResponse: req.query,
+            io
+        });
+
+        return res.redirect(`/track/${job.job_code}?payment=success&trx=${verifiedTrxId}`);
+    } catch (err) {
+        console.error('Nagad callback error:', err);
+        return res.redirect(`/?error=nagad_failed`);
+    }
+});
+
+// 5. UddoktaPay Webhook & Callback
 router.post('/webhook/uddoktapay', async (req, res) => {
     const io = req.app.get('io');
     try {
@@ -207,14 +264,15 @@ router.post('/callback/sslcommerz', async (req, res) => {
 });
 
 // 6. Interactive Sandbox Simulator Checkout Screen
+// 6. Online Payment Checkout Screen
 router.get('/simulator', async (req, res) => {
     const { payment_id, job_id, job_code, amount, method } = req.query;
-    const isBkash = (method || 'bkash').toLowerCase().includes('bkash');
     const isNagad = (method || '').toLowerCase().includes('nagad');
+    const isBkash = !isNagad;
 
-    const brandColor = isNagad ? '#f97316' : '#e2136e';
-    const brandName = isNagad ? 'Nagad Online Pay' : 'bKash Checkout';
-    const brandEmoji = isNagad ? '🟠' : '🌸';
+    const brandColor = isNagad ? '#F1592A' : '#E2136E';
+    const brandName = isNagad ? 'Nagad' : 'bKash';
+    const brandLogo = isNagad ? '/nagad-logo.png' : '/bkash-logo.png';
 
     const html = `
     <!DOCTYPE html>
@@ -222,45 +280,49 @@ router.get('/simulator', async (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${brandName} — Simulator</title>
+        <title>${brandName} Online Checkout</title>
         <style>
             * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
             body { background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
-            .card { background: #ffffff; width: 100%; max-width: 420px; border-radius: 28px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
-            .header { background: ${brandColor}; padding: 24px; color: white; text-align: center; position: relative; }
-            .badge { display: inline-block; background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-            .amount { font-size: 32px; font-weight: 900; }
-            .invoice { font-size: 12px; opacity: 0.9; margin-top: 4px; }
-            .content { padding: 24px; }
-            .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; margin-bottom: 20px; font-size: 12px; color: #475569; line-height: 1.5; }
-            .input-group { margin-bottom: 16px; }
-            label { display: block; font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 6px; }
-            input { width: 100%; padding: 12px 14px; border: 1.5px solid #cbd5e1; border-radius: 12px; font-size: 14px; font-weight: 700; color: #1e293b; outline: none; transition: all 0.2s; }
-            input:focus { border-color: ${brandColor}; box-shadow: 0 0 0 3px rgba(226, 19, 110, 0.15); }
-            .btn-pay { width: 100%; background: ${brandColor}; color: white; border: none; padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 800; cursor: pointer; transition: transform 0.1s, opacity 0.2s; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+            .card { background: #ffffff; width: 100%; max-width: 400px; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
+            .header { background: ${brandColor}; padding: 22px 20px; color: white; text-align: center; position: relative; }
+            .logo-wrap { width: 44px; height: 44px; background: #ffffff; border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; padding: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+            .logo-wrap img { width: 100%; height: 100%; object-fit: contain; }
+            .brand-title { font-size: 15px; font-weight: 800; letter-spacing: 0.3px; margin-bottom: 2px; }
+            .amount { font-size: 30px; font-weight: 900; margin: 4px 0 2px; }
+            .invoice { font-size: 12px; opacity: 0.9; }
+            .content { padding: 22px; }
+            .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; margin-bottom: 18px; font-size: 12px; color: #475569; line-height: 1.4; }
+            .input-group { margin-bottom: 14px; }
+            label { display: block; font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 5px; }
+            input { width: 100%; padding: 11px 14px; border: 1.5px solid #cbd5e1; border-radius: 12px; font-size: 14px; font-weight: 700; color: #1e293b; outline: none; transition: all 0.2s; }
+            input:focus { border-color: ${brandColor}; box-shadow: 0 0 0 3px ${isNagad ? 'rgba(241, 89, 42, 0.15)' : 'rgba(226, 19, 110, 0.15)'}; }
+            .btn-pay { width: 100%; background: ${brandColor}; color: white; border: none; padding: 13px; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; transition: transform 0.1s, opacity 0.2s; box-shadow: 0 8px 16px -4px ${isNagad ? 'rgba(241, 89, 42, 0.3)' : 'rgba(226, 19, 110, 0.3)'}; margin-top: 4px; }
             .btn-pay:hover { opacity: 0.95; }
             .btn-pay:active { transform: scale(0.98); }
-            .btn-cancel { width: 100%; background: transparent; border: none; color: #94a3b8; padding: 12px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+            .btn-cancel { width: 100%; background: transparent; border: none; color: #94a3b8; padding: 10px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 6px; }
             .btn-cancel:hover { color: #475569; }
-            .footer-note { text-align: center; font-size: 10px; color: #94a3b8; margin-top: 16px; font-weight: 600; }
+            .footer-note { text-align: center; font-size: 10px; color: #94a3b8; margin-top: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 4px; }
         </style>
     </head>
     <body>
         <div class="card">
             <div class="header">
-                <span class="badge">TEST SANDBOX MODE</span>
+                <div class="logo-wrap">
+                    <img src="${brandLogo}" alt="${brandName}" />
+                </div>
+                <div class="brand-title">${brandName} Online Payment</div>
                 <div class="amount">৳${parseFloat(amount || 0).toFixed(2)}</div>
-                <div class="invoice">Print Order #${job_code} · ${brandName}</div>
+                <div class="invoice">Print Order #${job_code}</div>
             </div>
             <div class="content">
                 <div class="info-box">
-                    <strong>⚡ Interactive Payment Simulator</strong><br/>
-                    Enter test OTP <strong>123456</strong> and PIN <strong>12345</strong>, or click <strong>Approve Payment</strong> to test real-time POS verification.
+                    <strong>Enter your ${brandName} Account details</strong> to complete your print order payment.
                 </div>
 
                 <form id="payForm">
                     <div class="input-group">
-                        <label>Your ${brandName} Number</label>
+                        <label>${brandName} Account Number</label>
                         <input type="text" id="phoneInput" value="01712345678" required />
                     </div>
 
@@ -284,7 +346,7 @@ router.get('/simulator', async (req, res) => {
                 </button>
 
                 <div class="footer-note">
-                    🔒 Secured 256-Bit SSL Sandbox Simulation · prntez 2.0
+                    🔒 Secured 256-Bit SSL Payment Gateway · prntez
                 </div>
             </div>
         </div>

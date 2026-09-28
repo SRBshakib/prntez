@@ -44,7 +44,14 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
     nagad_number: shop?.nagad_number || '',
     nagad_type: shop?.nagad_type || 'merchant',
     nagad_qr_image: shop?.nagad_qr_image || '',
+    nagad_merchant_id: shop?.nagad_merchant_id || '',
+    nagad_public_key: shop?.nagad_public_key || '',
+    nagad_private_key: shop?.nagad_private_key || '',
     uddoktapay_api_key: shop?.uddoktapay_api_key || '',
+    allow_cash_payment: shop?.allow_cash_payment !== undefined ? Boolean(shop.allow_cash_payment) : true,
+    allow_bkash_payment: shop?.allow_bkash_payment !== undefined ? Boolean(shop.allow_bkash_payment) : true,
+    allow_nagad_payment: shop?.allow_nagad_payment !== undefined ? Boolean(shop.allow_nagad_payment) : true,
+    allow_online_payment: shop?.allow_online_payment !== undefined ? Boolean(shop.allow_online_payment) : true,
     discount_min_pages: shop?.discount_min_pages || 50,
     discount_percent: shop?.discount_percent || 10,
     discount_tier2_pages: shop?.discount_tier2_pages || 100,
@@ -56,6 +63,7 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState(null);
   const [showAdvancedBkash, setShowAdvancedBkash] = useState(false);
+  const [showAdvancedNagad, setShowAdvancedNagad] = useState(false);
   const [showAdvancedUddoktapay, setShowAdvancedUddoktapay] = useState(false);
 
   const shopImageInputRef = useRef(null);
@@ -700,6 +708,100 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
           {activeTab === 'payment' && (
             <div className="space-y-4 animate-in fade-in duration-150">
               
+              {/* Payment Methods Enabled/Disabled Toggle Card */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-blue-600" />
+                    <span className="font-extrabold text-slate-800 text-xs">Customer Payment Options</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">Toggle active payment methods</span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Select which payment options are available for customers when placing print orders at your shop.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  {/* Cash at Counter Toggle */}
+                  <div className={`p-3 rounded-xl border transition flex items-center justify-between cursor-pointer ${
+                    formData.allow_cash_payment
+                      ? 'bg-white border-emerald-300 ring-1 ring-emerald-200 shadow-2xs'
+                      : 'bg-slate-100 border-slate-200 opacity-60'
+                  }`}
+                  onClick={() => setFormData({ ...formData, allow_cash_payment: !formData.allow_cash_payment })}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                        💵
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-xs text-slate-800">Cash at Counter</p>
+                        <p className="text-[10px] text-slate-400">Pay on pickup</p>
+                      </div>
+                    </div>
+                    <div className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
+                      formData.allow_cash_payment ? 'bg-emerald-600' : 'bg-slate-300'
+                    }`}>
+                      <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                        formData.allow_cash_payment ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
+                    </div>
+                  </div>
+
+                  {/* bKash Payment Toggle */}
+                  <div className={`p-3 rounded-xl border transition flex items-center justify-between cursor-pointer ${
+                    formData.allow_bkash_payment
+                      ? 'bg-white border-pink-300 ring-1 ring-pink-200 shadow-2xs'
+                      : 'bg-slate-100 border-slate-200 opacity-60'
+                  }`}
+                  onClick={() => setFormData({ ...formData, allow_bkash_payment: !formData.allow_bkash_payment })}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-14 h-8 rounded-lg bg-white flex items-center justify-center px-1.5 py-0.5 border border-pink-200 shadow-2xs">
+                        <img src="/bkash-logo.png" alt="bKash" className="h-5 w-auto max-w-full object-contain" />
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-xs text-slate-800">bKash</p>
+                        <p className="text-[10px] text-pink-600 font-semibold">{formData.allow_bkash_payment ? 'Enabled' : 'Disabled'}</p>
+                      </div>
+                    </div>
+                    <div className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
+                      formData.allow_bkash_payment ? 'bg-pink-600' : 'bg-slate-300'
+                    }`}>
+                      <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                        formData.allow_bkash_payment ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
+                    </div>
+                  </div>
+
+                  {/* Nagad Payment Toggle */}
+                  <div className={`p-3 rounded-xl border transition flex items-center justify-between cursor-pointer ${
+                    formData.allow_nagad_payment
+                      ? 'bg-white border-orange-300 ring-1 ring-orange-200 shadow-2xs'
+                      : 'bg-slate-100 border-slate-200 opacity-60'
+                  }`}
+                  onClick={() => setFormData({ ...formData, allow_nagad_payment: !formData.allow_nagad_payment })}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-14 h-8 rounded-lg bg-white flex items-center justify-center px-1.5 py-0.5 border border-orange-200 shadow-2xs">
+                        <img src="/nagad-logo.png" alt="Nagad" className="h-5 w-auto max-w-full object-contain" />
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-xs text-slate-800">Nagad</p>
+                        <p className="text-[10px] text-orange-600 font-semibold">{formData.allow_nagad_payment ? 'Enabled' : 'Disabled'}</p>
+                      </div>
+                    </div>
+                    <div className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
+                      formData.allow_nagad_payment ? 'bg-orange-600' : 'bg-slate-300'
+                    }`}>
+                      <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                        formData.allow_nagad_payment ? 'translate-x-4' : 'translate-x-0'
+                      }`} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl text-blue-950 flex items-start gap-2.5 text-xs">
                 <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                 <div>
@@ -929,6 +1031,77 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
                         <span>Upload Nagad Standee QR Image</span>
                       </button>
                     )}
+                    {/* Direct Nagad PGW API (Optional) */}
+                    <div className="pt-2 border-t border-orange-200/80">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedNagad(!showAdvancedNagad)}
+                        className="text-[11px] font-bold text-orange-900 hover:underline flex items-center justify-between w-full"
+                      >
+                        <span>⚡ Direct Nagad Official PGW API (Optional)</span>
+                        <span>{showAdvancedNagad ? '▲ Hide' : '▼ Setup'}</span>
+                      </button>
+
+                      {showAdvancedNagad && (
+                        <div className="mt-2.5 space-y-2 bg-white/80 p-3 rounded-xl border border-orange-200 animate-in fade-in">
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-700 block mb-0.5">Nagad Merchant ID</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 6800000025 or 683002007104225"
+                              value={formData.nagad_merchant_id}
+                              onChange={e => setFormData({ ...formData, nagad_merchant_id: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="text-[9px] font-bold text-slate-700">Nagad PG Public Key (Certificate)</label>
+                              {formData.nagad_public_key && (
+                                <span className={`text-[9px] font-mono font-bold ${formData.nagad_public_key.length < 200 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                  {formData.nagad_public_key.length} chars {formData.nagad_public_key.length < 200 && '(⚠️ Typically ~390 chars)'}
+                                </span>
+                              )}
+                            </div>
+                            <textarea
+                              rows={2}
+                              placeholder="Starts with MIIBIj... or -----BEGIN PUBLIC KEY----- (~390 chars)"
+                              value={formData.nagad_public_key}
+                              onChange={e => setFormData({ ...formData, nagad_public_key: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] font-mono"
+                            />
+                            {formData.nagad_public_key && formData.nagad_public_key.startsWith('MIIEv') && (
+                              <p className="text-[9px] text-rose-600 mt-0.5 font-medium">⚠️ Notice: Keys starting with "MIIEv" are typically Private Keys. Make sure Public and Private keys are not swapped.</p>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="text-[9px] font-bold text-slate-700">Merchant RSA Private Key</label>
+                              {formData.nagad_private_key && (
+                                <span className={`text-[9px] font-mono font-bold ${formData.nagad_private_key.length < 500 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                  {formData.nagad_private_key.length} chars {formData.nagad_private_key.length < 500 && '(⚠️ Truncated! Full key is ~1600+ chars)'}
+                                </span>
+                              )}
+                            </div>
+                            <textarea
+                              rows={2}
+                              placeholder="Starts with MIIEv... or -----BEGIN RSA PRIVATE KEY----- (~1600+ chars)"
+                              value={formData.nagad_private_key}
+                              onChange={e => setFormData({ ...formData, nagad_private_key: e.target.value })}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] font-mono"
+                            />
+                            {formData.nagad_private_key && formData.nagad_private_key.startsWith('MIIBIj') && (
+                              <p className="text-[9px] text-rose-600 mt-0.5 font-medium">⚠️ Notice: Keys starting with "MIIBIj" are typically Public Keys. Make sure Public and Private keys are not swapped.</p>
+                            )}
+                            {formData.nagad_private_key && formData.nagad_private_key.length < 200 && (
+                              <p className="text-[9px] text-amber-600 mt-0.5 leading-tight">
+                                💡 If copying from a tutorial/screenshot with "...", open the full <code>.key</code> / <code>.env</code> file to copy the complete 1600+ character key.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* UddoktaPay Merchant API (Optional) */}

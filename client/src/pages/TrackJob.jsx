@@ -9,6 +9,28 @@ import { socket, playChime } from '../socket';
 import GoogleAdSense from '../components/GoogleAdSense';
 import BrandSponsorCard from '../components/BrandSponsorCard';
 
+// Official Brand Logos
+const BkashLogo = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M50 12L15 48L36 53L50 12Z" fill="white" fillOpacity="0.95"/>
+    <path d="M50 12L85 30L63 50L50 12Z" fill="white" fillOpacity="0.85"/>
+    <path d="M50 12L36 53L63 50L50 12Z" fill="white"/>
+    <path d="M15 48L42 80L36 53L15 48Z" fill="white" fillOpacity="0.75"/>
+    <path d="M85 30L55 76L63 50L85 30Z" fill="white" fillOpacity="0.8"/>
+    <path d="M36 53L42 80L63 50L36 53Z" fill="white" fillOpacity="0.9"/>
+    <path d="M42 80L49 92L55 76L42 80Z" fill="white"/>
+  </svg>
+);
+
+const NagadLogo = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="46" fill="white" fillOpacity="0.25"/>
+    <path d="M50 16C50 16 30 36 30 52C30 63.0457 38.9543 72 50 72C61.0457 72 70 63.0457 70 52C70 36 50 16 50 16Z" fill="white"/>
+    <path d="M50 36C50 36 38 48 38 56C38 62.6274 43.3726 68 50 68C56.6274 68 62 62.6274 62 56C62 48 50 36 50 36Z" fill="#F1592A"/>
+    <circle cx="50" cy="57" r="6" fill="white"/>
+  </svg>
+);
+
 export default function TrackJob({ jobCode, onBack }) {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -21,6 +43,7 @@ export default function TrackJob({ jobCode, onBack }) {
   const [paymentSuccessTrx, setPaymentSuccessTrx] = useState(null);
   const [manualDigits, setManualDigits] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
+  const [showOnlinePayOptions, setShowOnlinePayOptions] = useState(false);
   const [submittingManual, setSubmittingManual] = useState(false);
   const [notifGranted, setNotifGranted] = useState(
     typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
@@ -641,7 +664,7 @@ export default function TrackJob({ jobCode, onBack }) {
                   </>
                 )}
 
-                {/* Instant Gateway Sandbox alternative */}
+                {/* Instant Gateway alternative */}
                 <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between">
                   <span className="text-[10px] text-slate-500">Want instant confirmation?</span>
                   <button
@@ -650,145 +673,198 @@ export default function TrackJob({ jobCode, onBack }) {
                     disabled={payingMethod !== null}
                     className="text-[11px] font-bold text-pink-700 hover:text-pink-900 flex items-center gap-1 cursor-pointer underline"
                   >
-                    {payingMethod === 'bkash' ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>⚡ Pay with bKash Gateway Sandbox →</span>}
+                    {payingMethod === 'bkash' ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>⚡ Pay with bKash Gateway →</span>}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Instant Automated Online Payment Buttons & Manual 4-digits if unpaid */}
-            {job.payment_status !== 'paid' && job.payment_status !== 'paid_cash' && job.payment_status !== 'paid_bkash' && job.payment_status !== 'mfs_pending' && (
-              <div className="pt-2.5 border-t border-slate-200/80 space-y-2.5">
-                
-                {/* Shop Standee QR if uploaded */}
-                {(job.shop_bkash_qr || job.shop_nagad_qr) && (
-                  <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                    <img
-                      src={job.shop_bkash_qr || job.shop_nagad_qr}
-                      alt="Shop Standee QR"
-                      className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white shrink-0"
-                    />
-                    <div className="text-[10px] text-slate-600 space-y-0.5">
-                      <p className="font-extrabold text-slate-800 text-xs flex items-center gap-1">
-                        <QrCode className="w-3.5 h-3.5 text-blue-600" />
-                        Scan {job.shop_name || 'Shop'} Counter QR
-                      </p>
-                      <p className="text-slate-500">Scan using bKash / Nagad App to pay directly to this shop's merchant account.</p>
+            {/* Automated Online Payment Buttons & Manual 4-digits if unpaid */}
+            {job.payment_status !== 'paid' && job.payment_status !== 'paid_cash' && job.payment_status !== 'paid_bkash' && job.payment_status !== 'mfs_pending' && (() => {
+              const isCashPayment = (job.payment_method === 'cash' || !job.payment_method);
+              return (
+                <div className="pt-2 border-t border-slate-200/80 space-y-2.5">
+                  {/* Cash at Counter info notice */}
+                  {isCashPayment && (
+                    <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-2.5 flex items-start gap-2.5">
+                      <span className="text-base leading-none mt-0.5">💵</span>
+                      <div className="space-y-0.5 text-xs">
+                        <p className="font-bold text-emerald-950">Cash Payment Selected</p>
+                        <p className="text-[11px] text-emerald-800">
+                          Please hand <strong>৳{job.total_price || 0}</strong> cash to the shopkeeper when picking up your printouts.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                    Choose How to Pay:
-                  </span>
-                  <span className="text-[9px] font-extrabold text-pink-700 bg-pink-50 px-1.5 py-0.2 rounded border border-pink-200">
-                    Gateway Sandbox & Manual App
-                  </span>
-                </div>
-
-                {/* Option 1: Payment Gateway Sandbox */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleInitiateOnlinePay('bkash')}
-                    disabled={payingMethod !== null}
-                    className="py-2 px-3 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/20 transition cursor-pointer active:scale-95 disabled:opacity-50"
-                  >
-                    {payingMethod === 'bkash' ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <span>🌸 bKash Gateway (Sandbox)</span>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleInitiateOnlinePay('nagad')}
-                    disabled={payingMethod !== null}
-                    className="py-2 px-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95 disabled:opacity-50"
-                  >
-                    {payingMethod === 'nagad' ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <span>🟠 Pay with Nagad</span>
-                    )}
-                  </button>
-                </div>
-
-                {/* Option 2: Sent money via App? Submit last 4 digits */}
-                <div className="pt-2 border-t border-slate-200/80">
-                  {!showManualInput ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowManualInput(true)}
-                      className="w-full text-center text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 p-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <span>📱 Sent money via bKash App? Enter last 4 digits</span>
-                    </button>
-                  ) : (
-                    <div className="bg-pink-50/60 border border-pink-200 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-800">
-                          Enter last 4 digits of your bKash number:
+                  {/* For cash customers: show a small subtle toggle button if at least one online method is enabled */}
+                  {isCashPayment && (job.allow_bkash_payment !== 0 || job.allow_nagad_payment !== 0) && (
+                    <div className="text-center pt-0.5 pb-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowOnlinePayOptions(!showOnlinePayOptions)}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-pink-700 hover:text-pink-900 hover:underline cursor-pointer transition"
+                      >
+                        <CreditCard className="w-3.5 h-3.5 text-pink-600" />
+                        <span>
+                          Want to pay online with {job.allow_bkash_payment !== 0 && job.allow_nagad_payment !== 0 ? 'bKash / Nagad' : job.allow_bkash_payment !== 0 ? 'bKash' : 'Nagad'} instead?
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowManualInput(false)}
-                          className="text-[10px] text-slate-400 hover:text-slate-600"
-                        >
-                          Cancel
-                        </button>
+                        <span className="text-[10px] text-slate-500 font-bold ml-0.5">{showOnlinePayOptions ? '▲ Hide' : '▼ Pay Online'}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Render Online Payment Options if customer selected online or toggled show */}
+                  {((!isCashPayment || showOnlinePayOptions) && (job.allow_bkash_payment !== 0 || job.allow_nagad_payment !== 0)) && (
+                    <div className="space-y-2.5 pt-1">
+                      {/* Shop Standee QR if uploaded */}
+                      {((job.allow_bkash_payment !== 0 && job.shop_bkash_qr) || (job.allow_nagad_payment !== 0 && job.shop_nagad_qr)) && (
+                        <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                          <img
+                            src={job.shop_bkash_qr || job.shop_nagad_qr}
+                            alt="Shop Standee QR"
+                            className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white shrink-0"
+                          />
+                          <div className="text-[10px] text-slate-600 space-y-0.5">
+                            <p className="font-extrabold text-slate-800 text-xs flex items-center gap-1">
+                              <QrCode className="w-3.5 h-3.5 text-blue-600" />
+                              Scan {job.shop_name || 'Shop'} Counter QR
+                            </p>
+                            <p className="text-slate-500">Scan using bKash / Nagad App to pay directly to this shop's merchant account.</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Choose How to Pay:
+                        </span>
+                        <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Instant Online & App Payment
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={4}
-                          placeholder="● ● ● ●"
-                          value={manualDigits}
-                          onChange={e => setManualDigits(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                          className="w-28 bg-white border-2 border-pink-300 rounded-xl px-2 py-1.5 text-center font-mono font-extrabold text-base tracking-widest focus:ring-1 focus:ring-pink-400 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleManualMfsSubmit('bkash')}
-                          disabled={submittingManual || manualDigits.length !== 4}
-                          className="flex-1 py-1.5 px-3 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1"
-                        >
-                          {submittingManual ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>Submit for Verification</span>}
-                        </button>
+
+                      {/* Official Payment Buttons */}
+                      <div className={`grid ${job.allow_bkash_payment !== 0 && job.allow_nagad_payment !== 0 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                        {/* bKash Official Button */}
+                        {job.allow_bkash_payment !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleInitiateOnlinePay('bkash')}
+                            disabled={payingMethod !== null}
+                            className="py-2.5 px-3.5 bg-[#E2136E] hover:bg-[#c40f5e] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm hover:shadow transition cursor-pointer active:scale-95 disabled:opacity-50"
+                          >
+                            {payingMethod === 'bkash' ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <span className="w-6 h-6 rounded-lg bg-white flex items-center justify-center p-0.5 shrink-0 shadow-xs">
+                                  <img src="/bkash-logo.png" alt="bKash" className="w-full h-full object-contain" />
+                                </span>
+                                <span>Pay with bKash</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Nagad Official Button */}
+                        {job.allow_nagad_payment !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleInitiateOnlinePay('nagad')}
+                            disabled={payingMethod !== null}
+                            className="py-2.5 px-3.5 bg-gradient-to-r from-[#F6921E] to-[#F1592A] hover:from-[#e58316] hover:to-[#db4b1e] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm hover:shadow transition cursor-pointer active:scale-95 disabled:opacity-50"
+                          >
+                            {payingMethod === 'nagad' ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <span className="w-6 h-6 rounded-lg bg-white flex items-center justify-center p-0.5 shrink-0 shadow-xs">
+                                  <img src="/nagad-logo.png" alt="Nagad" className="w-full h-full object-contain" />
+                                </span>
+                                <span>Pay with Nagad</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
-                      <p className="text-[9px] text-slate-500">
-                        Shopkeeper will verify your transaction using these digits at the counter.
-                      </p>
+
+                      {/* Option 2: Sent money via App? Submit last 4 digits */}
+                      <div className="pt-2 border-t border-slate-200/80">
+                        {!showManualInput ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowManualInput(true)}
+                            className="w-full text-center text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 p-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
+                          >
+                            <span>📱 Sent money via bKash App? Enter last 4 digits</span>
+                          </button>
+                        ) : (
+                          <div className="bg-pink-50/60 border border-pink-200 rounded-xl p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-slate-800">
+                                Enter last 4 digits of your bKash number:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShowManualInput(false)}
+                                className="text-[10px] text-slate-400 hover:text-slate-600"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={4}
+                                placeholder="● ● ● ●"
+                                value={manualDigits}
+                                onChange={e => setManualDigits(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                className="w-28 bg-white border-2 border-pink-300 rounded-xl px-2 py-1.5 text-center font-mono font-extrabold text-base tracking-widest focus:ring-1 focus:ring-pink-400 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleManualMfsSubmit('bkash')}
+                                disabled={submittingManual || manualDigits.length !== 4}
+                                className="flex-1 py-1.5 px-3 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                {submittingManual ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>Submit for Verification</span>}
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-slate-500">
+                              Shopkeeper will verify your transaction using these digits at the counter.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {paymentError && (
+                        <p className="text-[10px] font-bold text-rose-600 mt-1">{paymentError}</p>
+                      )}
+
+                      {shopBkashNumber && (
+                        <div className="pt-1.5 flex items-center justify-between text-[10px] text-slate-500">
+                          <span>
+                            {job.shop_bkash_type === 'merchant' ? 'Merchant No:' : 'Shop MFS:'} <strong className="font-mono text-slate-800">{shopBkashNumber}</strong>
+                          </span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(shopBkashNumber);
+                              setCopiedBkash(true);
+                              setTimeout(() => setCopiedBkash(false), 2000);
+                            }}
+                            className="text-blue-600 font-bold hover:underline"
+                          >
+                            {copiedBkash ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-
-                {paymentError && (
-                  <p className="text-[10px] font-bold text-rose-600 mt-1">{paymentError}</p>
-                )}
-
-                {shopBkashNumber && (
-                  <div className="pt-1.5 flex items-center justify-between text-[10px] text-slate-500">
-                    <span>
-                      {job.shop_bkash_type === 'merchant' ? 'Merchant No:' : 'Shop MFS:'} <strong className="font-mono text-slate-800">{shopBkashNumber}</strong>
-                    </span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(shopBkashNumber);
-                        setCopiedBkash(true);
-                        setTimeout(() => setCopiedBkash(false), 2000);
-                      }}
-                      className="text-blue-600 font-bold hover:underline"
-                    >
-                      {copiedBkash ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Uploaded Documents List */}

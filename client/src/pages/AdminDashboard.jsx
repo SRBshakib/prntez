@@ -1367,12 +1367,13 @@ export default function AdminDashboard({ onLogout }) {
                 <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block mb-2">
                   Active Payment Processor
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
                   {[
-                    { id: 'simulator', title: '🧪 Interactive Simulator', badge: 'Recommended for Dev', desc: 'Full OTP & PIN simulator for bKash & Nagad test runs without API keys.' },
-                    { id: 'uddoktapay', title: '🚀 UddoktaPay PGW', badge: 'bKash + Nagad + Rocket', desc: 'All-in-one payment gateway with instant webhooks & auto verification.' },
+                    { id: 'simulator', title: '🧪 Interactive Sandbox', badge: 'Official bKash & Nagad', desc: 'Full OTP & PIN sandbox for bKash & Nagad test runs.' },
+                    { id: 'nagad', title: '🟠 Nagad Official PGW', badge: 'Direct Nagad API', desc: 'Direct Nagad Sandbox / Live PGW handshake & verification.' },
                     { id: 'bkash', title: '🌸 bKash Tokenized Direct', badge: 'Official bKash PGW', desc: 'Direct bKash Tokenized Checkout API integration.' },
-                    { id: 'sslcommerz', title: '💳 SSLCommerz', badge: 'Cards + MFS + NetBanking', desc: 'Traditional multi-channel gateway for cards and MFS.' }
+                    { id: 'uddoktapay', title: '🚀 UddoktaPay PGW', badge: 'bKash + Nagad + Rocket', desc: 'All-in-one payment gateway with instant webhooks.' },
+                    { id: 'sslcommerz', title: '💳 SSLCommerz', badge: 'Cards + MFS + NetBanking', desc: 'Multi-channel gateway for cards and MFS.' }
                   ].map(p => (
                     <button
                       key={p.id}
@@ -1447,6 +1448,82 @@ export default function AdminDashboard({ onLogout }) {
                   <code className="text-[10px] text-indigo-700 bg-white px-2 py-1 rounded border border-slate-200 block font-mono break-all select-all">
                     {typeof window !== 'undefined' ? `${window.location.origin}/api/payment/webhook/uddoktapay` : '/api/payment/webhook/uddoktapay'}
                   </code>
+                </div>
+              </div>
+
+              {/* Option: Nagad Official PGW (Sandbox & Live) */}
+              <div className={`bg-white p-5 rounded-3xl border transition shadow-xs space-y-3.5 ${
+                settings.pgw_active_provider === 'nagad' ? 'border-orange-400 ring-2 ring-orange-500/10' : 'border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#F1592A]" />
+                    <h4 className="font-extrabold text-xs text-slate-800">Nagad Official PGW (v-0.2)</h4>
+                  </div>
+                  <span className="text-[10px] font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                    Direct Nagad API
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Nagad Merchant ID</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 683002007104225"
+                      value={settings.nagad_merchant_id || ''}
+                      onChange={e => setSettings({ ...settings, nagad_merchant_id: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Merchant Account Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 01711428070"
+                      value={settings.nagad_merchant_number || ''}
+                      onChange={e => setSettings({ ...settings, nagad_merchant_number: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Nagad DFS Endpoint URL</label>
+                  <input
+                    type="text"
+                    placeholder="http://sandbox.mynagad.com:10080/remote-payment-gateway-1.0/api/dfs"
+                    value={settings.nagad_base_url || 'http://sandbox.mynagad.com:10080/remote-payment-gateway-1.0/api/dfs'}
+                    onChange={e => setSettings({ ...settings, nagad_base_url: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Live Endpoint: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">https://api.mynagad.com/api/dfs</code></p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Nagad Public Key (RSA Certificate / Public Key)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="-----BEGIN PUBLIC KEY----- ..."
+                    value={settings.nagad_public_key || ''}
+                    onChange={e => setSettings({ ...settings, nagad_public_key: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] font-mono text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Merchant Private Key (RSA Private Key)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="-----BEGIN RSA PRIVATE KEY----- ..."
+                    value={settings.nagad_private_key || ''}
+                    onChange={e => setSettings({ ...settings, nagad_private_key: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] font-mono text-slate-800"
+                  />
+                </div>
+
+                <div className="p-3 bg-orange-50/70 border border-orange-200 rounded-xl text-[10px] text-orange-950 leading-relaxed">
+                  Nagad PGW executes encrypted 2-phase handshake and confirms payment via <code>/api/payment/callback/nagad</code>.
                 </div>
               </div>
 

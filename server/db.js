@@ -66,11 +66,18 @@ async function migrate() {
     await ensureColumn('shops', 'nagad_number', "VARCHAR(20) DEFAULT ''");
     await ensureColumn('shops', 'nagad_type', "VARCHAR(20) DEFAULT 'merchant'");
     await ensureColumn('shops', 'nagad_qr_image', 'LONGTEXT DEFAULT NULL');
+    await ensureColumn('shops', 'nagad_merchant_id', 'VARCHAR(100) DEFAULT NULL');
+    await ensureColumn('shops', 'nagad_public_key', 'TEXT DEFAULT NULL');
+    await ensureColumn('shops', 'nagad_private_key', 'TEXT DEFAULT NULL');
     await ensureColumn('shops', 'uddoktapay_api_key', 'VARCHAR(255) DEFAULT NULL');
     await ensureColumn('shops', 'discount_min_pages', 'INT DEFAULT 50');
     await ensureColumn('shops', 'discount_percent', 'DECIMAL(5,2) DEFAULT 10.00');
     await ensureColumn('shops', 'discount_tier2_pages', 'INT DEFAULT 100');
     await ensureColumn('shops', 'discount_tier2_percent', 'DECIMAL(5,2) DEFAULT 15.00');
+    await ensureColumn('shops', 'allow_cash_payment', 'TINYINT(1) DEFAULT 1');
+    await ensureColumn('shops', 'allow_bkash_payment', 'TINYINT(1) DEFAULT 1');
+    await ensureColumn('shops', 'allow_nagad_payment', 'TINYINT(1) DEFAULT 1');
+    await ensureColumn('shops', 'allow_online_payment', 'TINYINT(1) DEFAULT 1');
     await ensureColumn('shops', 'trade_license', "VARCHAR(100) DEFAULT ''");
     await ensureColumn('shops', 'trade_license_image', 'LONGTEXT DEFAULT NULL');
     await ensureColumn('shops', 'shop_image', 'LONGTEXT DEFAULT NULL');

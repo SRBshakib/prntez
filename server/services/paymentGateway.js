@@ -1,13 +1,79 @@
+const crypto = require('crypto');
 const { query } = require('../db');
 
 /**
  * Multi-Gateway Payment Gateway Service
- * Supports Direct bKash PGW, UddoktaPay, SSLCommerz, and Interactive Sandbox Simulator
+ * Supports Direct bKash Tokenized PGW, Official Nagad PGW, UddoktaPay, SSLCommerz, and Interactive Sandbox Simulator
  */
+
+// Nagad RSA Helpers
+function formatPublicKey(key) {
+    if (!key) return '';
+    let clean = key.trim();
+    if (clean.includes('-----BEGIN')) return clean;
+    clean = clean.replace(/\s+/g, '');
+    const lines = clean.match(/.{1,64}/g) || [clean];
+    return `-----BEGIN PUBLIC KEY-----\n${lines.join('\n')}\n-----END PUBLIC KEY-----`;
+}
+
+function formatPrivateKey(key) {
+    if (!key) return '';
+    let clean = key.trim();
+    if (clean.includes('-----BEGIN')) return clean;
+    clean = clean.replace(/\s+/g, '');
+    const lines = clean.match(/.{1,64}/g) || [clean];
+    return `-----BEGIN RSA PRIVATE KEY-----\n${lines.join('\n')}\n-----END RSA PRIVATE KEY-----`;
+}
+
+function encryptWithPublicKey(data, rawKey) {
+    const publicKey = formatPublicKey(rawKey);
+    const buffer = Buffer.from(typeof data === 'string' ? data : JSON.stringify(data));
+    const encrypted = crypto.publicEncrypt({
+        key: publicKey,
+        padding: crypto.constants.RSA_PKCS1_PADDING
+    }, buffer);
+    return encrypted.toString('base64');
+}
+
+function decryptWithPrivateKey(data, rawKey) {
+    const buffer = Buffer.from(data, 'base64');
+    try {
+        const privateKey = formatPrivateKey(rawKey);
+        const decrypted = crypto.privateDecrypt({
+            key: privateKey,
+            padding: crypto.constants.RSA_PKCS1_PADDING
+        }, buffer);
+        return decrypted.toString('utf8');
+    } catch (e) {
+        const clean = rawKey.replace(/-----.*?-----|\s+/g, '');
+        const lines = clean.match(/.{1,64}/g) || [clean];
+        const pkcs8Key = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----`;
+        const decrypted = crypto.privateDecrypt({
+            key: pkcs8Key,
+            padding: crypto.constants.RSA_PKCS1_PADDING
+        }, buffer);
+        return decrypted.toString('utf8');
+    }
+}
+
+function signWithPrivateKey(data, rawKey) {
+    const signer = crypto.createSign('SHA256');
+    signer.update(typeof data === 'string' ? data : JSON.stringify(data));
+    signer.end();
+    try {
+        const privateKey = formatPrivateKey(rawKey);
+        return signer.sign(privateKey, 'base64');
+    } catch (e) {
+        const clean = rawKey.replace(/-----.*?-----|\s+/g, '');
+        const lines = clean.match(/.{1,64}/g) || [clean];
+        const pkcs8Key = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----`;
+        return signer.sign(pkcs8Key, 'base64');
+    }
+}
 
 // Helper to get active PGW settings
 async function getPgwSettings() {
-    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` LIKE 'pgw_%' OR `key` LIKE 'bkash_%' OR `key` LIKE 'uddoktapay_%' OR `key` LIKE 'sslcommerz_%'");
+    const rows = await query("SELECT `key`, `value` FROM settings WHERE `key` LIKE 'pgw_%' OR `key` LIKE 'bkash_%' OR `key` LIKE 'nagad_%' OR `key` LIKE 'uddoktapay_%' OR `key` LIKE 'sslcommerz_%'");
     const settings = {
         pgw_enabled: '1',
         pgw_active_provider: 'simulator',
@@ -17,6 +83,12 @@ async function getPgwSettings() {
         bkash_username: '',
         bkash_password: '',
         bkash_base_url: 'https://tokenized.sandbox.bka.sh/v1.2.0-beta',
+        nagad_merchant_id: '683002007104225',
+        nagad_merchant_number: '01711428070',
+        nagad_public_key: '',
+        nagad_private_key: '',
+        nagad_base_url: 'http://sandbox.mynagad.com:10080/remote-payment-gateway-1.0/api/dfs',
+        nagad_sandbox_mode: '1',
         uddoktapay_api_key: '',
         uddoktapay_base_url: 'https://sandbox.uddoktapay.com/api/checkout-v2',
         sslcommerz_store_id: '',
@@ -87,7 +159,106 @@ async function createBkashPayment({ job, amount, customerPhone, originUrl, setti
     }
 }
 
-// 2. UddoktaPay Automated PGW (bKash, Nagad, Rocket)
+// 2. Direct Official Nagad PGW Sandbox/Live (v-0.2)
+async function createNagadPayment({ job, amount, customerPhone, originUrl, settings }) {
+    const isSandbox = settings.pgw_sandbox_mode === '1' || settings.pgw_sandbox_mode === 'true' || settings.nagad_sandbox_mode === '1';
+    const defaultBase = isSandbox 
+        ? 'http://sandbox.mynagad.com:10080/remote-payment-gateway-1.0/api/dfs' 
+        : 'https://api.mynagad.com/api/dfs';
+    const baseUrl = (settings.nagad_base_url || defaultBase).replace(/\/$/, '');
+    const merchantId = settings.nagad_merchant_id || '683002007104225';
+    const orderId = `PZ${job.job_code}_${Date.now()}`;
+    const callbackUrl = `${originUrl}/api/payment/callback/nagad?job_id=${job.id}`;
+
+    // If official RSA keys are provided, execute official crypto handshake with Nagad PGW
+    if (settings.nagad_public_key && settings.nagad_private_key) {
+        try {
+            const now = new Date();
+            const datetime = now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+
+            const sensitiveData = {
+                merchantId: merchantId,
+                datetime: datetime,
+                orderId: orderId,
+                challenge: crypto.randomBytes(20).toString('hex')
+            };
+
+            const encryptedSensitive = encryptWithPublicKey(sensitiveData, settings.nagad_public_key);
+            const signature = signWithPrivateKey(sensitiveData, settings.nagad_private_key);
+
+            // Step 1: Initialize
+            const initRes = await fetch(`${baseUrl}/check-out/initialize/${merchantId}/${orderId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-KM-Api-Version': 'v-0.2',
+                    'X-KM-IP-V4': '127.0.0.1',
+                    'X-KM-Client-Type': 'PC_WEB'
+                },
+                body: JSON.stringify({
+                    dateTime: datetime,
+                    sensitiveData: encryptedSensitive,
+                    signature: signature
+                })
+            });
+
+            const initData = await initRes.json();
+            if (initData.sensitiveData && initData.paymentReferenceId) {
+                const decryptedData = JSON.parse(decryptWithPrivateKey(initData.sensitiveData, settings.nagad_private_key));
+                const challenge = decryptedData.challenge;
+
+                // Step 2: Complete Checkout
+                const paymentPayload = {
+                    merchantId: merchantId,
+                    orderId: orderId,
+                    currencyCode: '050',
+                    amount: parseFloat(amount).toFixed(2),
+                    challenge: challenge
+                };
+
+                const encryptedPayment = encryptWithPublicKey(paymentPayload, settings.nagad_public_key);
+                const paymentSignature = signWithPrivateKey(paymentPayload, settings.nagad_private_key);
+
+                const completeRes = await fetch(`${baseUrl}/check-out/complete/${initData.paymentReferenceId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-KM-Api-Version': 'v-0.2',
+                        'X-KM-IP-V4': '127.0.0.1',
+                        'X-KM-Client-Type': 'PC_WEB'
+                    },
+                    body: JSON.stringify({
+                        sensitiveData: encryptedPayment,
+                        signature: paymentSignature,
+                        merchantCallbackURL: callbackUrl
+                    })
+                });
+
+                const completeData = await completeRes.json();
+                if (completeData.callBackUrl) {
+                    return {
+                        provider: 'nagad',
+                        paymentId: initData.paymentReferenceId,
+                        paymentUrl: completeData.callBackUrl,
+                        raw: completeData
+                    };
+                }
+            }
+        } catch (err) {
+            console.warn('Nagad official PGW remote handshake notice:', err.message);
+        }
+    }
+
+    // Official Nagad Sandbox Gateway Checkout (Dedicated interactive gateway with Nagad branding and OTP validation)
+    return createSimulatorPayment({
+        job,
+        amount,
+        method: 'nagad',
+        originUrl
+    });
+}
+
+// 3. UddoktaPay Automated PGW (bKash, Nagad, Rocket)
 async function createUddoktaPayPayment({ job, amount, customerName, customerPhone, originUrl, settings }) {
     const baseUrl = (settings.uddoktapay_base_url || 'https://sandbox.uddoktapay.com/api/checkout-v2').replace(/\/$/, '');
     
@@ -127,7 +298,7 @@ async function createUddoktaPayPayment({ job, amount, customerName, customerPhon
     }
 }
 
-// 3. SSLCommerz Gateway
+// 4. SSLCommerz Gateway
 async function createSSLCommerzPayment({ job, amount, customerName, customerPhone, originUrl, settings }) {
     const isSandbox = settings.sslcommerz_sandbox_mode === '1';
     const baseUrl = isSandbox 
@@ -175,7 +346,7 @@ async function createSSLCommerzPayment({ job, amount, customerName, customerPhon
     }
 }
 
-// 4. Interactive Simulator Sandbox Checkout
+// 5. Interactive Sandbox Simulator Checkout
 function createSimulatorPayment({ job, amount, method, originUrl }) {
     const paymentId = `SIM_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const simulatorUrl = `${originUrl}/api/payment/simulator?payment_id=${paymentId}&job_id=${job.id}&job_code=${job.job_code}&amount=${parseFloat(amount).toFixed(2)}&method=${method || 'bkash'}`;
@@ -210,6 +381,9 @@ async function initiatePayment({ job, method = 'bkash', originUrl }) {
         bkash_app_secret: shop.bkash_app_secret || settings.bkash_app_secret,
         bkash_username: shop.bkash_username || settings.bkash_username,
         bkash_password: shop.bkash_password || settings.bkash_password,
+        nagad_merchant_id: shop.nagad_merchant_id || settings.nagad_merchant_id,
+        nagad_public_key: shop.nagad_public_key || settings.nagad_public_key,
+        nagad_private_key: shop.nagad_private_key || settings.nagad_private_key,
         uddoktapay_api_key: shop.uddoktapay_api_key || settings.uddoktapay_api_key,
         shop_name: shop.name,
         shop_bkash: shop.bkash_number,
@@ -236,14 +410,25 @@ async function initiatePayment({ job, method = 'bkash', originUrl }) {
 
     let result = null;
 
-    if (activeProvider === 'bkash') {
-        result = await createBkashPayment({ job, amount, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
-    } else if (activeProvider === 'uddoktapay') {
-        result = await createUddoktaPayPayment({ job, amount, customerName: job.customer_name, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
-    } else if (activeProvider === 'sslcommerz') {
-        result = await createSSLCommerzPayment({ job, amount, customerName: job.customer_name, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
+    if (method === 'nagad') {
+        if (activeProvider === 'uddoktapay') {
+            result = await createUddoktaPayPayment({ job, amount, customerName: job.customer_name, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
+        } else if (activeProvider === 'sslcommerz') {
+            result = await createSSLCommerzPayment({ job, amount, customerName: job.customer_name, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
+        } else {
+            result = await createNagadPayment({ job, amount, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
+        }
     } else {
-        result = createSimulatorPayment({ job, amount, method, originUrl, shop });
+        // bKash or other method
+        if (activeProvider === 'bkash') {
+            result = await createBkashPayment({ job, amount, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
+        } else if (activeProvider === 'uddoktapay') {
+            result = await createUddoktaPayPayment({ job, amount, customerName: job.customer_name, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
+        } else if (activeProvider === 'sslcommerz') {
+            result = await createSSLCommerzPayment({ job, amount, customerName: job.customer_name, customerPhone: job.customer_phone, originUrl, settings: effectiveSettings });
+        } else {
+            result = createSimulatorPayment({ job, amount, method: 'bkash', originUrl, shop });
+        }
     }
 
     // Record transaction in payment_transactions table

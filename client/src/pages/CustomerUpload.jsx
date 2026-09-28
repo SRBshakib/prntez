@@ -331,6 +331,27 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
 
   const isClosed = isShopCurrentlyClosed();
 
+  const allowCash = shop?.allow_cash_payment !== 0 && shop?.allow_cash_payment !== false;
+  const allowBkash = shop?.allow_bkash_payment !== 0 && shop?.allow_bkash_payment !== false;
+  const allowNagad = shop?.allow_nagad_payment !== 0 && shop?.allow_nagad_payment !== false;
+  const enabledPaymentCount = [allowCash, allowBkash, allowNagad].filter(Boolean).length;
+  const paymentGridClass = enabledPaymentCount === 1 ? 'grid-cols-1' : enabledPaymentCount === 2 ? 'grid-cols-2' : 'grid-cols-3';
+
+  // Auto-correct selected payment method if shop disabled it
+  useEffect(() => {
+    if (!shop) return;
+    if (paymentMethod === 'cash' && !allowCash) {
+      if (allowBkash) setPaymentMethod('bkash');
+      else if (allowNagad) setPaymentMethod('nagad');
+    } else if (paymentMethod === 'bkash' && !allowBkash) {
+      if (allowCash) setPaymentMethod('cash');
+      else if (allowNagad) setPaymentMethod('nagad');
+    } else if (paymentMethod === 'nagad' && !allowNagad) {
+      if (allowCash) setPaymentMethod('cash');
+      else if (allowBkash) setPaymentMethod('bkash');
+    }
+  }, [shop, allowCash, allowBkash, allowNagad, paymentMethod]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (files.length === 0) {
@@ -1048,75 +1069,86 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           </div>
         </div>
 
-        {/* Payment Selection — Clean & Smooth */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
-              <CreditCard className="w-4 h-4 text-blue-600" />
-              Payment Method
-            </h4>
-            <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400">Pay at counter or online</span>
-          </div>
+        {/* Payment Selection — Clean & Smooth (Dynamic per Shop settings) */}
+        {enabledPaymentCount > 0 && (
+          <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-blue-600" />
+                Payment Method
+              </h4>
+              <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400">
+                {allowCash && (allowBkash || allowNagad) ? 'Pay at counter or online' : allowCash ? 'Pay at counter' : 'Pay online'}
+              </span>
+            </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            {/* Cash */}
-            <button
-              type="button"
-              onClick={() => { setPaymentMethod('cash'); setPaymentTrxId(''); }}
-              className={`p-2.5 sm:p-3 rounded-xl border-2 text-center transition cursor-pointer ${
-                paymentMethod === 'cash'
-                  ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-400 shadow-sm'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <div className="text-xl mb-1">💵</div>
-              <div className="text-[11px] font-bold text-slate-800">Cash</div>
-              <div className="text-[9px] text-slate-400 mt-0.5">At counter</div>
-            </button>
+            <div className={`grid ${paymentGridClass} gap-2.5 sm:gap-3`}>
+              {/* Cash at Counter */}
+              {allowCash && (
+                <button
+                  type="button"
+                  onClick={() => { setPaymentMethod('cash'); setPaymentTrxId(''); }}
+                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[110px] ${
+                    paymentMethod === 'cash'
+                      ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-400/30 shadow-md shadow-emerald-500/10 scale-[1.01]'
+                      : 'border-slate-200/90 bg-slate-50/60 hover:border-slate-300 hover:bg-white'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shadow-2xs border border-emerald-200/80">
+                    💵
+                  </div>
+                  <div className="mt-2">
+                    <div className="text-xs font-extrabold text-slate-800">Cash on Pickup</div>
+                    <div className="text-[10px] text-emerald-700 font-semibold mt-0.5 bg-emerald-100/70 px-2 py-0.5 rounded-full inline-block">Pay at Counter</div>
+                  </div>
+                </button>
+              )}
 
-            {/* bKash with official logo */}
-            <button
-              type="button"
-              onClick={() => { setPaymentMethod('bkash'); setPaymentTrxId(''); }}
-              className={`p-2.5 sm:p-3 rounded-xl border-2 text-center transition cursor-pointer ${
-                paymentMethod === 'bkash'
-                  ? 'border-pink-500 bg-pink-50/60 ring-1 ring-pink-400 shadow-sm'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <svg className="w-7 h-7 mx-auto mb-1" viewBox="0 0 48 48" fill="none">
-                <rect width="48" height="48" rx="12" fill="#E2136E"/>
-                <path d="M14 16l6 4-6 4V16z" fill="white"/>
-                <path d="M22 14l6 4-6 4V14z" fill="white" opacity="0.7"/>
-                <text x="14" y="36" fill="white" fontSize="9" fontWeight="bold" fontFamily="sans-serif">bKash</text>
-              </svg>
-              <div className="text-[11px] font-bold text-slate-800">bKash</div>
-              <div className="text-[9px] text-pink-600 font-semibold mt-0.5">Gateway · App</div>
-            </button>
+              {/* bKash with official logo */}
+              {allowBkash && (
+                <button
+                  type="button"
+                  onClick={() => { setPaymentMethod('bkash'); setPaymentTrxId(''); }}
+                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[110px] ${
+                    paymentMethod === 'bkash'
+                      ? 'border-[#E2136E] bg-pink-50/80 ring-2 ring-pink-400/30 shadow-md shadow-pink-500/10 scale-[1.01]'
+                      : 'border-slate-200/90 bg-slate-50/60 hover:border-slate-300 hover:bg-white'
+                  }`}
+                >
+                  <div className="h-10 w-full max-w-[130px] rounded-xl bg-white border border-pink-200/80 flex items-center justify-center px-2 py-1 shadow-2xs">
+                    <img src="/bkash-logo.png" alt="bKash" className="h-6 max-h-7 w-auto max-w-full object-contain" />
+                  </div>
+                  <div className="mt-2">
+                    <div className="text-xs font-extrabold text-slate-800">bKash</div>
+                    <div className="text-[10px] text-pink-700 font-semibold mt-0.5 bg-pink-100/70 px-2 py-0.5 rounded-full inline-block">Gateway · App</div>
+                  </div>
+                </button>
+              )}
 
-            {/* Nagad with official logo */}
-            <button
-              type="button"
-              onClick={() => { setPaymentMethod('nagad'); setPaymentTrxId(''); }}
-              className={`p-2.5 sm:p-3 rounded-xl border-2 text-center transition cursor-pointer ${
-                paymentMethod === 'nagad'
-                  ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-400 shadow-sm'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-            >
-              <svg className="w-7 h-7 mx-auto mb-1" viewBox="0 0 48 48" fill="none">
-                <rect width="48" height="48" rx="12" fill="#F6921E"/>
-                <circle cx="24" cy="18" r="6" fill="white"/>
-                <path d="M18 28h12l-2 6H20l-2-6z" fill="white" opacity="0.85"/>
-                <text x="10" y="44" fill="white" fontSize="8" fontWeight="bold" fontFamily="sans-serif">Nagad</text>
-              </svg>
-              <div className="text-[11px] font-bold text-slate-800">Nagad</div>
-              <div className="text-[9px] text-orange-600 font-semibold mt-0.5">Gateway · App</div>
-            </button>
-          </div>
+              {/* Nagad with official logo */}
+              {allowNagad && (
+                <button
+                  type="button"
+                  onClick={() => { setPaymentMethod('nagad'); setPaymentTrxId(''); }}
+                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[110px] ${
+                    paymentMethod === 'nagad'
+                      ? 'border-[#F7941D] bg-orange-50/80 ring-2 ring-orange-400/30 shadow-md shadow-orange-500/10 scale-[1.01]'
+                      : 'border-slate-200/90 bg-slate-50/60 hover:border-slate-300 hover:bg-white'
+                  }`}
+                >
+                  <div className="h-10 w-full max-w-[130px] rounded-xl bg-white border border-orange-200/80 flex items-center justify-center px-2 py-1 shadow-2xs">
+                    <img src="/nagad-logo.png" alt="Nagad" className="h-6 max-h-7 w-auto max-w-full object-contain" />
+                  </div>
+                  <div className="mt-2">
+                    <div className="text-xs font-extrabold text-slate-800">Nagad</div>
+                    <div className="text-[10px] text-orange-700 font-semibold mt-0.5 bg-orange-100/70 px-2 py-0.5 rounded-full inline-block">Gateway · App</div>
+                  </div>
+                </button>
+              )}
+            </div>
 
-          {/* bKash / Nagad — Dual Mode: Payment Gateway (Sandbox) & Manual App Payment */}
-          {(paymentMethod === 'bkash' || paymentMethod === 'nagad') && (
+            {/* bKash / Nagad — Dual Mode: Payment Gateway & Manual App Payment */}
+            {(paymentMethod === 'bkash' || paymentMethod === 'nagad') && (
             <div className={`rounded-xl border overflow-hidden transition-all ${
               paymentMethod === 'bkash' ? 'border-pink-200 bg-gradient-to-b from-pink-50/80 to-white' : 'border-orange-200 bg-gradient-to-b from-orange-50/80 to-white'
             }`}>
@@ -1134,7 +1166,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                         : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                     }`}
                   >
-                    <span>⚡ Gateway (Sandbox)</span>
+                    <span>⚡ Online Gateway</span>
                     <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/20 font-medium hidden sm:inline">Instant</span>
                   </button>
 
@@ -1155,7 +1187,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                 </div>
               </div>
 
-              {/* Mode 1: Payment Gateway (Sandbox / Direct PGW) */}
+              {/* Mode 1: Payment Gateway (Direct PGW) */}
               {onlinePayMode === 'gateway' ? (
                 <div className="p-4 space-y-3">
                   <div className="flex items-start gap-3 bg-white p-3 rounded-xl border border-slate-200/90 shadow-2xs">
@@ -1167,14 +1199,14 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="text-xs font-extrabold text-slate-800">
-                          {paymentMethod === 'bkash' ? 'bKash Tokenized Gateway (Sandbox)' : 'Nagad Online Gateway'}
+                          {paymentMethod === 'bkash' ? 'bKash Official Gateway' : 'Nagad Online Gateway'}
                         </p>
                         <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Auto-Confirmed
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-600 leading-relaxed">
-                        After submitting, you will be redirected to the secure {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} checkout / test sandbox.
+                        After submitting, you will be redirected to the secure {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} checkout.
                         Payment verifies <strong>instantly</strong> with no manual checks needed.
                       </p>
                     </div>
@@ -1186,7 +1218,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                   </div>
 
                   <p className="text-[10px] text-slate-400 text-center">
-                    💡 Click <strong>"Pay with {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'}"</strong> below to launch the sandbox checkout.
+                    💡 Click <strong>"Pay with {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'}"</strong> below to launch the checkout.
                   </p>
                 </div>
               ) : (
@@ -1290,6 +1322,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
             </div>
           )}
         </div>
+      )}
 
         {/* Sticky Floating Bottom Checkout Bar (Clean Mobile Optimized) */}
         <div className="bg-white/95 backdrop-blur-md rounded-2xl p-3 sm:p-4 shadow-xl border border-slate-200/90 flex flex-row items-center justify-between gap-3 sticky bottom-3 sm:bottom-4 z-20">
