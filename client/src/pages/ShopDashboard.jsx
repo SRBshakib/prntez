@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Printer, QrCode, Download, Trash2, CheckCircle2, Clock, Zap, Star,
   Eye, RefreshCw, Search, ArrowUpRight, LogOut, ChevronDown, ChevronUp,
   FileText, Image as ImageIcon, Volume2, VolumeX, Store, Check, AlertCircle, X,
   Command, Sparkles, Play, Layers, Copy, BarChart3, TrendingUp, MessageCircle,
-  CreditCard, ShieldCheck, Sun, Moon, Percent, Wrench, Lock, Megaphone, Shield, KeyRound
+  CreditCard, ShieldCheck, Sun, Moon, Percent, Wrench, Lock, Megaphone, Shield, KeyRound, User
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import { socket, playChime } from '../socket';
@@ -31,6 +31,12 @@ function formatOrderTime(dateString) {
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+// Payment verification helper
+function isJobPaid(j) {
+  if (!j) return false;
+  return j.payment_status === 'paid' || j.payment_status === 'paid_cash' || j.payment_status === 'paid_bkash';
 }
 
 export default function ShopDashboard({ shop, onLogout }) {
@@ -834,9 +840,20 @@ export default function ShopDashboard({ shop, onLogout }) {
   // Filtered & Searched Jobs
   const filteredJobs = useMemo(() => {
     return jobs.filter(j => {
+      const isJobPaid = j.payment_status === 'paid' || j.payment_status === 'paid_cash' || j.payment_status === 'paid_bkash';
+
       if (activeFilter === 'pending') {
-        // Exclude purged files from pending queue
-        if (j.status !== 'pending' || j.files_deleted) return false;
+        // If file is purged/deleted, do not show in pending
+        if (j.files_deleted) return false;
+
+        // Show pending active print jobs + all done jobs held at counter waiting for payment
+        const isPending = j.status === 'pending';
+        const isUnpaidHold = j.status === 'done' && !isJobPaid;
+        if (!isPending && !isUnpaidHold) return false;
+      } else if (activeFilter === 'done') {
+        // Done queue ONLY contains orders that are printed AND paid!
+        // Unpaid orders remain in Pending queue until payment is collected.
+        if (j.status !== 'done' || !isJobPaid) return false;
       } else if (activeFilter !== 'all' && j.status !== activeFilter) {
         return false;
       }
@@ -852,24 +869,90 @@ export default function ShopDashboard({ shop, onLogout }) {
   }, [jobs, activeFilter, searchQuery]);
 
   const stats = useMemo(() => {
-    const pending = jobs.filter(j => j.status === 'pending' && !j.files_deleted).length;
+    const isJobPaid = (j) => j.payment_status === 'paid' || j.payment_status === 'paid_cash' || j.payment_status === 'paid_bkash';
+
+    // Pending jobs in queue (unprinted active)
+    const pendingActive = jobs.filter(j => j.status === 'pending' && !j.files_deleted).length;
+    // Done jobs waiting for payment at counter (unpaid cash or MFS hold)
+    const paymentHold = jobs.filter(j => j.status === 'done' && !j.files_deleted && !isJobPaid(j)).length;
     const printing = jobs.filter(j => j.status === 'printing').length;
-    const done = jobs.filter(j => j.status === 'done').length;
+    
+    // Done today: strictly printed AND paid!
+    const done = jobs.filter(j => j.status === 'done' && isJobPaid(j)).length;
     const total = jobs.length;
-    const todayRevenue = jobs.reduce((sum, j) => sum + (parseFloat(j.total_price) || 0), 0);
+    const todayRevenue = jobs.reduce((sum, j) => sum + (isJobPaid(j) ? (parseFloat(j.total_price) || 0) : 0), 0);
     return {
-      pending,
+      pending: pendingActive + paymentHold,
       printing,
       done,
       total,
-      todayRevenue
+      todayRevenue,
+      paymentHold
     };
   }, [jobs]);
 
-  // Fresh Printed Jobs for Counter Handoff Display Card
+  // State for tracking dismissed and currently wiping items from Freshly Printed panel
+  const [dismissedFreshIds, setDismissedFreshIds] = useState(new Set());
+  const [wipingFreshIds, setWipingFreshIds] = useState(new Set());
+  const isWipingRef = useRef(false);
+
+  // Candidate jobs for Freshly Printed panel:
+  // Exclude purged jobs (!j.files_deleted), limit to maximum 5, excluding dismissed
   const freshPrintedJobs = useMemo(() => {
-    return jobs.filter(j => j.status === 'done' || j.status === 'printing').slice(0, 6);
-  }, [jobs]);
+    return jobs
+      .filter(j => (j.status === 'done' || j.status === 'printing') && !j.files_deleted && !dismissedFreshIds.has(j.id))
+      .slice(0, 5);
+  }, [jobs, dismissedFreshIds]);
+
+  // Active (un-purged) freshly printed jobs
+  const activeFreshJobs = freshPrintedJobs;
+
+  // Staggered Wipe from Bottom animation
+  const triggerWipeFromBottom = useCallback((listToWipe) => {
+    if (!listToWipe || listToWipe.length === 0 || isWipingRef.current) return;
+    isWipingRef.current = true;
+    const total = listToWipe.length;
+
+    // Stagger wipe starting from bottom (index total - 1) up to top (index 0)
+    listToWipe.forEach((job, index) => {
+      const bottomDistance = total - 1 - index; // 0 for the bottom-most item, total-1 for top
+      const delay = bottomDistance * 170; // 170ms delay per card from bottom
+      setTimeout(() => {
+        setWipingFreshIds(prev => new Set(prev).add(job.id));
+      }, delay);
+    });
+
+    const completionTime = (total * 170) + 480;
+    setTimeout(() => {
+      setDismissedFreshIds(prev => {
+        const next = new Set(prev);
+        listToWipe.forEach(j => next.add(j.id));
+        return next;
+      });
+      setWipingFreshIds(new Set());
+      isWipingRef.current = false;
+    }, completionTime);
+  }, []);
+
+  // Automatic Wipe: When a freshly printed order's retention timer hits 00:00 or files are purged,
+  // automatically wipe it from the panel with bottom-to-top animation!
+  useEffect(() => {
+    if (isWipingRef.current || !cleanupSettings?.enabled || freshPrintedJobs.length === 0) return;
+
+    const expiredJobs = freshPrintedJobs.filter(j => {
+      if (wipingFreshIds.has(j.id) || dismissedFreshIds.has(j.id)) return false;
+      if (j.files_deleted) return true;
+      let deadlineMs = null;
+      if (j.status === 'done' && (j.completed_at || j.updated_at)) {
+        deadlineMs = new Date(j.completed_at || j.updated_at).getTime() + ((cleanupSettings.success_minutes || 30) * 60 * 1000);
+      }
+      return deadlineMs && deadlineMs <= now;
+    });
+
+    if (expiredJobs.length > 0) {
+      triggerWipeFromBottom(expiredJobs);
+    }
+  }, [now, freshPrintedJobs, cleanupSettings, wipingFreshIds, dismissedFreshIds, triggerWipeFromBottom]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-blue-500 selection:text-white">
@@ -1541,11 +1624,15 @@ export default function ShopDashboard({ shop, onLogout }) {
                       <div className="flex items-center gap-2">
                         {/* Status Pill */}
                         <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                          job.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                          job.status === 'printing' ? 'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse' :
-                          'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          job.status === 'done' && (!job.payment_status || job.payment_status === 'unpaid' || job.payment_status === 'mfs_pending')
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : job.status === 'pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                            job.status === 'printing' ? 'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse' :
+                            'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         }`}>
-                          {job.status}
+                          {job.status === 'done' && (!job.payment_status || job.payment_status === 'unpaid' || job.payment_status === 'mfs_pending')
+                            ? (job.payment_method === 'cash' || !job.payment_method ? 'Printed · Cash Due' : job.payment_status === 'mfs_pending' ? 'Printed · MFS Hold' : 'Printed · Unpaid')
+                            : job.status}
                         </span>
 
                         {/* Total Price */}
@@ -1557,18 +1644,29 @@ export default function ShopDashboard({ shop, onLogout }) {
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ${
                           job.payment_status === 'paid' || job.payment_status === 'paid_cash' || job.payment_status === 'paid_bkash'
                             ? 'bg-emerald-100 text-emerald-800'
-                            : job.payment_status === 'paid_online_pending_verify'
-                              ? 'bg-indigo-100 text-indigo-800 animate-pulse'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : job.payment_status === 'mfs_pending'
+                              ? 'bg-pink-100 text-pink-800 border border-pink-300 animate-pulse'
+                              : job.payment_status === 'paid_online_pending_verify'
+                                ? 'bg-indigo-100 text-indigo-800 animate-pulse'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>
                           <CreditCard className="w-2.5 h-2.5" />
                           <span>
                             {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? 'Paid (Cash)' :
                              job.payment_status === 'paid_bkash' ? 'Paid (bKash)' :
+                             job.payment_status === 'mfs_pending' ? `MFS ****${job.payment_trx_id || ''}` :
                              job.payment_status === 'paid_online_pending_verify' ? `Verify ${job.payment_method?.toUpperCase()}` :
                              'Unpaid'}
                           </span>
                         </span>
+
+                        {/* MFS Payment Pending Hold Banner — printed but payment not confirmed */}
+                        {job.payment_status === 'mfs_pending' && job.status === 'done' && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 animate-pulse">
+                            <AlertCircle className="w-2.5 h-2.5" />
+                            HOLD — Verify Payment
+                          </span>
+                        )}
                       </div>
 
                     </div>
@@ -1647,6 +1745,23 @@ export default function ShopDashboard({ shop, onLogout }) {
                             </button>
                           </div>
 
+                          {/* MFS Verify: Show last 4 digits + Confirm button for bKash/Nagad pending */}
+                          {job.payment_status === 'mfs_pending' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`Verify bKash/Nagad payment?\n\nCustomer's last 4 digits: ${job.payment_trx_id || '????'}\nAmount: ৳${parseFloat(job.total_price || 0).toFixed(2)}\n\nCheck your ${job.payment_method === 'bkash' ? 'bKash' : 'Nagad'} app — match the last 4 digits of the sender's number. Press OK to confirm payment.`)) {
+                                  updatePaymentStatus(job.id, 'paid_bkash', job.payment_method || 'bkash');
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-extrabold rounded-lg text-[10px] flex items-center gap-1 transition shadow-xs cursor-pointer animate-pulse"
+                              title={`Customer last 4: ${job.payment_trx_id} — click to verify`}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Verify ****{job.payment_trx_id}</span>
+                            </button>
+                          )}
+
                           <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
 
                           {/* Preview Button */}
@@ -1708,8 +1823,18 @@ export default function ShopDashboard({ shop, onLogout }) {
                             </button>
                           )}
 
-                          {/* Done Button */}
-                          {!isDone ? (
+                          {/* Done / Collect Cash Action Button */}
+                          {isDone && (!job.payment_status || job.payment_status === 'unpaid') ? (
+                            <button
+                              type="button"
+                              onClick={() => updatePaymentStatus(job.id, 'paid_cash', 'cash')}
+                              className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-lg text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95 animate-pulse"
+                              title="Customer handed cash? Click to mark Paid (Cash) & complete"
+                            >
+                              <span>💵</span>
+                              <span>Collect ৳{parseFloat(job.total_price || 0).toFixed(0)} Cash</span>
+                            </button>
+                          ) : !isDone ? (
                             <button
                               type="button"
                               onClick={() => updateJobStatus(job.id, 'done')}
@@ -1808,6 +1933,23 @@ export default function ShopDashboard({ shop, onLogout }) {
                               </button>
                             </div>
 
+                            {/* MFS Verify: Show last 4 digits + Confirm button for bKash/Nagad pending */}
+                            {job.payment_status === 'mfs_pending' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Verify bKash/Nagad payment?\n\nCustomer's last 4 digits: ${job.payment_trx_id || '????'}\nAmount: ৳${parseFloat(job.total_price || 0).toFixed(2)}\n\nCheck your ${job.payment_method === 'bkash' ? 'bKash' : 'Nagad'} app — match the last 4 digits of the sender's number. Press OK to confirm payment.`)) {
+                                    updatePaymentStatus(job.id, 'paid_bkash', job.payment_method || 'bkash');
+                                  }
+                                }}
+                                className="px-2.5 py-1 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-extrabold rounded-lg text-[10px] flex items-center gap-1 transition shadow-xs cursor-pointer animate-pulse"
+                                title={`Customer last 4: ${job.payment_trx_id} — click to verify`}
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                <span>Verify ****{job.payment_trx_id}</span>
+                              </button>
+                            )}
+
                             <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
 
                             {/* Download All */}
@@ -1835,8 +1977,18 @@ export default function ShopDashboard({ shop, onLogout }) {
                               </button>
                             )}
 
-                            {/* Done Button */}
-                            {!isDone ? (
+                            {/* Done / Collect Cash Action Button */}
+                            {isDone && (!job.payment_status || job.payment_status === 'unpaid') ? (
+                              <button
+                                type="button"
+                                onClick={() => updatePaymentStatus(job.id, 'paid_cash', 'cash')}
+                                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-lg text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95 animate-pulse"
+                                title="Customer handed cash? Click to mark Paid (Cash) & complete"
+                              >
+                                <span>💵</span>
+                                <span>Collect ৳{parseFloat(job.total_price || 0).toFixed(0)} Cash</span>
+                              </button>
+                            ) : !isDone ? (
                               <button
                                 type="button"
                                 onClick={() => updateJobStatus(job.id, 'done')}
@@ -2025,122 +2177,132 @@ export default function ShopDashboard({ shop, onLogout }) {
           <div className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-xs border border-emerald-200/90 space-y-3 sticky top-20">
             
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-100"></span>
-                <h3 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                  <span>✨ Freshly Printed</span>
-                  <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.2 rounded-full font-bold">
-                    {freshPrintedJobs.length} Ready
+            <div className="border-b border-slate-100 pb-3 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
-                </h3>
+                  <h3 className="font-extrabold text-xs sm:text-sm text-slate-800 tracking-tight whitespace-nowrap">
+                    Freshly Printed
+                  </h3>
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold shadow-2xs shrink-0">
+                    {activeFreshJobs.length} Ready
+                  </span>
+                </div>
+
+                {freshPrintedJobs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => triggerWipeFromBottom(freshPrintedJobs)}
+                    disabled={isWipingRef.current}
+                    className="text-[11px] text-slate-600 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0 shadow-2xs border border-slate-200/60"
+                    title="Wipe completed orders from the bottom up"
+                  >
+                    <span>🧹 Wipe</span>
+                  </button>
+                )}
               </div>
-              <span className="text-[10px] text-slate-400 font-medium">Counter Pickup</span>
+              <p className="text-[10px] text-slate-400 font-medium pl-4.5 truncate">Counter Pickup · Hand over to customer</p>
             </div>
 
             {/* List of Freshly Printed Cards */}
             {freshPrintedJobs.length === 0 ? (
-              <div className="text-center py-6 text-slate-400 text-xs space-y-1">
-                <Printer className="w-6 h-6 text-slate-300 mx-auto mb-1" />
-                <p className="font-semibold text-slate-600">No printed orders yet</p>
-                <p className="text-[10px]">When you mark an order Done, it appears here for counter calling.</p>
+              <div className="text-center py-8 text-slate-400 text-xs space-y-1.5 animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                </div>
+                <p className="font-bold text-slate-700 text-xs">All Printed Orders Cleared</p>
+                <p className="text-[10px] text-slate-400">When you complete an order, it appears here for counter pickup.</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-[75vh] overflow-y-auto pr-0.5">
+              <div className="space-y-2.5 max-h-[75vh] overflow-y-auto pr-0.5">
                 {freshPrintedJobs.map(fj => {
                   const hasMultiple = fj.files && fj.files.length > 1;
+                  const totalPages = fj.total_pages || (fj.files ? fj.files.reduce((acc, f) => acc + (f.page_count || 1) * (f.copies || 1), 0) : 1);
+                  const totalCopies = fj.files && fj.files.length > 0 ? fj.files[0].copies || 1 : 1;
+                  const isPaid = isJobPaid(fj);
+                  const isWiping = wipingFreshIds.has(fj.id);
+
                   return (
                     <div
                       key={fj.id}
-                      className="bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-200/80 rounded-xl p-2.5 space-y-2 transition shadow-2xs"
+                      className={`bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-emerald-300 rounded-2xl p-2.5 sm:p-3 space-y-2 transition-all shadow-2xs hover:shadow-xs relative ${
+                        isWiping ? 'animate-wipe-out' : ''
+                      }`}
                     >
-                      {/* Layer 1: Main Header - Token Number, Customer Name, Status & WhatsApp */}
-                      <div className="flex items-center justify-between gap-2 min-w-0">
+                      {/* Layer 1: Token, Customer Name, Status & Actions */}
+                      <div className="flex items-center justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          {/* Token Number - always prominent & never shrinking */}
-                          <span className="text-xs font-black text-blue-700 font-mono tracking-tight bg-blue-100/70 border border-blue-200 px-1.5 py-0.5 rounded-md shrink-0 shadow-2xs">
+                          <span className="text-xs font-black text-blue-700 font-mono tracking-tight bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-lg shrink-0 shadow-2xs">
                             #{fj.job_code}
                           </span>
-                          {/* Customer Name */}
-                          <span className="text-xs font-extrabold text-slate-800 truncate" title={fj.customer_name || 'Guest'}>
-                            👤 {fj.customer_name || 'Guest'}
+                          <span className="text-xs font-extrabold text-slate-800 truncate flex items-center gap-1" title={fj.customer_name || 'Guest'}>
+                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{fj.customer_name || 'Guest'}</span>
                           </span>
                         </div>
 
-                        {/* Ready Badge & WhatsApp Button */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shadow-2xs shrink-0 whitespace-nowrap">
-                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                             <span>Ready</span>
                           </span>
+
                           {fj.customer_phone && (
                             <button
                               type="button"
                               onClick={() => handleSendWhatsApp(fj)}
-                              className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition cursor-pointer shadow-2xs shrink-0"
+                              className="w-6 h-6 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition cursor-pointer shadow-2xs shrink-0"
                               title="Send WhatsApp Ready Message"
                             >
-                              <MessageCircle className="w-3 h-3" />
+                              <MessageCircle className="w-3.5 h-3.5" />
                             </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => setDismissedFreshIds(prev => new Set(prev).add(fj.id))}
+                            className="w-5 h-5 rounded-md hover:bg-rose-50 text-slate-300 hover:text-rose-500 flex items-center justify-center transition cursor-pointer shrink-0 ml-0.5"
+                            title="Dismiss (Order Handed Over)"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Layer 1.5: Metadata Sub-row - Timestamp & Purge Countdown */}
-                      <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500 pt-1 border-t border-emerald-100/80">
-                        {fj.completed_at ? (
-                          <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1 shrink-0">
-                            <Clock className="w-2.5 h-2.5 text-slate-400" />
-                            <span>{formatOrderTime(fj.completed_at)}</span>
+                      {/* Layer 2: PDF Name, Pages, Money & Paid Status */}
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-1.5">
+                        <div 
+                          className="flex items-center gap-1.5 min-w-0 flex-1" 
+                          title={fj.files && fj.files.length > 0 ? fj.files.map(f => f.original_name).join(', ') : 'Document'}
+                        >
+                          <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          <span className="truncate text-xs font-semibold text-slate-800">
+                            {fj.files && fj.files.length > 1
+                              ? `${fj.files[0]?.original_name || 'Document'} (+${fj.files.length - 1})`
+                              : fj.files?.[0]?.original_name || 'Document'}
                           </span>
-                        ) : <span />}
+                        </div>
 
-                        {/* Auto-Delete / Purge Countdown Pill */}
-                        {(() => {
-                          const cd = getJobDeleteCountdown(fj);
-                          if (!cd) return null;
-                          return (
-                            <span 
-                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 shadow-2xs ${
-                                cd.status === 'deleted' 
-                                  ? 'bg-slate-100 text-slate-500 border border-slate-200' 
-                                  : cd.isUrgent 
-                                    ? 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse' 
-                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
-                              }`}
-                              title={cd.status === 'deleted' ? 'Files purged from server storage' : 'File retention countdown'}
-                            >
-                              <Clock className="w-2.5 h-2.5 text-rose-500" />
-                              <span>{cd.text}</span>
-                            </span>
-                          );
-                        })()}
-                      </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200/90 px-1.5 py-0.5 rounded shadow-2xs whitespace-nowrap">
+                            {totalPages} {totalPages === 1 ? 'Page' : 'Pages'}
+                          </span>
 
-                      {/* Layer 2: Uploaded Document / PDF Name(s) */}
-                      <div className="space-y-1">
-                        {fj.files && fj.files.length > 0 ? (
-                          fj.files.map((doc, docIdx) => (
-                            <div
-                              key={doc.id || docIdx}
-                              className="bg-white border border-emerald-200/90 rounded-lg px-2 py-1 text-xs flex items-center gap-1.5 text-slate-800 font-semibold shadow-2xs min-w-0"
-                              title={doc.original_name}
-                            >
-                              {hasMultiple && (
-                                <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-1 rounded shrink-0">
-                                  #{docIdx + 1}
-                                </span>
-                              )}
-                              <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                              <span className="truncate flex-1 min-w-0 text-[11px]">{doc.original_name}</span>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="bg-white border border-emerald-200/90 rounded-lg px-2.5 py-1 text-xs flex items-center gap-1.5 text-slate-800 font-semibold shadow-2xs min-w-0">
-                            <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                            <span className="truncate flex-1 min-w-0 text-[11px]">Document</span>
-                          </div>
-                        )}
+                          <span className="text-xs font-black font-mono text-slate-900 tracking-tight whitespace-nowrap">
+                            ৳{parseFloat(fj.total_price || 0).toFixed(2)}
+                          </span>
+
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-2xs whitespace-nowrap ${
+                            isPaid
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              : 'bg-amber-100 text-amber-900 border border-amber-300'
+                          }`}>
+                            {isPaid ? '✓ PAID' : 'CASH DUE'}
+                          </span>
+                        </div>
                       </div>
 
                     </div>
@@ -2150,6 +2312,17 @@ export default function ShopDashboard({ shop, onLogout }) {
             )}
 
           </div>
+
+          {/* Google AdSense Space (Directly Under Freshly Printed Box) */}
+          <div className="pt-0.5">
+            <GoogleAdSense
+              client={adsenseConfig?.clientId}
+              slot={adsenseConfig?.slotShopSide || adsenseConfig?.slotShopTop}
+              format="rectangle"
+              className="my-0"
+            />
+          </div>
+
         </aside>
 
       </div>

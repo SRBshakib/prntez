@@ -139,10 +139,13 @@ router.post('/', upload.array('files', 20), async (req, res) => {
         grandTotal = Math.max(0, grandTotal - discountApplied);
 
         // Payment status based on method & trx
+        // For Bangladesh MFS (bKash/Nagad), customer provides last 4 digits of their number.
+        // Shop verifies payment by matching those digits in their bKash/Nagad transaction history.
         let payStatus = 'unpaid';
         const method = (payment_method || 'cash').toLowerCase();
         if (method === 'bkash' || method === 'nagad') {
-            payStatus = payment_trx_id && payment_trx_id.trim() ? 'paid_online_pending_verify' : 'unpaid';
+            const last4 = (payment_trx_id || '').trim();
+            payStatus = last4.length === 4 ? 'mfs_pending' : 'unpaid';
         }
 
         // Set expiry: 30 minutes from now

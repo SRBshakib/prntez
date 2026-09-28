@@ -16,6 +16,30 @@ export default function App() {
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminError, setAdminError] = useState('');
 
+  const navigateTo = (newView, data = null) => {
+    setView(newView);
+    let newPath = '/';
+    if (newView === 'shop') {
+      newPath = '/shop';
+    } else if (newView === 'admin') {
+      newPath = '/admin';
+    } else if (newView === 'track') {
+      const code = data || jobCode;
+      if (data) setJobCode(data);
+      newPath = code ? `/track/${code}` : '/';
+    } else if (newView === 'upload') {
+      const slug = data || shopSlug;
+      if (data) setShopSlug(data);
+      newPath = slug ? `/?shop=${encodeURIComponent(slug)}` : '/';
+    } else {
+      newPath = '/';
+    }
+
+    if (window.location.pathname + window.location.search !== newPath) {
+      window.history.pushState({ view: newView }, '', newPath);
+    }
+  };
+
   useEffect(() => {
     // Restore persistent shop session
     const savedShop = localStorage.getItem('prntez_shop');
@@ -23,29 +47,32 @@ export default function App() {
       try { setCurrentShop(JSON.parse(savedShop)); } catch (_) {}
     }
 
-    // Check URL path or params for initial routing
-    const path = window.location.pathname;
-    const urlParams = new URLSearchParams(window.location.search);
-    const shopParam = urlParams.get('shop');
+    const syncRouteFromUrl = () => {
+      const path = window.location.pathname;
+      const urlParams = new URLSearchParams(window.location.search);
+      const shopParam = urlParams.get('shop');
 
-    if (path.startsWith('/track/')) {
-      const code = path.replace('/track/', '');
-      if (code) {
-        setJobCode(code);
-        setView('track');
+      if (path.startsWith('/track/')) {
+        const code = path.replace('/track/', '');
+        if (code) {
+          setJobCode(code);
+          setView('track');
+        }
+      } else if (path === '/shop' || urlParams.get('view') === 'shop') {
+        setView('shop');
+      } else if (path === '/admin' || urlParams.get('view') === 'admin') {
+        setView('admin');
+      } else if (shopParam) {
+        setShopSlug(shopParam);
+        setView('upload');
+      } else {
+        setView('home');
       }
-    } else if (path === '/shop' || urlParams.get('view') === 'shop') {
-      setView('shop');
-    } else if (path === '/admin' || urlParams.get('view') === 'admin') {
-      setView('admin');
-    } else if (shopParam) {
-      // Customer arrived via shop QR code — go straight to upload
-      setShopSlug(shopParam);
-      setView('upload');
-    } else {
-      // No special path — show landing page
-      setView('home');
-    }
+    };
+
+    syncRouteFromUrl();
+    window.addEventListener('popstate', syncRouteFromUrl);
+    return () => window.removeEventListener('popstate', syncRouteFromUrl);
   }, []);
 
   const handleAdminLogin = async (e) => {
@@ -60,6 +87,7 @@ export default function App() {
       const data = await res.json();
       if (data.success) {
         setAdminAuth(true);
+        navigateTo('admin');
       } else {
         setAdminError(data.error || 'Invalid admin password');
       }
@@ -71,12 +99,11 @@ export default function App() {
   // Navigation handler used by LandingPage
   const handleLandingNavigate = (target, data) => {
     if (target === 'track' && data) {
-      setJobCode(data);
-      setView('track');
+      navigateTo('track', data);
     } else if (target === 'shop') {
-      setView('shop');
+      navigateTo('shop');
     } else if (target === 'upload') {
-      setView('upload');
+      navigateTo('upload', data);
     }
   };
 
@@ -88,7 +115,7 @@ export default function App() {
         <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6">
           <div className="max-w-5xl mx-auto flex items-center justify-between h-16">
             <div
-              onClick={() => setView('home')}
+              onClick={() => navigateTo('home')}
               className="flex items-center gap-2 text-blue-600 font-extrabold text-xl cursor-pointer select-none tracking-tight"
             >
               <Printer className="w-6 h-6" />
@@ -98,7 +125,7 @@ export default function App() {
             <div className="flex items-center gap-2 sm:gap-3">
               {view !== 'home' && (
                 <button
-                  onClick={() => setView('home')}
+                  onClick={() => navigateTo('home')}
                   className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
                 >
                   <Home className="w-3.5 h-3.5" />
@@ -106,14 +133,14 @@ export default function App() {
                 </button>
               )}
               <button
-                onClick={() => setView('shop')}
+                onClick={() => navigateTo('shop')}
                 className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
               >
                 <Store className="w-3.5 h-3.5" />
                 <span>Shop POS</span>
               </button>
               <button
-                onClick={() => setView('admin')}
+                onClick={() => navigateTo('admin')}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"
                 title="Admin Hub"
               >
@@ -134,8 +161,7 @@ export default function App() {
           <CustomerUpload
             initialSlug={shopSlug}
             onJobCreated={(code) => {
-              setJobCode(code);
-              setView('track');
+              navigateTo('track', code);
             }}
           />
         )}
@@ -143,7 +169,7 @@ export default function App() {
         {view === 'track' && (
           <TrackJob
             jobCode={jobCode}
-            onBack={() => setView(shopSlug ? 'upload' : 'home')}
+            onBack={() => navigateTo(shopSlug ? 'upload' : 'home')}
           />
         )}
 
@@ -154,7 +180,7 @@ export default function App() {
               onLogout={() => {
                 localStorage.removeItem('prntez_shop');
                 setCurrentShop(null);
-                setView('home');
+                navigateTo('home');
               }}
             />
           ) : (
@@ -169,7 +195,7 @@ export default function App() {
             <AdminDashboard
               onLogout={() => {
                 setAdminAuth(false);
-                setView('home');
+                navigateTo('home');
               }}
             />
           ) : (

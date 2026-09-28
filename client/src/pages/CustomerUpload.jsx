@@ -291,6 +291,15 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
       return;
     }
 
+    // Validate last 4 digits for bKash/Nagad manual payment
+    if ((paymentMethod === 'bkash' || paymentMethod === 'nagad') && onlinePayMode === 'manual') {
+      const digits = paymentTrxId.replace(/\D/g, '');
+      if (!digits || digits.length !== 4) {
+        setError(`Please enter the last 4 digits of your ${paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} number to confirm payment.`);
+        return;
+      }
+    }
+
     setUploading(true);
     setUploadProgress(20);
     setError('');
@@ -809,150 +818,242 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           </div>
         </div>
 
-        {/* Payment Selection & bKash / Nagad Number Box (Feature 4) */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 space-y-2.5 sm:space-y-3">
+        {/* Payment Selection — Clean & Smooth */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
               <CreditCard className="w-4 h-4 text-blue-600" />
-              Payment Preference
+              Payment Method
             </h4>
             <span className="text-[10px] sm:text-[11px] font-semibold text-slate-400">Pay at counter or online</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-            {[
-              { id: 'cash', label: '💵 Cash', desc: 'At counter' },
-              { id: 'bkash', label: '🌸 bKash', desc: shop?.bkash_number ? 'Direct pay' : 'At counter' },
-              { id: 'nagad', label: '🟠 Nagad', desc: shop?.nagad_number ? 'Direct pay' : 'At counter' }
-            ].map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPaymentMethod(p.id)}
-                className={`p-2 sm:p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                  paymentMethod === p.id
-                    ? 'border-blue-600 bg-blue-50/60 font-bold text-blue-900 ring-1 ring-blue-500 shadow-2xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <div className="text-[10px] sm:text-[11px] font-bold truncate leading-tight">{p.label}</div>
-                <div className="text-[8px] sm:text-[9px] text-slate-400 mt-0.5 truncate">{p.desc}</div>
-              </button>
-            ))}
+          <div className="grid grid-cols-3 gap-2">
+            {/* Cash */}
+            <button
+              type="button"
+              onClick={() => { setPaymentMethod('cash'); setPaymentTrxId(''); }}
+              className={`p-2.5 sm:p-3 rounded-xl border-2 text-center transition cursor-pointer ${
+                paymentMethod === 'cash'
+                  ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-400 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="text-xl mb-1">💵</div>
+              <div className="text-[11px] font-bold text-slate-800">Cash</div>
+              <div className="text-[9px] text-slate-400 mt-0.5">At counter</div>
+            </button>
+
+            {/* bKash with official logo */}
+            <button
+              type="button"
+              onClick={() => { setPaymentMethod('bkash'); setPaymentTrxId(''); }}
+              className={`p-2.5 sm:p-3 rounded-xl border-2 text-center transition cursor-pointer ${
+                paymentMethod === 'bkash'
+                  ? 'border-pink-500 bg-pink-50/60 ring-1 ring-pink-400 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <svg className="w-7 h-7 mx-auto mb-1" viewBox="0 0 48 48" fill="none">
+                <rect width="48" height="48" rx="12" fill="#E2136E"/>
+                <path d="M14 16l6 4-6 4V16z" fill="white"/>
+                <path d="M22 14l6 4-6 4V14z" fill="white" opacity="0.7"/>
+                <text x="14" y="36" fill="white" fontSize="9" fontWeight="bold" fontFamily="sans-serif">bKash</text>
+              </svg>
+              <div className="text-[11px] font-bold text-slate-800">bKash</div>
+              <div className="text-[9px] text-pink-600 font-semibold mt-0.5">Gateway · App</div>
+            </button>
+
+            {/* Nagad with official logo */}
+            <button
+              type="button"
+              onClick={() => { setPaymentMethod('nagad'); setPaymentTrxId(''); }}
+              className={`p-2.5 sm:p-3 rounded-xl border-2 text-center transition cursor-pointer ${
+                paymentMethod === 'nagad'
+                  ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-400 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <svg className="w-7 h-7 mx-auto mb-1" viewBox="0 0 48 48" fill="none">
+                <rect width="48" height="48" rx="12" fill="#F6921E"/>
+                <circle cx="24" cy="18" r="6" fill="white"/>
+                <path d="M18 28h12l-2 6H20l-2-6z" fill="white" opacity="0.85"/>
+                <text x="10" y="44" fill="white" fontSize="8" fontWeight="bold" fontFamily="sans-serif">Nagad</text>
+              </svg>
+              <div className="text-[11px] font-bold text-slate-800">Nagad</div>
+              <div className="text-[9px] text-orange-600 font-semibold mt-0.5">Gateway · App</div>
+            </button>
           </div>
 
-          {/* bKash / Nagad Payment Instructions & Mode Selector */}
+          {/* bKash / Nagad — Dual Mode: Payment Gateway (Sandbox) & Manual App Payment */}
           {(paymentMethod === 'bkash' || paymentMethod === 'nagad') && (
-            <div className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3 animate-in fade-in">
-              
-              {/* Shop Merchant Badge */}
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                  {shop?.name || 'Print Shop'} · Direct Payout
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
-                  paymentMethod === 'bkash'
-                    ? (shop?.bkash_type === 'merchant' ? 'bg-pink-100 text-pink-800 border border-pink-200' : 'bg-slate-100 text-slate-700')
-                    : (shop?.nagad_type === 'merchant' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700')
-                }`}>
-                  {paymentMethod === 'bkash'
-                    ? (shop?.bkash_type === 'merchant' ? 'bKash Merchant (Make Payment)' : 'bKash Personal')
-                    : (shop?.nagad_type === 'merchant' ? 'Nagad Merchant (Payment)' : 'Nagad Personal')}
-                </span>
-              </div>
-
-              {pgwConfig.enabled !== false && (
-                <div className="flex items-center gap-1.5 p-1 bg-white rounded-xl border border-slate-200">
+            <div className={`rounded-xl border overflow-hidden transition-all ${
+              paymentMethod === 'bkash' ? 'border-pink-200 bg-gradient-to-b from-pink-50/80 to-white' : 'border-orange-200 bg-gradient-to-b from-orange-50/80 to-white'
+            }`}>
+              {/* Payment Mode Selector: Gateway Sandbox vs Manual App */}
+              <div className="p-3 border-b border-slate-200/80 bg-white/70">
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl">
                   <button
                     type="button"
-                    onClick={() => setOnlinePayMode('gateway')}
-                    className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    onClick={() => { setOnlinePayMode('gateway'); setError(''); }}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       onlinePayMode === 'gateway'
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50'
+                        ? paymentMethod === 'bkash'
+                          ? 'bg-pink-600 text-white shadow-xs'
+                          : 'bg-orange-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                     }`}
                   >
-                    <span>⚡ Instant Auto Checkout</span>
+                    <span>⚡ Gateway (Sandbox)</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/20 font-medium hidden sm:inline">Instant</span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => setOnlinePayMode('manual')}
-                    className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    onClick={() => { setOnlinePayMode('manual'); setError(''); }}
+                    className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       onlinePayMode === 'manual'
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50'
+                        ? paymentMethod === 'bkash'
+                          ? 'bg-pink-600 text-white shadow-xs'
+                          : 'bg-orange-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                     }`}
                   >
-                    <span>📱 bKash App / TrxID</span>
+                    <span>📱 Manual App</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/20 font-medium hidden sm:inline">4 Digits</span>
                   </button>
                 </div>
-              )}
+              </div>
 
-              {onlinePayMode === 'gateway' && pgwConfig.enabled !== false ? (
-                <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-blue-900 space-y-1">
-                  <p className="font-extrabold text-[11px] flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    Automated Checkout to {shop?.name || 'Shop'}
-                  </p>
-                  <p className="text-[10px] text-blue-800 leading-relaxed">
-                    Clicking submit will redirect you to secure {paymentMethod.toUpperCase()} checkout. Money is credited directly to {shop?.name || 'this shop'}'s merchant account, and your print queue is confirmed immediately.
+              {/* Mode 1: Payment Gateway (Sandbox / Direct PGW) */}
+              {onlinePayMode === 'gateway' ? (
+                <div className="p-4 space-y-3">
+                  <div className="flex items-start gap-3 bg-white p-3 rounded-xl border border-slate-200/90 shadow-2xs">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 font-bold ${
+                      paymentMethod === 'bkash' ? 'bg-pink-500' : 'bg-orange-500'
+                    }`}>
+                      ⚡
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-extrabold text-slate-800">
+                          {paymentMethod === 'bkash' ? 'bKash Tokenized Gateway (Sandbox)' : 'Nagad Online Gateway'}
+                        </p>
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Auto-Confirmed
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        After submitting, you will be redirected to the secure {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} checkout / test sandbox.
+                        Payment verifies <strong>instantly</strong> with no manual checks needed.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">
+                    <span className="text-slate-600 font-medium">Checkout Amount:</span>
+                    <span className="font-mono font-extrabold text-slate-900 text-sm">৳{total.toFixed(2)}</span>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 text-center">
+                    💡 Click <strong>"Pay with {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'}"</strong> below to launch the sandbox checkout.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
-                  {/* Shop QR Code if uploaded by shopkeeper */}
-                  {((paymentMethod === 'bkash' && shop?.bkash_qr_image) || (paymentMethod === 'nagad' && shop?.nagad_qr_image)) && (
-                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                      <img
-                        src={paymentMethod === 'bkash' ? shop.bkash_qr_image : shop.nagad_qr_image}
-                        alt="Shop QR"
-                        className="w-16 h-16 object-contain rounded-lg border border-slate-200 bg-white shrink-0"
-                      />
-                      <div className="text-[10px] text-slate-600 space-y-0.5">
-                        <p className="font-extrabold text-slate-800 text-xs flex items-center gap-1">
-                          <QrCode className="w-3.5 h-3.5 text-blue-600" />
-                          Scan Shop Standee QR
-                        </p>
-                        <p className="text-slate-500">Open {paymentMethod.toUpperCase()} App → Scan QR Code → Enter amount <strong>৳{total.toFixed(2)}</strong></p>
-                      </div>
+                /* Mode 2: Manual App Payment (Send Money & 4 Digits) */
+                <div className="space-y-0">
+                  {/* Step 1: Send Money To */}
+                  <div className="p-3.5 space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-5 h-5 rounded-full text-[10px] font-extrabold flex items-center justify-center text-white ${
+                        paymentMethod === 'bkash' ? 'bg-pink-500' : 'bg-orange-500'
+                      }`}>1</span>
+                      <span className="text-[11px] font-bold text-slate-700">
+                        Send <strong className="text-slate-900">৳{total.toFixed(2)}</strong> to this {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} number
+                      </span>
                     </div>
-                  )}
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">
-                        Shop {paymentMethod.toUpperCase()} {paymentMethod === 'bkash' && shop?.bkash_type === 'merchant' ? 'Merchant' : 'Account'} Number
-                      </p>
-                      <p className="text-xs sm:text-sm font-mono font-extrabold text-slate-800">
-                        {paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone || '017XXXXXXXX') : (shop?.nagad_number || shop?.phone || '018XXXXXXXX')}
-                      </p>
+                    <div className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-slate-200 shadow-2xs">
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">
+                          {shop?.name || 'Shop'} · {paymentMethod === 'bkash'
+                            ? (shop?.bkash_type === 'merchant' ? 'Merchant' : 'Personal')
+                            : (shop?.nagad_type === 'merchant' ? 'Merchant' : 'Personal')}
+                        </p>
+                        <p className="text-sm font-mono font-extrabold text-slate-900 mt-0.5">
+                          {paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone || '017XXXXXXXX') : (shop?.nagad_number || shop?.phone || '018XXXXXXXX')}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const num = paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone) : (shop?.nagad_number || shop?.phone);
+                          if (num) navigator.clipboard.writeText(num);
+                          setCopiedNumber(true);
+                          setTimeout(() => setCopiedNumber(false), 2000);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                          copiedNumber
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                        }`}
+                      >
+                        {copiedNumber ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        {copiedNumber ? 'Copied!' : 'Copy'}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const num = paymentMethod === 'bkash' ? (shop?.bkash_number || shop?.phone) : (shop?.nagad_number || shop?.phone);
-                        if (num) navigator.clipboard.writeText(num);
-                        setCopiedNumber(true);
-                        setTimeout(() => setCopiedNumber(false), 2000);
-                      }}
-                      className="px-2 sm:px-2.5 py-1 sm:py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-[10px] sm:text-xs font-bold text-slate-700 flex items-center gap-1 shadow-2xs"
-                    >
-                      {copiedNumber ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedNumber ? 'Copied!' : 'Copy'}</span>
-                    </button>
+
+                    {/* QR Code if available */}
+                    {((paymentMethod === 'bkash' && shop?.bkash_qr_image) || (paymentMethod === 'nagad' && shop?.nagad_qr_image)) && (
+                      <div className="flex items-center gap-2.5 bg-white p-2 rounded-lg border border-slate-200">
+                        <img
+                          src={paymentMethod === 'bkash' ? shop.bkash_qr_image : shop.nagad_qr_image}
+                          alt="QR"
+                          className="w-12 h-12 object-contain rounded border border-slate-200 bg-white shrink-0"
+                        />
+                        <p className="text-[10px] text-slate-500">Or scan this QR from your {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} app</p>
+                      </div>
+                    )}
                   </div>
 
-                  <div>
-                    <label className="text-[9px] sm:text-[10px] font-bold text-slate-500 block mb-1">
-                      bKash Transaction ID / Sender Phone
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 9JA2K1L5 or 017XXXXXXXX"
-                      value={paymentTrxId}
-                      onChange={e => setPaymentTrxId(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono"
-                    />
+                  {/* Step 2: Verify with last 4 digits */}
+                  <div className={`p-3.5 border-t space-y-2.5 ${
+                    paymentMethod === 'bkash' ? 'border-pink-100' : 'border-orange-100'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-5 h-5 rounded-full text-[10px] font-extrabold flex items-center justify-center text-white ${
+                        paymentMethod === 'bkash' ? 'bg-pink-500' : 'bg-orange-500'
+                      }`}>2</span>
+                      <span className="text-[11px] font-bold text-slate-700">
+                        Enter last 4 digits of <strong>your</strong> {paymentMethod === 'bkash' ? 'bKash' : 'Nagad'} number
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-slate-500 leading-relaxed pl-7">
+                      The shopkeeper verifies your payment by matching these digits in their app.
+                    </p>
+                    <div className="pl-7">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="● ● ● ●"
+                        value={paymentTrxId}
+                        onChange={e => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                          setPaymentTrxId(val);
+                        }}
+                        className={`w-full max-w-[180px] bg-white border-2 rounded-xl px-4 py-2.5 text-xl font-mono font-extrabold text-center tracking-[0.4em] transition ${
+                          paymentTrxId.length === 4
+                            ? 'border-emerald-400 bg-emerald-50/30 ring-1 ring-emerald-300'
+                            : paymentMethod === 'bkash' ? 'border-pink-200 focus:border-pink-400 focus:ring-1 focus:ring-pink-400' : 'border-orange-200 focus:border-orange-400 focus:ring-1 focus:ring-orange-400'
+                        }`}
+                      />
+                      {paymentTrxId.length === 4 && (
+                        <p className="text-[10px] font-bold text-emerald-700 flex items-center gap-1 mt-1.5">
+                          <CheckCircle className="w-3 h-3" /> Ready — shop will verify at counter
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

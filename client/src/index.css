@@ -300,3 +300,32 @@
   animation: paper-eject 2.5s ease-in-out infinite alternate;
 }
 
+/* Staggered Wipe-Out from Bottom Animation */
+@keyframes wipe-out-bottom {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    max-height: 200px;
+    margin-bottom: 0.5rem;
+  }
+  50% {
+    opacity: 0.35;
+    transform: translateX(30px) scale(0.96);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(110%) scale(0.9);
+    max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+    overflow: hidden;
+  }
+}
+
+.animate-wipe-out {
+  animation: wipe-out-bottom 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+
