@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2, Clock, Printer, Store, Phone, MapPin, Sparkles, Loader2,
   ArrowLeft, Copy, Check, QrCode, Bell, BellRing, MessageCircle, CreditCard, Percent,
-  Download, AlertTriangle, FileText, ShieldCheck, Lock, Trash2
+  Download, AlertTriangle, FileText, ShieldCheck, Lock, Trash2, Image as ImageIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { socket, playChime } from '../socket';
@@ -66,6 +66,19 @@ export default function TrackJob({ jobCode, onBack }) {
         .catch(() => {});
     }
   }, [now, job?.id, job?.status, job?.files_deleted, job?.completed_at, job?.updated_at]);
+
+  // File type icon helper
+  const getFileIcon = (fileName) => {
+    if (!fileName) return <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />;
+    const ext = fileName.split('.').pop().toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) {
+      return <ImageIcon className="w-3.5 h-3.5 text-teal-600 shrink-0" />;
+    }
+    if (['doc', 'docx'].includes(ext)) {
+      return <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
+    }
+    return <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />;
+  };
 
   // Customer manual immediate file deletion
   const handleDeleteFilesNow = async () => {
@@ -490,14 +503,35 @@ export default function TrackJob({ jobCode, onBack }) {
                 {job.customer_name?.includes('Anonymous') ? (job.customer_name.split(' ').pop() || '👤') : '👤'}
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] text-slate-400 font-semibold uppercase">Customer</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Customer</p>
+                  {job.service_type === 'edit' ? (
+                    <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black px-1.5 py-0.2 rounded-md uppercase">
+                      ✏️ Edit & Print
+                    </span>
+                  ) : job.service_type === 'photo' ? (
+                    <span className="bg-pink-100 text-pink-900 border border-pink-300 text-[9px] font-black px-1.5 py-0.2 rounded-md uppercase">
+                      🖼️ Photo Print
+                    </span>
+                  ) : job.service_type === 'bind' ? (
+                    <span className="bg-purple-100 text-purple-900 border border-purple-300 text-[9px] font-black px-1.5 py-0.2 rounded-md uppercase">
+                      📖 Binding
+                    </span>
+                  ) : null}
+                </div>
                 <p className="text-xs font-bold text-slate-800 truncate max-w-[140px] sm:max-w-[220px]">{job.customer_name || 'Guest'}</p>
               </div>
             </div>
             <div className="text-right shrink-0">
               <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Due</p>
               <div className="flex items-center justify-end gap-1.5">
-                <p className="text-sm sm:text-base font-extrabold text-slate-900">৳{parseFloat(job.total_price || 0).toFixed(2)}</p>
+                {job.service_type === 'edit' && parseFloat(job.total_price || 0) === 0 ? (
+                  <span className="text-xs font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                    Custom Quote
+                  </span>
+                ) : (
+                  <p className="text-sm sm:text-base font-extrabold text-slate-900">৳{parseFloat(job.total_price || 0).toFixed(2)}</p>
+                )}
                 {parseFloat(job.discount_applied || 0) > 0 && (
                   <span className="text-[9px] sm:text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full">
                     -৳{parseFloat(job.discount_applied).toFixed(2)} off
@@ -763,12 +797,22 @@ export default function TrackJob({ jobCode, onBack }) {
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Your Documents ({job.files.length} {job.files.length === 1 ? 'file' : 'files'})</span>
+                  <span>
+                    {job.service_type === 'edit'
+                      ? `Your Files for Editing (${job.files.length} ${job.files.length === 1 ? 'file' : 'files'})`
+                      : job.service_type === 'photo'
+                      ? `Your Photos for Print (${job.files.length} ${job.files.length === 1 ? 'item' : 'items'})`
+                      : `Your Documents (${job.files.length} ${job.files.length === 1 ? 'file' : 'files'})`}
+                  </span>
                 </span>
                 <div className="flex items-center gap-1.5">
                   {job.files_deleted ? (
                     <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
                       <Lock className="w-2.5 h-2.5" /> Storage Wiped
+                    </span>
+                  ) : job.service_type === 'edit' ? (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      ✏️ Edit & Modification
                     </span>
                   ) : (
                     <span className="text-[10px] font-bold text-slate-400">
@@ -788,30 +832,83 @@ export default function TrackJob({ jobCode, onBack }) {
                       <span className="text-[9px] font-black bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
                         #{fIdx + 1}
                       </span>
-                      <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                      {getFileIcon(file.original_name)}
                       <p className="font-bold text-xs text-slate-800 truncate flex-1 min-w-0" title={file.original_name}>
                         {file.original_name}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap text-[10px]">
-                      <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
-                        📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
-                      </span>
-                      <span className="bg-blue-50/80 px-1.5 sm:px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
-                        🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
-                      </span>
-                      <span className={`px-1.5 sm:px-2 py-0.5 rounded-md border font-bold ${
-                        file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
-                      }`}>
-                        {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
-                      </span>
-                      <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
-                        📐 {file.paper_size || 'A4'}
-                      </span>
-                      <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
-                        {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
-                      </span>
+                      {job.service_type === 'edit' ? (
+                        <>
+                          <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 font-bold">
+                            ✏️ Sent for Editing
+                          </span>
+                          {job.service_detail && (
+                            <span className="bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 text-amber-900 font-semibold" title={job.service_detail}>
+                              📝 {job.service_detail}
+                            </span>
+                          )}
+                          <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
+                            📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                          </span>
+                          <span className="bg-blue-50/80 px-1.5 sm:px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
+                            🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                          </span>
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded-md border font-bold ${
+                            file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }`}>
+                            {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                          </span>
+                          <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
+                            📐 {file.paper_size || 'A4'}
+                          </span>
+                          <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
+                            {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                          </span>
+                          <span className="bg-amber-50/60 px-2 py-0.5 rounded-md border border-amber-200 text-amber-800 text-[9px] font-bold">
+                            ⏳ Manual Shop Editing
+                          </span>
+                        </>
+                      ) : job.service_type === 'photo' ? (
+                        <>
+                          <span className="bg-pink-100 text-pink-900 px-2 py-0.5 rounded-md border border-pink-300 font-bold">
+                            🖼️ {job.service_detail === 'passport_8' ? '8x Passport' : job.service_detail === 'stamp_4' ? '4x Stamp' : job.service_detail === 'photo_4r' ? '4R Photo (4×6)' : job.service_detail === 'photo_a4' ? 'A4 Glossy' : '4x Passport'}
+                          </span>
+                          <span className="bg-blue-50/80 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
+                            📷 {file.copies || 1}x Set
+                          </span>
+                          <span className="bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
+                            ✨ Glossy Photo Paper
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {job.service_type === 'bind' && (
+                            <span className="bg-purple-100 text-purple-900 px-2 py-0.5 rounded-md border border-purple-300 font-bold">
+                              📖 {job.service_detail === 'tape' ? 'Tape Binding' : job.service_detail === 'hardcover' ? 'Hardcover Thesis' : 'Spiral Binding'}
+                            </span>
+                          )}
+                          <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
+                            📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                          </span>
+                          <span className="bg-blue-50/80 px-1.5 sm:px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
+                            🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                          </span>
+                          <span className={`px-1.5 sm:px-2 py-0.5 rounded-md border font-bold ${
+                            file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }`}>
+                            {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                          </span>
+                          <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
+                            📐 {file.paper_size || 'A4'}
+                          </span>
+                          <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
+                            {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                          </span>
+                        </>
+                      )}
+
                       {job.files_deleted ? (
                         <span className="bg-slate-100 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-300 text-slate-500 font-bold text-[9px]">
                           🔒 Purged
@@ -927,24 +1024,34 @@ export default function TrackJob({ jobCode, onBack }) {
           {/* Stepper Progress */}
           <div className="py-2 space-y-3">
             {[
-              { id: 'pending', label: 'Order Received', desc: 'Queued at print counter', icon: Clock },
-              { id: 'printing', label: 'Printing in Progress', desc: 'Being printed right now', icon: Printer },
+              {
+                id: 'pending',
+                label: job.service_type === 'photo' ? 'Photo Order Received' : job.service_type === 'edit' ? 'Edit Request Received' : job.service_type === 'bind' ? 'Print & Binding Queued' : 'Order Received',
+                desc: job.service_type === 'photo' ? 'Queued at photo studio counter' : job.service_type === 'edit' ? 'Queued for shop editing' : 'Queued at print counter',
+                icon: Clock
+              },
+              {
+                id: 'printing',
+                label: job.service_type === 'photo' ? 'Photo Processing & Printing' : job.service_type === 'edit' ? 'Editing & Printing in Progress' : job.service_type === 'bind' ? 'Printing & Binding in Progress' : 'Printing in Progress',
+                desc: job.service_type === 'photo' ? 'Shop is editing and printing your photos' : job.service_type === 'edit' ? 'Shopkeeper is editing your document' : 'Being printed right now',
+                icon: job.service_type === 'photo' ? ImageIcon : Printer
+              },
               {
                 id: 'done',
                 label: isPrinted && isUnpaid
                   ? (isMfsPending 
                       ? 'Ready for Pickup · Verification Pending' 
-                      : (job.payment_method === 'cash' || !job.payment_method ? 'Ready for Pickup! Pay Cash at Counter' : 'Ready for Pickup! Make Payment'))
+                      : (job.payment_method === 'cash' || !job.payment_method ? '✨ Ready for Pickup! Pay Cash at Counter' : '✨ Ready for Pickup! Make Payment'))
                   : isPrinted
-                    ? 'Ready for Pickup! (Paid ✓)'
+                    ? '✨ Ready for Pickup! (Paid ✓)'
                     : 'Ready for Pickup!',
                 desc: isPrinted && isUnpaid
                   ? (isMfsPending
-                      ? `Printing complete! Shop is verifying your last 4 digits (****${job.payment_trx_id || ''}) to release your documents.`
+                      ? `Complete! Shop is verifying your last 4 digits (****${job.payment_trx_id || ''}) to release your order.`
                       : (job.payment_method === 'cash' || !job.payment_method
-                          ? `Printing is complete! Hand ৳${parseFloat(job.total_price || 0).toFixed(2)} cash to the counter to collect your printout.`
-                          : `Printing is complete! Please make payment (৳${parseFloat(job.total_price || 0).toFixed(2)}) to collect your printout.`))
-                  : 'Collect your printout at the counter',
+                          ? `Your ${job.service_type === 'photo' ? 'photos are' : job.service_type === 'edit' ? 'edited document is' : 'order is'} ready! Hand ৳${parseFloat(job.total_price || 0).toFixed(2)} cash at the counter to collect.`
+                          : `Your ${job.service_type === 'photo' ? 'photos are' : job.service_type === 'edit' ? 'edited document is' : 'order is'} ready! Please make payment (৳${parseFloat(job.total_price || 0).toFixed(2)}) to collect.`))
+                  : `Collect your ${job.service_type === 'photo' ? 'photo prints' : job.service_type === 'edit' ? 'edited documents' : 'printout'} at the counter`,
                 icon: isPrinted && isUnpaid ? AlertTriangle : CheckCircle2,
                 isAttention: isPrinted && isUnpaid
               }

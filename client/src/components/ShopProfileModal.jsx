@@ -26,6 +26,14 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
     price_color: shop?.price_color || '10.00',
     price_legal: shop?.price_legal || '3.00',
     price_a3: shop?.price_a3 || '15.00',
+    price_passport_4: shop?.price_passport_4 || '30.00',
+    price_passport_8: shop?.price_passport_8 || '50.00',
+    price_stamp_4: shop?.price_stamp_4 || '20.00',
+    price_photo_4r: shop?.price_photo_4r || '20.00',
+    price_photo_a4: shop?.price_photo_a4 || '60.00',
+    price_bind_spiral: shop?.price_bind_spiral || '30.00',
+    price_bind_tape: shop?.price_bind_tape || '20.00',
+    price_bind_hardcover: shop?.price_bind_hardcover || '300.00',
     bkash_number: shop?.bkash_number || '',
     bkash_type: shop?.bkash_type || 'merchant',
     bkash_qr_image: shop?.bkash_qr_image || '',
@@ -537,6 +545,104 @@ export default function ShopProfileModal({ shop, onSave, onClose }) {
                     onChange={e => setFormData({ ...formData, price_a3: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold"
                   />
+                </div>
+              </div>
+
+              {/* Photo Studio Rates */}
+              <div className="p-4 bg-pink-50/50 rounded-2xl border border-pink-200/80 space-y-3">
+                <p className="font-bold text-pink-900 flex items-center gap-1.5 text-xs">
+                  <span>🖼️</span> Photo Studio Rates (Glossy Paper)
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Passport 4-Pack (৳)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.price_passport_4}
+                      onChange={e => setFormData({ ...formData, price_passport_4: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-pink-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Passport 8-Pack (৳)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.price_passport_8}
+                      onChange={e => setFormData({ ...formData, price_passport_8: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-pink-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Stamp 4-Pack (৳)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.price_stamp_4}
+                      onChange={e => setFormData({ ...formData, price_stamp_4: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-pink-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">4R Photo 4x6" (৳)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.price_photo_4r}
+                      onChange={e => setFormData({ ...formData, price_photo_4r: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800"
+                    />
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">A4 Photo Sheet (৳)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.price_photo_a4}
+                      onChange={e => setFormData({ ...formData, price_photo_a4: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Book Binding Extra Rates */}
+              <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-200/80 space-y-3">
+                <p className="font-bold text-purple-900 flex items-center gap-1.5 text-xs">
+                  <span>📖</span> Book Binding Extra Rates
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Spiral Binding (৳)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.price_bind_spiral}
+                      onChange={e => setFormData({ ...formData, price_bind_spiral: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-purple-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Tape Binding (৳)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.price_bind_tape}
+                      onChange={e => setFormData({ ...formData, price_bind_tape: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-purple-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Hardcover Thesis (৳)</label>
+                    <input
+                      type="number"
+                      step="5"
+                      value={formData.price_bind_hardcover}
+                      onChange={e => setFormData({ ...formData, price_bind_hardcover: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-purple-700"
+                    />
+                  </div>
                 </div>
               </div>
 

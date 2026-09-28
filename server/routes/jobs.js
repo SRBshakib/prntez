@@ -52,6 +52,9 @@ router.get('/', async (req, res) => {
                    COALESCE(payment_status, 'unpaid') as payment_status,
                    COALESCE(payment_method, 'cash') as payment_method,
                    payment_trx_id,
+                   COALESCE(service_type, 'print') as service_type,
+                   service_detail,
+                   COALESCE(download_count, 0) as download_count,
                    status, global_notes, files_deleted, created_at, completed_at
             FROM print_jobs WHERE shop_id = ?
         `;
@@ -118,6 +121,9 @@ router.get('/track/:jobCode', async (req, res) => {
                    COALESCE(j.payment_status, 'unpaid') as payment_status,
                    COALESCE(j.payment_method, 'cash') as payment_method,
                    j.payment_trx_id,
+                   COALESCE(j.service_type, 'print') as service_type,
+                   j.service_detail,
+                   COALESCE(j.download_count, 0) as download_count,
                    j.status, j.global_notes, j.files_deleted, j.created_at, j.completed_at,
                    s.name as shop_name, s.phone as shop_phone, s.address as shop_address,
                    s.bkash_number as shop_bkash, s.bkash_type as shop_bkash_type, s.bkash_qr_image as shop_bkash_qr,
@@ -505,6 +511,21 @@ router.get('/download/:fileId', async (req, res) => {
             return res.status(404).send('File missing from disk storage');
         }
 
+        // Increment download count and transition status from pending -> printing (In Progress)
+        try {
+            await query("UPDATE print_jobs SET download_count = COALESCE(download_count, 0) + 1, status = CASE WHEN status = 'pending' THEN 'printing' ELSE status END WHERE id = ?", [file.job_id]);
+            const [j] = await query("SELECT id, shop_id, job_code, status, COALESCE(download_count, 0) as download_count FROM print_jobs WHERE id = ?", [file.job_id]);
+            if (j) {
+                const io = req.app.get('io');
+                if (io) {
+                    io.to(`shop_${j.shop_id}`).emit('job_updated', { id: j.id, status: j.status, download_count: j.download_count });
+                    io.to(`job_${j.job_code}`).emit('status_changed', { id: j.id, status: j.status });
+                }
+            }
+        } catch (dbErr) {
+            console.warn('Download tracking notice:', dbErr.message);
+        }
+
         res.download(file.stored_path, file.original_name);
     } catch (err) {
         console.error('Download file error:', err);
@@ -543,5 +564,146 @@ router.get('/:id/download-zip', async (req, res) => {
     }
 });
 
-module.exports = router;
+// ─────────────────────────────────────────────────────
+// Shop: Override Job Price (Shopkeeper sets custom price)
+// ─────────────────────────────────────────────────────
+router.put('/:id/price', async (req, res) => {
+    try {
+        const jobId = parseInt(req.params.id, 10);
+        const { total_price } = req.body;
+        if (!jobId || total_price === undefined) {
+            return res.status(400).json({ success: false, error: 'job_id and total_price are required' });
+        }
 
+        const price = Math.max(0, parseFloat(total_price) || 0);
+        await query('UPDATE print_jobs SET total_price = ?, updated_at = NOW() WHERE id = ?', [price, jobId]);
+
+        const [job] = await query('SELECT id, job_code, shop_id, total_price FROM print_jobs WHERE id = ?', [jobId]);
+
+        const io = req.app.get('io');
+        if (io && job) {
+            io.to(`shop_${job.shop_id}`).emit('job_updated', {
+                id: job.id,
+                job_code: job.job_code,
+                total_price: job.total_price
+            });
+            io.to(`job_${job.job_code}`).emit('status_changed', {
+                id: job.id,
+                total_price: job.total_price
+            });
+        }
+
+        res.json({ success: true, total_price: price });
+    } catch (err) {
+        console.error('Update price error:', err);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// ─────────────────────────────────────────────────────
+// Shop: Add Manual Job (Walk-in customer)
+// ─────────────────────────────────────────────────────
+router.post('/manual', async (req, res) => {
+    try {
+        const {
+            shop_id, customer_name, customer_phone,
+            global_notes, total_price, total_pages,
+            service_type, service_detail,
+            payment_method
+        } = req.body;
+
+        if (!shop_id) {
+            return res.status(400).json({ success: false, error: 'shop_id is required' });
+        }
+
+        const shopRows = await query('SELECT * FROM shops WHERE id = ?', [shop_id]);
+        if (shopRows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Shop not found' });
+        }
+
+        // Generate job code
+        const today = new Date().toISOString().slice(0, 10);
+        let lastSeq = 0;
+        try {
+            const seqRows = await query(
+                'SELECT last_seq FROM job_daily_sequence WHERE shop_id = ? AND date = ? FOR UPDATE',
+                [shop_id, today]
+            );
+            if (seqRows.length > 0) {
+                lastSeq = seqRows[0].last_seq;
+                await query('UPDATE job_daily_sequence SET last_seq = last_seq + 1 WHERE shop_id = ? AND date = ?', [shop_id, today]);
+            } else {
+                await query('INSERT INTO job_daily_sequence (shop_id, date, last_seq) VALUES (?, ?, 1)', [shop_id, today]);
+            }
+        } catch (_) {
+            const countRes = await query('SELECT COUNT(*) as total FROM print_jobs WHERE shop_id = ?', [shop_id]);
+            lastSeq = (countRes[0]?.total || 0);
+        }
+        const jobCode = (lastSeq + 1).toString().padStart(4, '0');
+
+        // Generate auth code
+        const authChars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+        let authCode = 'PZ-';
+        for (let i = 0; i < 4; i++) {
+            authCode += authChars.charAt(Math.floor(Math.random() * authChars.length));
+        }
+
+        const svcType = ['print', 'bind', 'photo', 'edit'].includes(service_type) ? service_type : 'print';
+        const svcDetail = (service_detail || '').trim().substring(0, 100) || null;
+        const price = Math.max(0, parseFloat(total_price) || 0);
+        const pages = Math.max(0, parseInt(total_pages, 10) || 0);
+        const method = (payment_method || 'cash').toLowerCase();
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+        const jobInsert = await query(`
+            INSERT INTO print_jobs (
+                job_code, auth_code, shop_id, customer_name, customer_phone,
+                total_files, total_pages, total_price,
+                payment_status, payment_method,
+                status, global_notes, files_deleted, expires_at,
+                service_type, service_detail
+            ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, 'unpaid', ?, 'pending', ?, 0, ?, ?, ?)
+        `, [
+            jobCode, authCode, shop_id,
+            (customer_name || 'Walk-in Customer').trim(),
+            (customer_phone || '').trim(),
+            pages, price, method,
+            global_notes || '',
+            expiresAt,
+            svcType, svcDetail
+        ]);
+
+        const jobId = jobInsert.insertId;
+
+        const fullJob = {
+            id: jobId,
+            job_code: jobCode,
+            auth_code: authCode,
+            shop_id: parseInt(shop_id, 10),
+            customer_name: (customer_name || 'Walk-in Customer').trim(),
+            customer_phone: customer_phone || '',
+            total_pages: pages,
+            total_files: 0,
+            total_price: price,
+            status: 'pending',
+            service_type: svcType,
+            service_detail: svcDetail,
+            global_notes: global_notes || '',
+            files_deleted: 0,
+            created_at: new Date().toISOString(),
+            files: []
+        };
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`shop_${shop_id}`).emit('new_job', fullJob);
+        }
+
+        res.json({ success: true, job_code: jobCode, job_id: jobId, auth_code: authCode });
+    } catch (err) {
+        console.error('Manual job error:', err);
+        res.status(500).json({ success: false, error: 'Failed to create manual job: ' + err.message });
+    }
+});
+
+module.exports = router;

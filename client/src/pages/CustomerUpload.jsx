@@ -3,7 +3,7 @@ import {
   UploadCloud, FileText, Image as ImageIcon, Trash2, Plus, Minus, CheckCircle,
   Store, Sparkles, ArrowRight, Loader2, Info, Clipboard, Settings2, RefreshCw,
   ChevronDown, MessageCircle, Clock, CreditCard, Copy, Check, History, Percent,
-  AlertTriangle, Phone
+  AlertTriangle, Phone, BookOpen, Palette, Pencil
 } from 'lucide-react';
 import GoogleAdSense from '../components/GoogleAdSense';
 
@@ -17,6 +17,8 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [globalNotes, setGlobalNotes] = useState('');
+  const [serviceType, setServiceType] = useState('print'); // 'print' | 'bind' | 'photo' | 'edit'
+  const [serviceDetail, setServiceDetail] = useState(''); // binding type, photo size, or edit notes
   const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash' | 'bkash' | 'nagad'
   const [onlinePayMode, setOnlinePayMode] = useState('gateway'); // 'gateway' | 'manual'
   const [pgwConfig, setPgwConfig] = useState({ enabled: true, activeProvider: 'simulator' });
@@ -224,32 +226,81 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
 
     let subtotal = 0;
     let totalPages = 0;
+    let printSubtotal = 0;
 
-    fileConfigs.forEach(cfg => {
-      let rate = cfg.color_mode === 'color' ? colorRate : bwRate;
-      if (cfg.paper_size === 'Legal') rate += legalExtra;
-      if (cfg.paper_size === 'A3') rate += a3Extra;
-      const copies = cfg.copies || 1;
-      const pages = cfg.page_count || 1;
-      subtotal += rate * copies * pages;
-      totalPages += copies * pages;
-    });
+    if (serviceType === 'photo') {
+      let photoRate = parseFloat(shop.price_passport_4) || 30.0;
+      const detail = serviceDetail || 'passport_4';
+      if (detail === 'passport_8') photoRate = parseFloat(shop.price_passport_8) || 50.0;
+      else if (detail === 'stamp_4') photoRate = parseFloat(shop.price_stamp_4) || 20.0;
+      else if (detail === 'photo_4r') photoRate = parseFloat(shop.price_photo_4r) || 20.0;
+      else if (detail === 'photo_a4') photoRate = parseFloat(shop.price_photo_a4) || 60.0;
+      else photoRate = parseFloat(shop.price_passport_4) || 30.0;
 
-    // Discount tiers
-    const minPages1 = parseInt(shop.discount_min_pages, 10) || 50;
-    const pct1 = parseFloat(shop.discount_percent) || 10;
-    const minPages2 = parseInt(shop.discount_tier2_pages, 10) || 100;
-    const pct2 = parseFloat(shop.discount_tier2_percent) || 15;
+      fileConfigs.forEach(cfg => {
+        const copies = cfg.copies || 1;
+        subtotal += photoRate * copies;
+        totalPages += copies;
+      });
+    } else if (serviceType === 'bind') {
+      let bindExtra = parseFloat(shop.price_bind_spiral) || 30.0;
+      const detail = serviceDetail || 'spiral';
+      if (detail === 'tape') bindExtra = parseFloat(shop.price_bind_tape) || 20.0;
+      else if (detail === 'hardcover') bindExtra = parseFloat(shop.price_bind_hardcover) || 300.0;
+      else if (detail === 'spiral') bindExtra = parseFloat(shop.price_bind_spiral) || 30.0;
 
+      fileConfigs.forEach(cfg => {
+        let rate = cfg.color_mode === 'color' ? colorRate : bwRate;
+        if (cfg.paper_size === 'Legal') rate += legalExtra;
+        if (cfg.paper_size === 'A3') rate += a3Extra;
+        const copies = cfg.copies || 1;
+        const pages = cfg.page_count || 1;
+        printSubtotal += rate * copies * pages;
+        totalPages += copies * pages;
+      });
+      subtotal = printSubtotal + (bindExtra * (fileConfigs.length || 1));
+    } else if (serviceType === 'edit') {
+      const editFeePerFile = parseFloat(shop.price_edit) || 30.0;
+      const totalEditFee = editFeePerFile * (fileConfigs.length || 1);
+      fileConfigs.forEach(cfg => {
+        let rate = cfg.color_mode === 'color' ? colorRate : bwRate;
+        if (cfg.paper_size === 'Legal') rate += legalExtra;
+        if (cfg.paper_size === 'A3') rate += a3Extra;
+        const copies = cfg.copies || 1;
+        const pages = cfg.page_count || 1;
+        printSubtotal += rate * copies * pages;
+        totalPages += copies * pages;
+      });
+      subtotal = printSubtotal + totalEditFee;
+    } else {
+      fileConfigs.forEach(cfg => {
+        let rate = cfg.color_mode === 'color' ? colorRate : bwRate;
+        if (cfg.paper_size === 'Legal') rate += legalExtra;
+        if (cfg.paper_size === 'A3') rate += a3Extra;
+        const copies = cfg.copies || 1;
+        const pages = cfg.page_count || 1;
+        subtotal += rate * copies * pages;
+        totalPages += copies * pages;
+      });
+    }
+
+    // Discount tiers (for document prints & bindings)
     let discount = 0;
     let discountPercent = 0;
 
-    if (totalPages >= minPages2 && pct2 > 0) {
-      discountPercent = pct2;
-      discount = (subtotal * pct2) / 100.0;
-    } else if (totalPages >= minPages1 && pct1 > 0) {
-      discountPercent = pct1;
-      discount = (subtotal * pct1) / 100.0;
+    if (serviceType !== 'photo') {
+      const minPages1 = parseInt(shop.discount_min_pages, 10) || 50;
+      const pct1 = parseFloat(shop.discount_percent) || 10;
+      const minPages2 = parseInt(shop.discount_tier2_pages, 10) || 100;
+      const pct2 = parseFloat(shop.discount_tier2_percent) || 15;
+
+      if (totalPages >= minPages2 && pct2 > 0) {
+        discountPercent = pct2;
+        discount = (subtotal * pct2) / 100.0;
+      } else if (totalPages >= minPages1 && pct1 > 0) {
+        discountPercent = pct1;
+        discount = (subtotal * pct1) / 100.0;
+      }
     }
 
     const total = Math.max(0, subtotal - discount);
@@ -320,6 +371,8 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
       formData.append('payment_method', paymentMethod);
       formData.append('payment_trx_id', paymentTrxId.trim());
       formData.append('file_configs', JSON.stringify(fileConfigs));
+      formData.append('service_type', serviceType);
+      formData.append('service_detail', serviceDetail.trim());
 
       setUploadProgress(65);
 
@@ -635,30 +688,148 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           </p>
         </div>
 
+        {/* Service Type Selector Chips */}
+        {files.length > 0 && (
+          <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 space-y-3">
+            <h4 className="font-bold text-xs text-slate-700">What do you need?</h4>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { key: 'print', icon: '🖨️', label: 'Print', desc: 'Print only', color: 'blue' },
+                { key: 'bind', icon: '📖', label: 'Bind', desc: 'Print + Binding', color: 'purple' },
+                { key: 'photo', icon: '🖼️', label: 'Photo', desc: 'Photo print', color: 'pink' },
+                { key: 'edit', icon: '✏️', label: 'Edit', desc: 'Edit & print', color: 'amber' },
+              ].map(s => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => { setServiceType(s.key); setServiceDetail(''); }}
+                  className={`p-2.5 rounded-xl border-2 text-center transition cursor-pointer ${
+                    serviceType === s.key
+                      ? `border-${s.color}-500 bg-${s.color}-50/60 ring-1 ring-${s.color}-400 shadow-sm`
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="text-xl mb-0.5">{s.icon}</div>
+                  <div className="text-[11px] font-bold text-slate-800">{s.label}</div>
+                  <div className="text-[9px] text-slate-400 mt-0.5 hidden sm:block">{s.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Sub-options based on service type */}
+            {serviceType === 'bind' && (
+              <div className="pt-2 border-t border-slate-100">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Binding Type</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { key: 'spiral', label: '🔗 Spiral Binding', price: shop?.price_bind_spiral || '30', desc: 'Assignments, lecture notes' },
+                    { key: 'tape', label: '📦 Tape Binding', price: shop?.price_bind_tape || '20', desc: 'Documents, office files' },
+                    { key: 'hardcover', label: '📗 Hardcover Thesis', price: shop?.price_bind_hardcover || '300', desc: 'Final year thesis & projects' },
+                  ].map(b => (
+                    <button
+                      key={b.key}
+                      type="button"
+                      onClick={() => setServiceDetail(b.key)}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                        (serviceDetail || 'spiral') === b.key
+                          ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-400 shadow-xs'
+                          : 'border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">{b.label}</span>
+                        <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded-md">+৳{b.price}</span>
+                      </div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">{b.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {serviceType === 'photo' && (
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Choose Photo Package / Size</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { key: 'passport_4', label: '4x Passport Size', count: '4 Copies', price: shop?.price_passport_4 || '30' },
+                    { key: 'passport_8', label: '8x Passport Size', count: '8 Copies', price: shop?.price_passport_8 || '50' },
+                    { key: 'stamp_4', label: '4x Stamp Size', count: '4 Copies', price: shop?.price_stamp_4 || '20' },
+                    { key: 'photo_4r', label: '4R Photo (4"×6")', count: '1 Copy', price: shop?.price_photo_4r || '20' },
+                    { key: 'photo_a4', label: 'A4 Photo (Glossy)', count: '1 Page', price: shop?.price_photo_a4 || '60' },
+                  ].map(pkg => (
+                    <button
+                      key={pkg.key}
+                      type="button"
+                      onClick={() => setServiceDetail(pkg.key)}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                        (serviceDetail || 'passport_4') === pkg.key
+                          ? 'border-pink-500 bg-pink-50 ring-1 ring-pink-400 shadow-xs'
+                          : 'border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">{pkg.label}</span>
+                        <span className="text-[10px] font-extrabold text-pink-700 bg-pink-100 px-1.5 py-0.5 rounded-md">৳{pkg.price}</span>
+                      </div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">High-Gloss Photo Paper · {pkg.count}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {serviceType === 'edit' && (
+              <div className="pt-2 border-t border-slate-100">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">What needs editing?</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Remove background, add text, resize for banner..."
+                  value={serviceDetail}
+                  onChange={e => setServiceDetail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-amber-500 focus:bg-white transition"
+                />
+                <p className="text-[10px] text-amber-700 font-semibold mt-1.5 flex items-center gap-1">
+                  <Info className="w-3 h-3 text-amber-600" />
+                  <span>Shop editing fee: <strong>৳{shop?.price_edit || '30'}/file</strong> + standard print rates</span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Selected Files List & Quick Batch Presets */}
         {files.length > 0 && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              <h4 className="font-bold text-xs text-slate-700">Documents ({files.length} files · {totalPages} total pages)</h4>
+              <h4 className="font-bold text-xs text-slate-700">
+                {serviceType === 'edit'
+                  ? `Files for Editing (${files.length} file${files.length > 1 ? 's' : ''})`
+                  : serviceType === 'photo'
+                  ? `Photos for Print (${files.length} item${files.length > 1 ? 's' : ''})`
+                  : `Documents (${files.length} files · ${totalPages} total pages)`}
+              </h4>
               
-              {/* Quick Batch Presets */}
-              <div className="flex items-center gap-1 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => applyPresetToAll('bw')}
-                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition"
-                >All B&W</button>
-                <button
-                  type="button"
-                  onClick={() => applyPresetToAll('color')}
-                  className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold transition"
-                >All Color</button>
-                <button
-                  type="button"
-                  onClick={() => applyPresetToAll('duplex')}
-                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition"
-                >All Duplex</button>
-              </div>
+              {/* Quick Batch Presets (For Document, Binding & Edit jobs) */}
+              {serviceType !== 'photo' && (
+                <div className="flex items-center gap-1 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => applyPresetToAll('bw')}
+                    className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition"
+                  >All B&W</button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetToAll('color')}
+                    className="px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold transition"
+                  >All Color</button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetToAll('duplex')}
+                    className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition"
+                  >All Duplex</button>
+                </div>
+              )}
             </div>
 
             {files.map((file, idx) => {
@@ -699,84 +870,143 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                     </button>
                   </div>
 
-                  {/* Print Configs Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-xs">
-                    
-                    {/* Copies Count */}
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Copies</label>
-                      <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                        <button
-                          type="button"
-                          onClick={() => updateConfig(idx, 'copies', Math.max(1, (cfg.copies || 1) - 1))}
-                          className="px-2 py-1 text-slate-600 hover:bg-slate-200 transition"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="flex-1 text-center font-bold text-slate-800 text-xs">{cfg.copies || 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => updateConfig(idx, 'copies', (cfg.copies || 1) + 1)}
-                          className="px-2 py-1 text-slate-600 hover:bg-slate-200 transition"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
+                  {/* Edit Job Notice Banner */}
+                  {serviceType === 'edit' && (
+                    <div className="pt-2 border-t border-slate-100">
+                      <div className="p-2 bg-amber-50 border border-amber-200/80 rounded-xl text-xs flex items-center justify-between gap-2 text-amber-900 mb-2">
+                        <span className="font-bold flex items-center gap-1.5 text-[11px]">
+                          <span>✏️</span> Set printing preferences for after editing:
+                        </span>
+                        <span className="text-[9px] text-amber-800 bg-amber-200/70 px-1.5 py-0.5 rounded font-bold shrink-0">
+                          Manual Editing by Shop
+                        </span>
                       </div>
                     </div>
+                  )}
 
-                    {/* Color Mode */}
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Color</label>
-                      <div className="grid grid-cols-2 gap-1 bg-slate-100 p-0.5 rounded-lg">
-                        <button
-                          type="button"
-                          onClick={() => updateConfig(idx, 'color_mode', 'bw')}
-                          className={`py-1 rounded font-bold text-[10px] transition ${
-                            cfg.color_mode === 'bw' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'
-                          }`}
-                        >
-                          B&W
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateConfig(idx, 'color_mode', 'color')}
-                          className={`py-1 rounded font-bold text-[10px] transition ${
-                            cfg.color_mode === 'color' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'
-                          }`}
-                        >
-                          Color
-                        </button>
+                  {/* Print Configs Grid / Photo Options */}
+                  {serviceType === 'photo' ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-xs items-center">
+                      {/* Copies Count / Sets */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Copies / Sets</label>
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => updateConfig(idx, 'copies', Math.max(1, (cfg.copies || 1) - 1))}
+                            className="px-2.5 py-1 text-slate-600 hover:bg-slate-200 transition"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="flex-1 text-center font-bold text-slate-800 text-xs">{cfg.copies || 1} set{(cfg.copies || 1) > 1 ? 's' : ''}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateConfig(idx, 'copies', (cfg.copies || 1) + 1)}
+                            className="px-2.5 py-1 text-slate-600 hover:bg-slate-200 transition"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Package / Size Selected */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Selected Package</label>
+                        <div className="py-1 px-2.5 bg-pink-50 border border-pink-200 rounded-lg text-pink-700 font-bold text-xs truncate">
+                          {serviceDetail === 'passport_8' ? '8x Passport Size' :
+                           serviceDetail === 'stamp_4' ? '4x Stamp Size' :
+                           serviceDetail === 'photo_4r' ? '4R Photo (4"×6")' :
+                           serviceDetail === 'photo_a4' ? 'A4 Glossy Photo' : '4x Passport Size'}
+                        </div>
+                      </div>
+
+                      {/* Paper Type */}
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Paper Type</label>
+                        <div className="py-1 px-2.5 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs flex items-center gap-1">
+                          <span>✨</span> Glossy Photo Paper
+                        </div>
                       </div>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-xs">
+                      
+                      {/* Copies Count */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Copies</label>
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => updateConfig(idx, 'copies', Math.max(1, (cfg.copies || 1) - 1))}
+                            className="px-2 py-1 text-slate-600 hover:bg-slate-200 transition"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="flex-1 text-center font-bold text-slate-800 text-xs">{cfg.copies || 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateConfig(idx, 'copies', (cfg.copies || 1) + 1)}
+                            className="px-2 py-1 text-slate-600 hover:bg-slate-200 transition"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
 
-                    {/* Paper Size */}
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Paper</label>
-                      <select
-                        value={cfg.paper_size || 'A4'}
-                        onChange={e => updateConfig(idx, 'paper_size', e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1 px-1.5 font-medium text-slate-800 text-xs focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="A4">A4 Standard</option>
-                        <option value="Legal">Legal (+৳{shop?.price_legal || 3})</option>
-                        <option value="A3">A3 Large (+৳{shop?.price_a3 || 15})</option>
-                      </select>
+                      {/* Color Mode */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Color</label>
+                        <div className="grid grid-cols-2 gap-1 bg-slate-100 p-0.5 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => updateConfig(idx, 'color_mode', 'bw')}
+                            className={`py-1 rounded font-bold text-[10px] transition ${
+                              cfg.color_mode === 'bw' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'
+                            }`}
+                          >
+                            B&W
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateConfig(idx, 'color_mode', 'color')}
+                            className={`py-1 rounded font-bold text-[10px] transition ${
+                              cfg.color_mode === 'color' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'
+                            }`}
+                          >
+                            Color
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Paper Size */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Paper</label>
+                        <select
+                          value={cfg.paper_size || 'A4'}
+                          onChange={e => updateConfig(idx, 'paper_size', e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1 px-1.5 font-medium text-slate-800 text-xs focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="A4">A4 Standard</option>
+                          <option value="Legal">Legal (+৳{shop?.price_legal || 3})</option>
+                          <option value="A3">A3 Large (+৳{shop?.price_a3 || 15})</option>
+                        </select>
+                      </div>
+
+                      {/* Sides / Duplex */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Sides</label>
+                        <select
+                          value={cfg.sides || 'single'}
+                          onChange={e => updateConfig(idx, 'sides', e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1 px-1.5 font-medium text-slate-800 text-xs focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="single">Single Side</option>
+                          <option value="double">2-Sided</option>
+                        </select>
+                      </div>
+
                     </div>
-
-                    {/* Sides / Duplex */}
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Sides</label>
-                      <select
-                        value={cfg.sides || 'single'}
-                        onChange={e => updateConfig(idx, 'sides', e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1 px-1.5 font-medium text-slate-800 text-xs focus:ring-1 focus:ring-blue-500"
-                      >
-                        <option value="single">Single Side</option>
-                        <option value="double">2-Sided</option>
-                      </select>
-                    </div>
-
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -1064,31 +1294,56 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
         {/* Sticky Floating Bottom Checkout Bar (Clean Mobile Optimized) */}
         <div className="bg-white/95 backdrop-blur-md rounded-2xl p-3 sm:p-4 shadow-xl border border-slate-200/90 flex flex-row items-center justify-between gap-3 sticky bottom-3 sm:bottom-4 z-20">
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">Estimated Total</span>
-              {discount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 truncate">
-                  -{discountPercent}%
-                </span>
-              )}
-            </div>
-            <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
-                ৳{total.toFixed(2)}
-              </span>
-              {discount > 0 && (
-                <span className="text-[10px] sm:text-xs text-slate-400 line-through">
-                  ৳{subtotal.toFixed(2)}
-                </span>
-              )}
-            </div>
+            {serviceType === 'edit' ? (
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-600 uppercase tracking-wider block truncate">Print + Edit Total</span>
+                  {discount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 truncate">
+                      -{discountPercent}%
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
+                    ৳{total.toFixed(2)}
+                  </span>
+                  <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 truncate">
+                    (Print: ৳{Math.max(0, subtotal - (parseFloat(shop?.price_edit || 30) * (files.length || 1))).toFixed(0)} + Edit: ৳{(parseFloat(shop?.price_edit || 30) * (files.length || 1)).toFixed(0)})
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">Estimated Total</span>
+                  {discount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 truncate">
+                      -{discountPercent}%
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
+                    ৳{total.toFixed(2)}
+                  </span>
+                  {discount > 0 && (
+                    <span className="text-[10px] sm:text-xs text-slate-400 line-through">
+                      ৳{subtotal.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <button
             onClick={handleSubmit}
             disabled={uploading || files.length === 0}
             className={`py-2.5 sm:py-3 px-4 sm:px-6 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md flex items-center justify-center gap-1.5 sm:gap-2 active:scale-98 shrink-0 cursor-pointer ${
-              paymentMethod !== 'cash' && onlinePayMode === 'gateway'
+              serviceType === 'edit'
+                ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/25'
+                : paymentMethod !== 'cash' && onlinePayMode === 'gateway'
                 ? paymentMethod === 'bkash'
                   ? 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 shadow-pink-500/25'
                   : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 shadow-amber-500/25'
@@ -1103,7 +1358,9 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
             ) : (
               <>
                 <span>
-                  {paymentMethod !== 'cash' && onlinePayMode === 'gateway'
+                  {serviceType === 'edit'
+                    ? 'Send for Edit & Print'
+                    : paymentMethod !== 'cash' && onlinePayMode === 'gateway'
                     ? `Pay with ${paymentMethod === 'bkash' ? '🌸 bKash' : '🟠 Nagad'}`
                     : 'Send to Print Counter'}
                 </span>

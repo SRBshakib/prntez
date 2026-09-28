@@ -35,7 +35,9 @@ router.post('/', upload.array('files', 20), async (req, res) => {
             customer_name, customer_phone, customer_email,
             global_notes,
             payment_method, payment_trx_id,
-            file_configs // JSON: array of per-file specs
+            file_configs, // JSON: array of per-file specs
+            service_type,   // 'print' | 'bind' | 'photo' | 'edit'
+            service_detail  // binding type, photo size, or edit instructions
         } = req.body;
 
         const files = req.files;
@@ -93,50 +95,141 @@ router.post('/', upload.array('files', 20), async (req, res) => {
 
         let grandTotal = 0;
         let totalPages = 0;
+        let discountApplied = 0;
         const processedFiles = [];
 
-        for (let i = 0; i < files.length; i++) {
-            const f = files[i];
-            const cfg = configs[i] || {};
-            const copies = Math.max(1, parseInt(cfg.copies, 10) || 1);
-            const colorMode = cfg.color_mode === 'color' ? 'color' : 'bw';
-            const paperSize = ['A4', 'A3', 'Letter', 'Legal'].includes(cfg.paper_size) ? cfg.paper_size : 'A4';
-            const sides = cfg.sides === 'double' ? 'double' : 'single';
-            const pageCount = Math.max(1, parseInt(cfg.page_count, 10) || 1);
-            const notes = cfg.notes || '';
+        const svcType = ['print', 'bind', 'photo', 'edit'].includes(service_type) ? service_type : 'print';
+        const svcDetail = (service_detail || '').trim().substring(0, 100) || null;
 
-            let pageRate = colorMode === 'color' ? colorRate : bwRate;
-            if (paperSize === 'Legal') pageRate += legalExtra;
-            if (paperSize === 'A3') pageRate += a3Extra;
+        if (svcType === 'edit') {
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const cfg = configs[i] || {};
+                const copies = Math.max(1, parseInt(cfg.copies, 10) || 1);
+                const colorMode = cfg.color_mode === 'color' ? 'color' : 'bw';
+                const paperSize = ['A4', 'A3', 'Letter', 'Legal'].includes(cfg.paper_size) ? cfg.paper_size : 'A4';
+                const sides = cfg.sides === 'double' ? 'double' : 'single';
+                const pageCount = Math.max(1, parseInt(cfg.page_count, 10) || 1);
+                const notes = cfg.notes || '';
 
-            const filePrice = pageRate * pageCount * copies;
-            grandTotal += filePrice;
-            totalPages += pageCount * copies;
+                let pageRate = colorMode === 'color' ? colorRate : bwRate;
+                if (paperSize === 'Legal') pageRate += legalExtra;
+                if (paperSize === 'A3') pageRate += a3Extra;
 
-            processedFiles.push({
-                file: f,
-                original_name: f.originalname,
-                stored_path: f.path,
-                file_size: f.size,
-                file_type: path.extname(f.originalname).replace('.', '').toLowerCase(),
-                page_count: pageCount,
-                copies, colorMode, paperSize, sides, notes, filePrice
-            });
+                const filePrice = pageRate * pageCount * copies;
+                grandTotal += filePrice;
+                totalPages += pageCount * copies;
+
+                processedFiles.push({
+                    file: f,
+                    original_name: f.originalname,
+                    stored_path: f.path,
+                    file_size: f.size,
+                    file_type: path.extname(f.originalname).replace('.', '').toLowerCase(),
+                    page_count: pageCount,
+                    copies, colorMode, paperSize, sides, notes, filePrice
+                });
+            }
+
+            const editFee = (parseFloat(shopRow.price_edit) || 30.00) * (files.length || 1);
+            grandTotal += editFee;
+
+            // Apply Bulk Discount (Feature 7)
+            discountApplied = 0;
+            const minPages1 = parseInt(shopRow.discount_min_pages, 10) || 50;
+            const pct1 = parseFloat(shopRow.discount_percent) || 10;
+            const minPages2 = parseInt(shopRow.discount_tier2_pages, 10) || 100;
+            const pct2 = parseFloat(shopRow.discount_tier2_percent) || 15;
+
+            if (totalPages >= minPages2 && pct2 > 0) {
+                discountApplied = (grandTotal * pct2) / 100.0;
+            } else if (totalPages >= minPages1 && pct1 > 0) {
+                discountApplied = (grandTotal * pct1) / 100.0;
+            }
+            grandTotal = Math.max(0, grandTotal - discountApplied);
+        } else if (svcType === 'photo') {
+            let photoRate = parseFloat(shopRow.price_passport_4) || 30.00;
+            const detail = svcDetail || 'passport_4';
+            if (detail === 'passport_8') photoRate = parseFloat(shopRow.price_passport_8) || 50.00;
+            else if (detail === 'stamp_4') photoRate = parseFloat(shopRow.price_stamp_4) || 20.00;
+            else if (detail === 'photo_4r') photoRate = parseFloat(shopRow.price_photo_4r) || 20.00;
+            else if (detail === 'photo_a4') photoRate = parseFloat(shopRow.price_photo_a4) || 60.00;
+            else photoRate = parseFloat(shopRow.price_passport_4) || 30.00;
+
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const cfg = configs[i] || {};
+                const copies = Math.max(1, parseInt(cfg.copies, 10) || 1);
+                const filePrice = photoRate * copies;
+                grandTotal += filePrice;
+                totalPages += copies;
+
+                processedFiles.push({
+                    file: f,
+                    original_name: f.originalname,
+                    stored_path: f.path,
+                    file_size: f.size,
+                    file_type: path.extname(f.originalname).replace('.', '').toLowerCase(),
+                    page_count: 1,
+                    copies,
+                    colorMode: 'color',
+                    paperSize: 'Photo',
+                    sides: 'single',
+                    notes: detail,
+                    filePrice
+                });
+            }
+        } else {
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const cfg = configs[i] || {};
+                const copies = Math.max(1, parseInt(cfg.copies, 10) || 1);
+                const colorMode = cfg.color_mode === 'color' ? 'color' : 'bw';
+                const paperSize = ['A4', 'A3', 'Letter', 'Legal'].includes(cfg.paper_size) ? cfg.paper_size : 'A4';
+                const sides = cfg.sides === 'double' ? 'double' : 'single';
+                const pageCount = Math.max(1, parseInt(cfg.page_count, 10) || 1);
+                const notes = cfg.notes || '';
+
+                let pageRate = colorMode === 'color' ? colorRate : bwRate;
+                if (paperSize === 'Legal') pageRate += legalExtra;
+                if (paperSize === 'A3') pageRate += a3Extra;
+
+                const filePrice = pageRate * pageCount * copies;
+                grandTotal += filePrice;
+                totalPages += pageCount * copies;
+
+                processedFiles.push({
+                    file: f,
+                    original_name: f.originalname,
+                    stored_path: f.path,
+                    file_size: f.size,
+                    file_type: path.extname(f.originalname).replace('.', '').toLowerCase(),
+                    page_count: pageCount,
+                    copies, colorMode, paperSize, sides, notes, filePrice
+                });
+            }
+
+            if (svcType === 'bind') {
+                let bindExtra = parseFloat(shopRow.price_bind_spiral) || 30.00;
+                if (svcDetail === 'tape') bindExtra = parseFloat(shopRow.price_bind_tape) || 20.00;
+                else if (svcDetail === 'hardcover') bindExtra = parseFloat(shopRow.price_bind_hardcover) || 300.00;
+                grandTotal += bindExtra * (files.length || 1);
+            }
+
+            // Apply Bulk Discount (Feature 7)
+            discountApplied = 0;
+            const minPages1 = parseInt(shopRow.discount_min_pages, 10) || 50;
+            const pct1 = parseFloat(shopRow.discount_percent) || 10;
+            const minPages2 = parseInt(shopRow.discount_tier2_pages, 10) || 100;
+            const pct2 = parseFloat(shopRow.discount_tier2_percent) || 15;
+
+            if (totalPages >= minPages2 && pct2 > 0) {
+                discountApplied = (grandTotal * pct2) / 100.0;
+            } else if (totalPages >= minPages1 && pct1 > 0) {
+                discountApplied = (grandTotal * pct1) / 100.0;
+            }
+            grandTotal = Math.max(0, grandTotal - discountApplied);
         }
-
-        // Apply Bulk Discount (Feature 7)
-        let discountApplied = 0;
-        const minPages1 = parseInt(shopRow.discount_min_pages, 10) || 50;
-        const pct1 = parseFloat(shopRow.discount_percent) || 10;
-        const minPages2 = parseInt(shopRow.discount_tier2_pages, 10) || 100;
-        const pct2 = parseFloat(shopRow.discount_tier2_percent) || 15;
-
-        if (totalPages >= minPages2 && pct2 > 0) {
-            discountApplied = (grandTotal * pct2) / 100.0;
-        } else if (totalPages >= minPages1 && pct1 > 0) {
-            discountApplied = (grandTotal * pct1) / 100.0;
-        }
-        grandTotal = Math.max(0, grandTotal - discountApplied);
 
         // Payment status based on method & trx
         // For Bangladesh MFS (bKash/Nagad), customer provides last 4 digits of their number.
@@ -168,13 +261,15 @@ router.post('/', upload.array('files', 20), async (req, res) => {
         }
 
         // Insert print_job
+
         const jobInsert = await query(`
             INSERT INTO print_jobs (
                 job_code, auth_code, shop_id, customer_name, customer_phone, customer_ip, customer_alias,
                 total_files, total_pages, total_price, discount_applied,
                 payment_status, payment_method, payment_trx_id,
-                status, global_notes, files_deleted, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?)
+                status, global_notes, files_deleted, expires_at,
+                service_type, service_detail
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?)
         `, [
             jobCode, authCode, targetShopId,
             finalCustomerName,
@@ -189,7 +284,9 @@ router.post('/', upload.array('files', 20), async (req, res) => {
             method,
             payment_trx_id ? payment_trx_id.trim() : null,
             global_notes || '',
-            expiresAt
+            expiresAt,
+            svcType,
+            svcDetail
         ]);
 
         const jobId = jobInsert.insertId;
@@ -248,6 +345,8 @@ router.post('/', upload.array('files', 20), async (req, res) => {
             total_price: grandTotal,
             status: 'pending',
             global_notes: global_notes || '',
+            service_type: svcType,
+            service_detail: svcDetail,
             files_deleted: 0,
             created_at: new Date().toISOString(),
             files: dbFiles

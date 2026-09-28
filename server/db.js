@@ -42,6 +42,15 @@ async function migrate() {
     await ensureColumn('shops', 'price_color', 'DECIMAL(10,2) DEFAULT 10.00');
     await ensureColumn('shops', 'price_legal', 'DECIMAL(10,2) DEFAULT 3.00');
     await ensureColumn('shops', 'price_a3', 'DECIMAL(10,2) DEFAULT 15.00');
+    await ensureColumn('shops', 'price_passport_4', 'DECIMAL(10,2) DEFAULT 30.00');
+    await ensureColumn('shops', 'price_passport_8', 'DECIMAL(10,2) DEFAULT 50.00');
+    await ensureColumn('shops', 'price_stamp_4', 'DECIMAL(10,2) DEFAULT 20.00');
+    await ensureColumn('shops', 'price_photo_4r', 'DECIMAL(10,2) DEFAULT 20.00');
+    await ensureColumn('shops', 'price_photo_a4', 'DECIMAL(10,2) DEFAULT 60.00');
+    await ensureColumn('shops', 'price_bind_spiral', 'DECIMAL(10,2) DEFAULT 30.00');
+    await ensureColumn('shops', 'price_bind_tape', 'DECIMAL(10,2) DEFAULT 20.00');
+    await ensureColumn('shops', 'price_bind_hardcover', 'DECIMAL(10,2) DEFAULT 300.00');
+    await ensureColumn('shops', 'price_edit', 'DECIMAL(10,2) DEFAULT 30.00');
     await ensureColumn('shops', 'counter_notice', "VARCHAR(255) DEFAULT 'High-quality laser printing & document services available.'");
     await ensureColumn('shops', 'password', 'VARCHAR(255) DEFAULT NULL');
     await ensureColumn('shops', 'opening_time', "VARCHAR(10) DEFAULT '08:00'");
@@ -90,6 +99,7 @@ async function migrate() {
     await ensureColumn('print_jobs', 'customer_ip', 'VARCHAR(45) DEFAULT NULL');
     await ensureColumn('print_jobs', 'customer_alias', 'VARCHAR(100) DEFAULT NULL');
     await ensureColumn('print_jobs', 'completed_at', 'DATETIME DEFAULT NULL');
+    await ensureColumn('print_jobs', 'download_count', 'INT DEFAULT 0');
 
     // Direct guarantee: Ensure auth_code column exists on print_jobs
     try {

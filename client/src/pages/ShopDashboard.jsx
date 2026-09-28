@@ -4,7 +4,8 @@ import {
   Eye, RefreshCw, Search, ArrowUpRight, LogOut, ChevronDown, ChevronUp,
   FileText, Image as ImageIcon, Volume2, VolumeX, Store, Check, AlertCircle, X,
   Command, Sparkles, Play, Layers, Copy, BarChart3, TrendingUp, MessageCircle,
-  CreditCard, ShieldCheck, Sun, Moon, Percent, Wrench, Lock, Megaphone, Shield, KeyRound, User
+  CreditCard, ShieldCheck, Sun, Moon, Percent, Wrench, Lock, Megaphone, Shield, KeyRound, User,
+  PlusCircle, BookOpen, Palette, Pencil, DollarSign, Save
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import { socket, playChime } from '../socket';
@@ -74,6 +75,14 @@ export default function ShopDashboard({ shop, onLogout }) {
   const [shopAd, setShopAd] = useState(null);
   const [adsenseConfig, setAdsenseConfig] = useState(null);
 
+  // Add Job Modal & Price Editing
+  const [showAddJobModal, setShowAddJobModal] = useState(false);
+  const [addJobForm, setAddJobForm] = useState({ customer_name: '', customer_phone: '', total_pages: '', total_price: '', service_type: 'print', service_detail: '', global_notes: '', payment_method: 'cash' });
+  const [addingJob, setAddingJob] = useState(false);
+  const [editPriceJobId, setEditPriceJobId] = useState(null);
+  const [editPriceValue, setEditPriceValue] = useState('');
+  const [savingPrice, setSavingPrice] = useState(false);
+
   // Editable Shop Profile & Pricing
   const [currentShopData, setCurrentShopData] = useState(shop);
   const [savingShopSettings, setSavingShopSettings] = useState(false);
@@ -141,6 +150,8 @@ export default function ShopDashboard({ shop, onLogout }) {
   
   // Real-time per-file printed tracking (keeps multi-file orders in Pending until all done)
   const [printedFileIds, setPrintedFileIds] = useState(new Set());
+  // Track jobs that have been downloaded at least once locally
+  const [downloadedJobIds, setDownloadedJobIds] = useState(new Set());
 
   // Toast Notification
   const [toast, setToast] = useState(null);
@@ -539,7 +550,134 @@ export default function ShopDashboard({ shop, onLogout }) {
     });
   };
 
-  // 3. Print Actions (Browser Dialog Ctrl+P vs Hardware Spooler)
+  // 2.12 Direct Download (1st download enables instant progress; subsequent downloads require customer permission)
+  const handleDirectDownload = (job, file = null) => {
+    if (!job) return;
+
+    const hasBeenDownloaded = (job.download_count > 0) || downloadedJobIds.has(job.id);
+
+    if (hasBeenDownloaded) {
+      // After first download, subsequent re-download requires customer permission!
+      showToast(`🔒 Order #${job.job_code} already downloaded once. Requesting customer approval to re-download...`, 'info');
+      handleRequestDownload(job, file);
+      return;
+    }
+
+    // 1st Download: Mark as downloaded & advance job progress to 'printing' (In Progress)
+    setDownloadedJobIds(prev => new Set(prev).add(job.id));
+    if (job.status === 'pending') {
+      updateJobStatus(job.id, 'printing');
+    }
+
+    if (file) {
+      const a = document.createElement('a');
+      a.href = `/api/jobs/download/${file.id}`;
+      a.download = file.original_name || `document_${file.id}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast(`⬇️ Downloaded ${file.original_name} — Order #${job.job_code} is now In Progress!`, 'success');
+    } else {
+      // Download all files
+      fetch(`/api/jobs/${job.id}/files`)
+        .then(res => res.json())
+        .then(filesData => {
+          const fileList = filesData?.data || [];
+          fileList.forEach((f, idx) => {
+            setTimeout(() => {
+              const a = document.createElement('a');
+              a.href = `/api/jobs/download/${f.id}`;
+              a.download = f.original_name || `document_${f.id}`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }, idx * 400);
+          });
+          showToast(`⬇️ Downloaded ${fileList.length} file(s) — Order #${job.job_code} is now In Progress!`, 'success');
+        })
+        .catch(() => showToast('Download failed', 'error'));
+    }
+  };
+
+  // 2.13 Add Manual Job (Walk-in customer)
+  const handleAddManualJob = async () => {
+    if (!shop?.id) return;
+    setAddingJob(true);
+    try {
+      const res = await fetch('/api/jobs/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shop_id: shop.id,
+          ...addJobForm,
+          total_price: parseFloat(addJobForm.total_price) || 0,
+          total_pages: parseInt(addJobForm.total_pages, 10) || 0
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✅ Manual job #${data.job_code} created!`, 'success');
+        setShowAddJobModal(false);
+        setAddJobForm({ customer_name: '', customer_phone: '', total_pages: '', total_price: '', service_type: 'print', service_detail: '', global_notes: '', payment_method: 'cash' });
+      } else {
+        showToast(data.error || 'Failed to create job', 'error');
+      }
+    } catch (err) {
+      showToast('Network error creating job', 'error');
+    } finally {
+      setAddingJob(false);
+    }
+  };
+
+  // 2.14 Save Price Override
+  const handleSavePrice = async (jobId) => {
+    setSavingPrice(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/price`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ total_price: parseFloat(editPriceValue) || 0 })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`💰 Price updated to ৳${parseFloat(data.total_price).toFixed(2)}`, 'success');
+        setEditPriceJobId(null);
+      } else {
+        showToast(data.error || 'Failed to update price', 'error');
+      }
+    } catch (err) {
+      showToast('Network error updating price', 'error');
+    } finally {
+      setSavingPrice(false);
+    }
+  };
+
+  // Service type display helpers
+  const getFileIcon = (fileName, isPrinted = false) => {
+    if (!fileName) return <FileText className={`w-3.5 h-3.5 shrink-0 ${isPrinted ? 'text-emerald-600' : 'text-rose-500'}`} />;
+    const ext = fileName.split('.').pop().toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) {
+      return <ImageIcon className={`w-3.5 h-3.5 shrink-0 ${isPrinted ? 'text-emerald-600' : 'text-teal-600'}`} />;
+    }
+    if (['doc', 'docx'].includes(ext)) {
+      return <FileText className={`w-3.5 h-3.5 shrink-0 ${isPrinted ? 'text-emerald-600' : 'text-blue-600'}`} />;
+    }
+    return <FileText className={`w-3.5 h-3.5 shrink-0 ${isPrinted ? 'text-emerald-600' : 'text-rose-500'}`} />;
+  };
+
+  const getServiceBadge = (job) => {
+    const st = job.service_type || 'print';
+    const detail = job.service_detail || '';
+    const badges = {
+      print: { icon: '🖨️', label: 'Print', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+      bind: { icon: '📖', label: `Bind${detail ? ' · ' + detail.charAt(0).toUpperCase() + detail.slice(1) : ''}`, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+      photo: { icon: '🖼️', label: `Photo${detail ? ' · ' + detail.charAt(0).toUpperCase() + detail.slice(1) : ''}`, color: 'bg-pink-50 text-pink-700 border-pink-200' },
+      edit: { icon: '✏️', label: 'Edit & Print', color: 'bg-amber-50 text-amber-800 border-amber-200' }
+    };
+    return badges[st] || badges.print;
+  };
+
+
   const handleBrowserPrint = async (file, job, markDone = true) => {
     if (!file) return;
 
@@ -846,10 +984,10 @@ export default function ShopDashboard({ shop, onLogout }) {
         // If file is purged/deleted, do not show in pending
         if (j.files_deleted) return false;
 
-        // Show pending active print jobs + all done jobs held at counter waiting for payment
-        const isPending = j.status === 'pending';
+        // Show pending & in-progress (printing / editing) jobs + all done jobs held at counter waiting for payment
+        const isActive = j.status === 'pending' || j.status === 'printing';
         const isUnpaidHold = j.status === 'done' && !isJobPaid;
-        if (!isPending && !isUnpaidHold) return false;
+        if (!isActive && !isUnpaidHold) return false;
       } else if (activeFilter === 'done') {
         // Done queue ONLY contains orders that are printed AND paid!
         // Unpaid orders remain in Pending queue until payment is collected.
@@ -871,8 +1009,8 @@ export default function ShopDashboard({ shop, onLogout }) {
   const stats = useMemo(() => {
     const isJobPaid = (j) => j.payment_status === 'paid' || j.payment_status === 'paid_cash' || j.payment_status === 'paid_bkash';
 
-    // Pending jobs in queue (unprinted active)
-    const pendingActive = jobs.filter(j => j.status === 'pending' && !j.files_deleted).length;
+    // Pending jobs in queue (unprinted active & in-progress editing/printing)
+    const pendingActive = jobs.filter(j => (j.status === 'pending' || j.status === 'printing') && !j.files_deleted).length;
     // Done jobs waiting for payment at counter (unpaid cash or MFS hold)
     const paymentHold = jobs.filter(j => j.status === 'done' && !j.files_deleted && !isJobPaid(j)).length;
     const printing = jobs.filter(j => j.status === 'printing').length;
@@ -1579,6 +1717,24 @@ export default function ShopDashboard({ shop, onLogout }) {
                           <span className="truncate max-w-[200px]">{job.customer_name || 'Guest Customer'}</span>
                         </span>
 
+                        {/* Service Type Badge */}
+                        {(() => {
+                          const badge = getServiceBadge(job);
+                          return (
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border flex items-center gap-1 shrink-0 ${badge.color}`}>
+                              <span>{badge.icon}</span>
+                              <span>{badge.label}</span>
+                            </span>
+                          );
+                        })()}
+
+                        {/* Edit Job Instructions */}
+                        {job.service_type === 'edit' && job.service_detail && (
+                          <span className="bg-amber-100/70 border border-amber-300 text-amber-900 text-[9px] font-semibold px-1.5 py-0.5 rounded-lg truncate max-w-[160px] shrink-0" title={`Edit: ${job.service_detail}`}>
+                            ✏️ {job.service_detail}
+                          </span>
+                        )}
+
                         {/* Submission & Done Time */}
                         {job.created_at && (
                           <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
@@ -1632,13 +1788,52 @@ export default function ShopDashboard({ shop, onLogout }) {
                         }`}>
                           {job.status === 'done' && (!job.payment_status || job.payment_status === 'unpaid' || job.payment_status === 'mfs_pending')
                             ? (job.payment_method === 'cash' || !job.payment_method ? 'Printed · Cash Due' : job.payment_status === 'mfs_pending' ? 'Printed · MFS Hold' : 'Printed · Unpaid')
+                            : job.status === 'printing'
+                            ? (job.service_type === 'edit' ? '✏️ In Progress (Editing)' : job.service_type === 'photo' ? '🖼️ In Progress (Photo)' : 'In Progress')
                             : job.status}
                         </span>
 
-                        {/* Total Price */}
-                        <span className="text-sm font-black text-slate-900 font-mono">
-                          ৳{parseFloat(job.total_price || 0).toFixed(2)}
-                        </span>
+                        {/* Total Price (Click to Edit) */}
+                        {editPriceJobId === job.id ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-bold text-slate-500">৳</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editPriceValue}
+                              onChange={e => setEditPriceValue(e.target.value)}
+                              className="w-20 bg-white border border-blue-400 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-900 focus:ring-1 focus:ring-blue-500"
+                              autoFocus
+                              onKeyDown={e => { if (e.key === 'Enter') handleSavePrice(job.id); if (e.key === 'Escape') setEditPriceJobId(null); }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSavePrice(job.id)}
+                              disabled={savingPrice}
+                              className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition cursor-pointer"
+                              title="Save price"
+                            >
+                              <Save className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditPriceJobId(null)}
+                              className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-md transition cursor-pointer"
+                              title="Cancel"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setEditPriceJobId(job.id); setEditPriceValue(parseFloat(job.total_price || 0).toFixed(2)); }}
+                            className="text-sm font-black text-slate-900 font-mono hover:text-blue-700 hover:bg-blue-50 px-1.5 py-0.5 rounded-lg transition cursor-pointer"
+                            title="Click to edit price"
+                          >
+                            ৳{parseFloat(job.total_price || 0).toFixed(2)}
+                          </button>
+                        )}
 
                         {/* Payment Status Pill */}
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ${
@@ -1679,27 +1874,76 @@ export default function ShopDashboard({ shop, onLogout }) {
                         {/* Left: Document Info & Specs */}
                         <div className="flex items-center gap-1.5 flex-nowrap min-w-0 flex-1 shrink">
                           <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-800 shadow-2xs min-w-0 max-w-[130px] sm:max-w-[170px] md:max-w-[220px] shrink truncate" title={job.files[0]?.original_name}>
-                            <FileText className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                            {getFileIcon(job.files[0]?.original_name, isDone)}
                             <span className="truncate">{job.files[0]?.original_name}</span>
                           </div>
 
-                          <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                            📄 {job.files[0]?.page_count || 1} {job.files[0]?.page_count === 1 ? 'Page' : 'Pages'}
-                          </span>
-                          <span className="bg-blue-50/80 px-2 py-1 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
-                            🖨️ {job.files[0]?.copies || 1}x {job.files[0]?.copies === 1 ? 'Copy' : 'Copies'}
-                          </span>
-                          <span className={`px-2 py-1 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
-                            job.files[0]?.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-white text-slate-700 border-slate-200'
-                          }`}>
-                            {job.files[0]?.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
-                          </span>
-                          <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                            📐 {job.files[0]?.paper_size || 'A4'}
-                          </span>
-                          <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                            {job.files[0]?.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
-                          </span>
+                          {job.service_type === 'edit' ? (
+                            <>
+                              <span className="bg-amber-100 text-amber-900 px-2 py-1 rounded-lg border border-amber-300 text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap">
+                                ✏️ Edit & Print
+                              </span>
+                              {job.service_detail && (
+                                <span className="bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 text-amber-900 text-[11px] font-bold shadow-2xs shrink-0 max-w-[200px] truncate" title={job.service_detail}>
+                                  📝 {job.service_detail}
+                                </span>
+                              )}
+                              <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                📄 {job.files[0]?.page_count || 1} {job.files[0]?.page_count === 1 ? 'Page' : 'Pages'}
+                              </span>
+                              <span className="bg-blue-50/80 px-2 py-1 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                🖨️ {job.files[0]?.copies || 1}x {job.files[0]?.copies === 1 ? 'Copy' : 'Copies'}
+                              </span>
+                              <span className={`px-2 py-1 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
+                                job.files[0]?.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-white text-slate-700 border-slate-200'
+                              }`}>
+                                {job.files[0]?.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                              </span>
+                              <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                📐 {job.files[0]?.paper_size || 'A4'}
+                              </span>
+                              <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                {job.files[0]?.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                              </span>
+                            </>
+                          ) : job.service_type === 'photo' ? (
+                            <>
+                              <span className="bg-pink-100 text-pink-900 px-2 py-1 rounded-lg border border-pink-300 text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap">
+                                🖼️ {job.service_detail === 'passport_8' ? '8x Passport' : job.service_detail === 'stamp_4' ? '4x Stamp' : job.service_detail === 'photo_4r' ? '4R Photo (4×6)' : job.service_detail === 'photo_a4' ? 'A4 Glossy' : '4x Passport'}
+                              </span>
+                              <span className="bg-blue-50/80 px-2 py-1 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                📷 {job.files[0]?.copies || 1}x Set
+                              </span>
+                              <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                ✨ Glossy Photo Paper
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              {job.service_type === 'bind' && (
+                                <span className="bg-purple-100 text-purple-900 px-2 py-1 rounded-lg border border-purple-300 text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap">
+                                  📖 {job.service_detail === 'tape' ? 'Tape Binding' : job.service_detail === 'hardcover' ? 'Hardcover Thesis' : 'Spiral Binding'}
+                                </span>
+                              )}
+                              <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                📄 {job.files[0]?.page_count || 1} {job.files[0]?.page_count === 1 ? 'Page' : 'Pages'}
+                              </span>
+                              <span className="bg-blue-50/80 px-2 py-1 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                🖨️ {job.files[0]?.copies || 1}x {job.files[0]?.copies === 1 ? 'Copy' : 'Copies'}
+                              </span>
+                              <span className={`px-2 py-1 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
+                                job.files[0]?.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-white text-slate-700 border-slate-200'
+                              }`}>
+                                {job.files[0]?.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                              </span>
+                              <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                📐 {job.files[0]?.paper_size || 'A4'}
+                              </span>
+                              <span className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                {job.files[0]?.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                              </span>
+                            </>
+                          )}
 
                           {job.global_notes && (
                             <span className="bg-amber-100/70 border border-amber-300 text-amber-900 text-[10px] font-semibold px-2 py-1 rounded-lg truncate max-w-[140px] shrink-0" title={`Note: ${job.global_notes}`}>
@@ -1785,21 +2029,39 @@ export default function ShopDashboard({ shop, onLogout }) {
                             </span>
                           ) : null}
 
-                          {/* Direct Download Button */}
-                          {canDownload && (
-                            <button
-                              type="button"
-                              onClick={() => handleRequestDownload(job)}
-                              className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
-                              title="Download files directly (Customer real-time confirmation required)"
-                            >
-                              <Download className="w-3.5 h-3.5 text-slate-600" />
-                              <span>Download</span>
-                            </button>
-                          )}
+                          {/* Download Button — 1st download direct & sets in-progress; subsequent downloads require permission */}
+                          {canDownload && (() => {
+                            const isDownloaded = (job.download_count > 0) || downloadedJobIds.has(job.id);
+                            const isDirectEligible = (job.service_type === 'edit' || job.service_type === 'photo');
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => (isDirectEligible && !isDownloaded) ? handleDirectDownload(job) : handleRequestDownload(job)}
+                                className={`px-2.5 py-1 font-bold rounded-lg text-xs flex items-center gap-1 transition border cursor-pointer shadow-2xs ${
+                                  isDownloaded
+                                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                                    : job.service_type === 'photo'
+                                    ? 'bg-pink-50 hover:bg-pink-100 text-pink-900 border-pink-300'
+                                    : job.service_type === 'edit'
+                                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                }`}
+                                title={
+                                  isDownloaded
+                                    ? 'Already downloaded once — Re-download requires customer permission'
+                                    : isDirectEligible
+                                    ? 'Download file and start progress (Direct 1st download)'
+                                    : 'Download files (Customer approval required)'
+                                }
+                              >
+                                {isDownloaded ? <Lock className="w-3.5 h-3.5 text-slate-500" /> : <Download className={`w-3.5 h-3.5 ${job.service_type === 'photo' ? 'text-pink-600' : job.service_type === 'edit' ? 'text-amber-600' : 'text-slate-600'}`} />}
+                                <span>{isDownloaded ? '🔐 Re-Download' : (job.service_type === 'photo' || job.service_type === 'edit') ? '⬇ Download' : 'Download'}</span>
+                              </button>
+                            );
+                          })()}
 
-                          {/* Print Button */}
-                          {!isDone && (
+                          {/* Print Button (Hidden for photo & edit jobs — printed via Photoshop/studio software) */}
+                          {!isDone && job.service_type !== 'photo' && job.service_type !== 'edit' && (
                             <button
                               type="button"
                               onClick={() => handlePrintAll(job)}
@@ -1952,21 +2214,39 @@ export default function ShopDashboard({ shop, onLogout }) {
 
                             <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
 
-                            {/* Download All */}
-                            {canDownload && (
-                              <button
-                                type="button"
-                                onClick={() => handleRequestDownload(job)}
-                                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
-                                title="Download all files directly (Customer approval required)"
-                              >
-                                <Download className="w-3.5 h-3.5 text-slate-600" />
-                                <span>Download All</span>
-                              </button>
-                            )}
+                            {/* Download All — 1st download direct & sets in-progress; subsequent downloads require permission */}
+                            {canDownload && (() => {
+                              const isDownloaded = (job.download_count > 0) || downloadedJobIds.has(job.id);
+                              const isDirectEligible = (job.service_type === 'edit' || job.service_type === 'photo');
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => (isDirectEligible && !isDownloaded) ? handleDirectDownload(job) : handleRequestDownload(job)}
+                                  className={`px-2.5 py-1 font-bold rounded-lg text-xs flex items-center gap-1 transition border cursor-pointer shadow-2xs ${
+                                    isDownloaded
+                                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                                      : job.service_type === 'photo'
+                                      ? 'bg-pink-50 hover:bg-pink-100 text-pink-900 border-pink-300'
+                                      : job.service_type === 'edit'
+                                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+                                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                  }`}
+                                  title={
+                                    isDownloaded
+                                      ? 'Already downloaded once — Re-download requires customer permission'
+                                      : isDirectEligible
+                                      ? 'Download files and start progress (Direct 1st download)'
+                                      : 'Download files (Customer approval required)'
+                                  }
+                                >
+                                  {isDownloaded ? <Lock className="w-3.5 h-3.5 text-slate-500" /> : <Download className={`w-3.5 h-3.5 ${job.service_type === 'photo' ? 'text-pink-600' : job.service_type === 'edit' ? 'text-amber-600' : 'text-slate-600'}`} />}
+                                  <span>{isDownloaded ? '🔐 Re-Download All' : (job.service_type === 'photo' || job.service_type === 'edit') ? '⬇ Download All' : 'Download All'}</span>
+                                </button>
+                              );
+                            })()}
 
-                            {/* Print All Button */}
-                            {!isDone && (
+                            {/* Print All Button (Hidden for photo & edit jobs) */}
+                            {!isDone && job.service_type !== 'photo' && job.service_type !== 'edit' && (
                               <button
                                 type="button"
                                 onClick={() => handlePrintAll(job)}
@@ -2039,27 +2319,66 @@ export default function ShopDashboard({ shop, onLogout }) {
                                   </span>
 
                                   <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-xs font-bold text-slate-800 shadow-2xs min-w-0 max-w-[130px] sm:max-w-[170px] md:max-w-[220px] shrink truncate" title={file.original_name}>
-                                    <FileText className={`w-3.5 h-3.5 shrink-0 ${isFilePrinted ? 'text-emerald-600' : 'text-rose-500'}`} />
+                                    {getFileIcon(file.original_name, isFilePrinted)}
                                     <span className="truncate">{file.original_name}</span>
                                   </div>
 
-                                  <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                                    📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
-                                  </span>
-                                  <span className="bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
-                                    🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
-                                  </span>
-                                  <span className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
-                                    file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
-                                  }`}>
-                                    {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
-                                  </span>
-                                  <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                                    📐 {file.paper_size || 'A4'}
-                                  </span>
-                                  <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
-                                    {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
-                                  </span>
+                                  {job.service_type === 'edit' ? (
+                                    <>
+                                      <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-lg border border-amber-300 text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap">
+                                        ✏️ Edit & Print
+                                      </span>
+                                      <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                        📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                                      </span>
+                                      <span className="bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                        🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                                      </span>
+                                      <span className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
+                                        file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                      }`}>
+                                        {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                                      </span>
+                                      <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                        📐 {file.paper_size || 'A4'}
+                                      </span>
+                                      <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                        {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                                      </span>
+                                    </>
+                                  ) : job.service_type === 'photo' ? (
+                                    <>
+                                      <span className="bg-pink-100 text-pink-900 px-2 py-0.5 rounded-lg border border-pink-300 text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap">
+                                        🖼️ {job.service_detail === 'passport_8' ? '8x Passport' : job.service_detail === 'stamp_4' ? '4x Stamp' : job.service_detail === 'photo_4r' ? '4R Photo (4×6)' : job.service_detail === 'photo_a4' ? 'A4 Glossy' : '4x Passport'}
+                                      </span>
+                                      <span className="bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                        📷 {file.copies || 1}x Set
+                                      </span>
+                                      <span className="bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                        ✨ Glossy Photo
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                        📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                                      </span>
+                                      <span className="bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200 text-blue-700 font-bold text-[11px] shadow-2xs shrink-0 whitespace-nowrap">
+                                        🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                                      </span>
+                                      <span className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold shadow-2xs shrink-0 whitespace-nowrap ${
+                                        file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                      }`}>
+                                        {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                                      </span>
+                                      <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                        📐 {file.paper_size || 'A4'}
+                                      </span>
+                                      <span className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 text-slate-600 text-[11px] font-semibold shadow-2xs shrink-0 whitespace-nowrap">
+                                        {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                                      </span>
+                                    </>
+                                  )}
 
                                   {file.notes && (
                                     <span className="bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[120px] shrink-0" title={file.notes}>
@@ -2092,20 +2411,38 @@ export default function ShopDashboard({ shop, onLogout }) {
                                   ) : null}
 
                                   {/* Download This File */}
-                                  {canDownload && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRequestDownload(job, file)}
-                                      className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition border border-slate-200 cursor-pointer shadow-2xs"
-                                      title={`Download ${file.original_name} (Customer approval required)`}
-                                    >
-                                      <Download className="w-3.5 h-3.5 text-slate-600" />
-                                      <span>Download</span>
-                                    </button>
-                                  )}
+                                  {canDownload && (() => {
+                                    const isDownloaded = (job.download_count > 0) || downloadedJobIds.has(job.id);
+                                    const isDirectEligible = (job.service_type === 'edit' || job.service_type === 'photo');
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => (isDirectEligible && !isDownloaded) ? handleDirectDownload(job, file) : handleRequestDownload(job, file)}
+                                        className={`px-2 py-1 font-bold rounded-lg text-xs flex items-center gap-1 transition border cursor-pointer shadow-2xs ${
+                                          isDownloaded
+                                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                                            : job.service_type === 'photo'
+                                            ? 'bg-pink-50 hover:bg-pink-100 text-pink-900 border-pink-300'
+                                            : job.service_type === 'edit'
+                                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+                                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                        }`}
+                                        title={
+                                          isDownloaded
+                                            ? `Already downloaded — Re-download ${file.original_name} requires customer permission`
+                                            : isDirectEligible
+                                            ? `Download ${file.original_name} and start progress`
+                                            : `Download ${file.original_name} (Customer approval required)`
+                                        }
+                                      >
+                                        {isDownloaded ? <Lock className="w-3.5 h-3.5 text-slate-500" /> : <Download className={`w-3.5 h-3.5 ${job.service_type === 'photo' ? 'text-pink-600' : job.service_type === 'edit' ? 'text-amber-600' : 'text-slate-600'}`} />}
+                                        <span>{isDownloaded ? '🔐 Re-Download' : 'Download'}</span>
+                                      </button>
+                                    );
+                                  })()}
 
-                                  {/* Print This File (One by One - Stay in Pending until all done) */}
-                                  {!isDone && !isFilePrinted && (
+                                  {/* Print This File (Hidden for photo & edit jobs) */}
+                                  {!isDone && !isFilePrinted && job.service_type !== 'photo' && job.service_type !== 'edit' && (
                                     <button
                                       type="button"
                                       onClick={() => handlePrintFile(file, job)}
@@ -2434,20 +2771,20 @@ export default function ShopDashboard({ shop, onLogout }) {
       {/* Shop Rates & Customer Notice Editor Modal */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                   <Store className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-slate-800">Shop Rates & Customer Notice</h3>
-                  <p className="text-[11px] text-slate-400">Updates reflect live on your QR upload page</p>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-800">Shop Rates & Customer Notice</h3>
+                  <p className="text-[11px] text-slate-400">Set rates for documents, photo studio & binding. Updates reflect live on QR page.</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowSettingsModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition cursor-pointer"
               >✕</button>
             </div>
 
@@ -2476,7 +2813,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                   setSavingShopSettings(false);
                 }
               }}
-              className="space-y-3.5 text-xs"
+              className="flex-1 overflow-y-auto pr-1 mt-4 space-y-4 text-xs"
             >
               {/* Counter Notice / Customer Promo Text */}
               <div>
@@ -2493,151 +2830,287 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <p className="text-[10px] text-slate-400 mt-0.5">This banner appears at the top of your customer upload page.</p>
               </div>
 
-              {/* Pricing Grid */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">B&W Price (৳/page)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={currentShopData.price_bw || '2.00'}
-                    onChange={e => setCurrentShopData({ ...currentShopData, price_bw: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500"
-                  />
+              {/* 2-Column Grid for Rates */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                
+                {/* Left Column: Print Rates & Photo Studio Rates */}
+                <div className="space-y-3.5">
+                  {/* Document Pricing Grid */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                      <span>🖨️</span> Document Print Rates
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">B&W (৳/page)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={currentShopData.price_bw || '2.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_bw: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Color (৳/page)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={currentShopData.price_color || '10.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_color: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-blue-600 focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Legal Sheet Extra (৳)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={currentShopData.price_legal || '3.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_legal: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">A3 Sheet Extra (৳)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={currentShopData.price_a3 || '15.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_a3: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Photo Print Pricing Grid */}
+                  <div className="p-3.5 bg-pink-50/50 rounded-2xl border border-pink-200/80 space-y-2.5">
+                    <label className="font-bold text-pink-900 flex items-center gap-1.5 text-xs">
+                      <span>🖼️</span> Photo Studio Rates (Glossy Paper)
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Passport 4-Pack (৳)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.price_passport_4 || '30.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_passport_4: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-pink-700 focus:ring-2 focus:ring-pink-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Passport 8-Pack (৳)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.price_passport_8 || '50.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_passport_8: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-pink-700 focus:ring-2 focus:ring-pink-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Stamp 4-Pack (৳)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.price_stamp_4 || '20.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_stamp_4: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-pink-700 focus:ring-2 focus:ring-pink-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">4R Photo 4x6" (৳)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.price_photo_4r || '20.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_photo_4r: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500"
+                        />
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">A4 Photo Sheet (৳)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.price_photo_a4 || '60.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_photo_a4: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Color Price (৳/page)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={currentShopData.price_color || '10.00'}
-                    onChange={e => setCurrentShopData({ ...currentShopData, price_color: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-blue-600 focus:ring-2 focus:ring-blue-500"
-                  />
+
+                {/* Right Column: Binding, Hours, Payment & Bulk Discounts */}
+                <div className="space-y-3.5">
+                  {/* Binding Rates Grid */}
+                  <div className="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-200/80 space-y-2.5">
+                    <label className="font-bold text-purple-900 flex items-center gap-1.5 text-xs">
+                      <span>📖</span> Book Binding Extra Rates
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Spiral Binding (৳)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.price_bind_spiral || '30.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_bind_spiral: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-purple-700 focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Tape Binding (৳)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.price_bind_tape || '20.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_bind_tape: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-purple-700 focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Hardcover (৳)</label>
+                        <input
+                          type="number"
+                          step="5"
+                          value={currentShopData.price_bind_hardcover || '300.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_bind_hardcover: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-purple-700 focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Document Editing Fee Card */}
+                  <div className="p-3.5 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-2.5">
+                    <label className="font-bold text-amber-900 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5">
+                        <span>✏️</span> Document Editing Fee (Word / Photoshop)
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Base Edit Charge / File (৳)</label>
+                        <input
+                          type="number"
+                          step="5"
+                          value={currentShopData.price_edit || '30.00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, price_edit: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-amber-800 focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div className="flex items-center text-[10px] text-amber-800/80 italic pt-1 sm:pt-0">
+                        Added to normal print rates when customer chooses Edit & Print.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Operating Hours */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                    <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                        Operating Hours & Status
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentShopData({ ...currentShopData, is_closed: currentShopData.is_closed ? 0 : 1 })}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                          !currentShopData.is_closed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {!currentShopData.is_closed ? '🟢 Currently OPEN' : '🔴 Currently CLOSED'}
+                      </button>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Opening Time</label>
+                        <input
+                          type="time"
+                          value={currentShopData.opening_time || '08:00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, opening_time: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Closing Time</label>
+                        <input
+                          type="time"
+                          value={currentShopData.closing_time || '22:00'}
+                          onChange={e => setCurrentShopData({ ...currentShopData, closing_time: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Online Payment Numbers */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                      <CreditCard className="w-3.5 h-3.5 text-pink-600" />
+                      Payment Numbers (bKash & Nagad)
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">bKash (Personal/Merchant)</label>
+                        <input
+                          type="tel"
+                          placeholder="017XXXXXXXX"
+                          value={currentShopData.bkash_number || ''}
+                          onChange={e => setCurrentShopData({ ...currentShopData, bkash_number: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Nagad Number</label>
+                        <input
+                          type="tel"
+                          placeholder="018XXXXXXXX"
+                          value={currentShopData.nagad_number || ''}
+                          onChange={e => setCurrentShopData({ ...currentShopData, nagad_number: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bulk Discount Rules */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
+                      <Percent className="w-3.5 h-3.5 text-amber-600" />
+                      Auto Bulk Discounts
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Min Pages</label>
+                        <input
+                          type="number"
+                          value={currentShopData.discount_min_pages || 50}
+                          onChange={e => setCurrentShopData({ ...currentShopData, discount_min_pages: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Discount %</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={currentShopData.discount_percent || 10}
+                          onChange={e => setCurrentShopData({ ...currentShopData, discount_percent: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Legal Paper Extra (৳)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={currentShopData.price_legal || '3.00'}
-                    onChange={e => setCurrentShopData({ ...currentShopData, price_legal: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">A3 Large Extra (৳)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={currentShopData.price_a3 || '15.00'}
-                    onChange={e => setCurrentShopData({ ...currentShopData, price_a3: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Operating Hours (Feature 3) */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                    Operating Hours & Open/Closed
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentShopData({ ...currentShopData, is_closed: currentShopData.is_closed ? 0 : 1 })}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      !currentShopData.is_closed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}
-                  >
-                    {!currentShopData.is_closed ? '🟢 Currently OPEN' : '🔴 Currently CLOSED'}
-                  </button>
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">Opening Time</label>
-                    <input
-                      type="time"
-                      value={currentShopData.opening_time || '08:00'}
-                      onChange={e => setCurrentShopData({ ...currentShopData, opening_time: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">Closing Time</label>
-                    <input
-                      type="time"
-                      value={currentShopData.closing_time || '22:00'}
-                      onChange={e => setCurrentShopData({ ...currentShopData, closing_time: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Online Payment Numbers (Feature 4) */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
-                  <CreditCard className="w-3.5 h-3.5 text-pink-600" />
-                  Online Payment Numbers (bKash & Nagad)
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">bKash (Personal/Merchant)</label>
-                    <input
-                      type="tel"
-                      placeholder="017XXXXXXXX"
-                      value={currentShopData.bkash_number || ''}
-                      onChange={e => setCurrentShopData({ ...currentShopData, bkash_number: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">Nagad Number</label>
-                    <input
-                      type="tel"
-                      placeholder="018XXXXXXXX"
-                      value={currentShopData.nagad_number || ''}
-                      onChange={e => setCurrentShopData({ ...currentShopData, nagad_number: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Bulk Discount Rules (Feature 7) */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
-                  <Percent className="w-3.5 h-3.5 text-amber-600" />
-                  Auto Bulk Discounts
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Min Pages</label>
-                    <input
-                      type="number"
-                      value={currentShopData.discount_min_pages || 50}
-                      onChange={e => setCurrentShopData({ ...currentShopData, discount_min_pages: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Discount %</label>
-                    <input
-                      type="number"
-                      step="1"
-                      value={currentShopData.discount_percent || 10}
-                      onChange={e => setCurrentShopData({ ...currentShopData, discount_percent: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
-                    />
-                  </div>
-                </div>
-              </div>
-
+              {/* Shop Address */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Shop Address / Counter Location</label>
                 <input
@@ -2648,13 +3121,23 @@ export default function ShopDashboard({ shop, onLogout }) {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={savingShopSettings}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-xs"
-              >
-                {savingShopSettings ? 'Saving...' : '✓ Save Settings & Rates'}
-              </button>
+              {/* Footer Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingShopSettings}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  {savingShopSettings ? 'Saving...' : '✓ Save Settings & Rates'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
