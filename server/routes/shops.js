@@ -30,6 +30,7 @@ router.get('/public', async (req, res) => {
                    COALESCE(discount_percent, 10.00) as discount_percent,
                    COALESCE(discount_tier2_pages, 100) as discount_tier2_pages,
                    COALESCE(discount_tier2_percent, 15.00) as discount_tier2_percent,
+                   COALESCE(allow_discount, 1) as allow_discount,
                    COALESCE(allow_cash_payment, 1) as allow_cash_payment,
                    COALESCE(allow_bkash_payment, 1) as allow_bkash_payment,
                    COALESCE(allow_nagad_payment, 1) as allow_nagad_payment,

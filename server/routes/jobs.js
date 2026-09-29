@@ -55,6 +55,7 @@ router.get('/', async (req, res) => {
                    COALESCE(service_type, 'print') as service_type,
                    service_detail,
                    COALESCE(download_count, 0) as download_count,
+                   COALESCE(reprint_count, 0) as reprint_count,
                    status, global_notes, files_deleted, created_at, completed_at
             FROM print_jobs WHERE shop_id = ?
         `;
@@ -124,6 +125,7 @@ router.get('/track/:jobCode', async (req, res) => {
                    COALESCE(j.service_type, 'print') as service_type,
                    j.service_detail,
                    COALESCE(j.download_count, 0) as download_count,
+                   COALESCE(j.reprint_count, 0) as reprint_count,
                    j.status, j.global_notes, j.files_deleted, j.created_at, j.completed_at,
                    s.name as shop_name, s.phone as shop_phone, s.address as shop_address,
                    s.bkash_number as shop_bkash, s.bkash_type as shop_bkash_type, s.bkash_qr_image as shop_bkash_qr,
@@ -458,6 +460,12 @@ router.get('/serve/:fileId', async (req, res) => {
             return res.status(404).send('File missing from disk storage');
         }
 
+        const normalizedPath = path.resolve(file.stored_path);
+        const uploadsBase = path.resolve(path.join(__dirname, '..', '..', 'uploads'));
+        if (!normalizedPath.startsWith(uploadsBase)) {
+            return res.status(403).send('Access denied: Invalid file location');
+        }
+
         const ext = path.extname(file.original_name).toLowerCase();
         const mimeTypes = {
             '.pdf': 'application/pdf',
@@ -513,6 +521,12 @@ router.get('/download/:fileId', async (req, res) => {
 
         if (!file.stored_path || !fs.existsSync(file.stored_path)) {
             return res.status(404).send('File missing from disk storage');
+        }
+
+        const normalizedPath = path.resolve(file.stored_path);
+        const uploadsBase = path.resolve(path.join(__dirname, '..', '..', 'uploads'));
+        if (!normalizedPath.startsWith(uploadsBase)) {
+            return res.status(403).send('Access denied: Invalid file location');
         }
 
         // Increment download count and transition status from pending -> printing (In Progress)

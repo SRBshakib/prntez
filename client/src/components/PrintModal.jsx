@@ -4,20 +4,89 @@ import {
   ZoomIn, ZoomOut, Maximize2, Download
 } from 'lucide-react';
 
+// Subcomponent: Individual PDF Page Canvas for Continuous Multi-Page Scrolling
+function PdfPageItem({ pdf, pageNum, scale }) {
+  const canvasRef = useRef(null);
+  const renderTaskRef = useRef(null);
+  const [rendering, setRendering] = useState(true);
+
+  useEffect(() => {
+    if (!pdf || !canvasRef.current) return;
+    let isMounted = true;
+
+    if (renderTaskRef.current) {
+      try { renderTaskRef.current.cancel(); } catch (_) {}
+    }
+
+    setRendering(true);
+    pdf.getPage(pageNum).then((page) => {
+      if (!isMounted || !canvasRef.current) return;
+      const canvas = canvasRef.current;
+      const pixelRatio = window.devicePixelRatio || 1;
+      const viewport = page.getViewport({ scale: scale * pixelRatio });
+
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      canvas.style.height = `${viewport.height / pixelRatio}px`;
+      canvas.style.width = `${viewport.width / pixelRatio}px`;
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const renderContext = {
+        canvasContext: ctx,
+        viewport: viewport,
+      };
+
+      const task = page.render(renderContext);
+      renderTaskRef.current = task;
+
+      task.promise
+        .then(() => {
+          if (isMounted) setRendering(false);
+        })
+        .catch((err) => {
+          if (err?.name !== 'RenderingCancelledException') {
+            console.warn(`Page ${pageNum} render error:`, err);
+          }
+          if (isMounted) setRendering(false);
+        });
+    });
+
+    return () => {
+      isMounted = false;
+      if (renderTaskRef.current) {
+        try { renderTaskRef.current.cancel(); } catch (_) {}
+      }
+    };
+  }, [pdf, pageNum, scale]);
+
+  return (
+    <div
+      id={`pdf-page-${pageNum}`}
+      data-page={pageNum}
+      className="bg-white rounded-xl shadow-lg p-2.5 sm:p-3 border border-slate-200 transition-all shrink-0 flex flex-col items-center relative"
+    >
+      <canvas ref={canvasRef} className="rounded shadow-2xs" />
+      <div className="w-full flex items-center justify-between text-[11px] text-slate-400 font-semibold px-2 pt-2 border-t border-slate-100 mt-2">
+        <span>Page {pageNum} of {pdf?.numPages || 1}</span>
+        {rendering && <span className="text-blue-500 animate-pulse text-[10px]">Rendering...</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function PrintModal({ file, job, preview, onClose, onPrint }) {
   const activeFile = file || preview?.file;
   const activeJob = job || preview?.job;
 
   const [loading, setLoading] = useState(true);
-  const [rendering, setRendering] = useState(false);
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0); // Default to 100%
   const [useNativeViewer, setUseNativeViewer] = useState(false);
 
-  const canvasRef = useRef(null);
   const pdfDocRef = useRef(null);
-  const renderTaskRef = useRef(null);
   const containerRef = useRef(null);
 
   const fileName = activeFile?.original_name || '';
@@ -100,64 +169,35 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
 
     return () => {
       isMounted = false;
-      if (renderTaskRef.current) {
-        try { renderTaskRef.current.cancel(); } catch (_) {}
-      }
       pdfDocRef.current = null;
     };
   }, [activeFile, useNativeViewer, isDocx]);
 
-  // 2. Render Page on Canvas whenever pageNumber, scale, or doc changes
-  const renderCurrentPage = () => {
-    const pdf = pdfDocRef.current;
-    const canvas = canvasRef.current;
-    if (!pdf || !canvas || useNativeViewer) return;
-
-    // Cancel any ongoing render
-    if (renderTaskRef.current) {
-      try { renderTaskRef.current.cancel(); } catch (_) {}
+  // Track active page as user scrolls through pages
+  const handleScroll = () => {
+    if (!containerRef.current || numPages <= 1) return;
+    const containerTop = containerRef.current.getBoundingClientRect().top;
+    for (let i = 1; i <= numPages; i++) {
+      const el = document.getElementById(`pdf-page-${i}`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.bottom > containerTop + 80) {
+          setPageNumber(i);
+          break;
+        }
+      }
     }
-
-    setRendering(true);
-
-    pdf.getPage(pageNumber).then((page) => {
-      const pixelRatio = window.devicePixelRatio || 1;
-      const viewport = page.getViewport({ scale: scale * pixelRatio });
-
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      canvas.style.height = `${viewport.height / pixelRatio}px`;
-      canvas.style.width = `${viewport.width / pixelRatio}px`;
-
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const renderContext = {
-        canvasContext: ctx,
-        viewport: viewport,
-      };
-
-      const task = page.render(renderContext);
-      renderTaskRef.current = task;
-
-      task.promise
-        .then(() => {
-          setRendering(false);
-        })
-        .catch((err) => {
-          if (err?.name !== 'RenderingCancelledException') {
-            console.warn('Page render error:', err);
-          }
-          setRendering(false);
-        });
-    });
   };
 
-  useEffect(() => {
-    if (isPdf && pdfDocRef.current && !loading && !useNativeViewer) {
-      renderCurrentPage();
+  // Scroll directly to a specific page
+  const scrollToPage = (targetPage) => {
+    const clamped = Math.max(1, Math.min(numPages, targetPage));
+    setPageNumber(clamped);
+    const targetEl = document.getElementById(`pdf-page-${clamped}`);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [pageNumber, scale, loading, useNativeViewer]);
+  };
 
   // Fit to Width Handler
   const handleFitWidth = () => {
@@ -165,8 +205,8 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
       setScale(1.0);
       return;
     }
-    pdfDocRef.current.getPage(pageNumber).then((page) => {
-      const containerWidth = containerRef.current.clientWidth - 48; // padding
+    pdfDocRef.current.getPage(1).then((page) => {
+      const containerWidth = containerRef.current.clientWidth - 56; // padding
       const unscaledViewport = page.getViewport({ scale: 1 });
       const fitScale = Math.max(0.5, Math.min(2.0, containerWidth / unscaledViewport.width));
       setScale(parseFloat(fitScale.toFixed(2)));
@@ -247,7 +287,8 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
         {/* Modal Body / Viewer */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-auto bg-slate-100/80 p-4 sm:p-6 flex flex-col items-center justify-start min-h-[350px] relative"
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto overflow-x-auto bg-slate-100/80 p-4 sm:p-6 flex flex-col items-center justify-start min-h-[350px] relative custom-scrollbar scroll-smooth"
         >
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-100/90 z-10 gap-2 text-slate-500">
@@ -256,10 +297,17 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
             </div>
           )}
 
-          {/* 1. PDF Canvas Viewer (Always Mounted) */}
-          {isPdf && !useNativeViewer && (
-            <div className="bg-white rounded-xl shadow-lg p-2 border border-slate-200 my-auto transition-all">
-              <canvas ref={canvasRef} className="rounded" />
+          {/* 1. PDF Continuous Multi-Page Canvas Viewer */}
+          {isPdf && !useNativeViewer && pdfDocRef.current && (
+            <div className="w-full flex flex-col items-center gap-6 py-4 pb-24">
+              {Array.from({ length: numPages }, (_, i) => i + 1).map((pNum) => (
+                <PdfPageItem
+                  key={pNum}
+                  pdf={pdfDocRef.current}
+                  pageNum={pNum}
+                  scale={scale}
+                />
+              ))}
             </div>
           )}
 
@@ -324,16 +372,18 @@ export default function PrintModal({ file, job, preview, onClose, onPrint }) {
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
+                onClick={() => scrollToPage(pageNumber - 1)}
                 disabled={pageNumber <= 1}
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Previous Page"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
+                onClick={() => scrollToPage(pageNumber + 1)}
                 disabled={pageNumber >= numPages}
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Next Page"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

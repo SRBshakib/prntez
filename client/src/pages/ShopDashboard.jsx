@@ -15,6 +15,7 @@ import ShopQrModal from '../components/ShopQrModal';
 import ShopToolsModal from '../components/ShopToolsModal';
 import ShopProfileModal from '../components/ShopProfileModal';
 import ShopPointsModal from '../components/ShopPointsModal';
+import ShopManualModal from '../components/ShopManualModal';
 import LanguageToggle from '../components/LanguageToggle';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -71,6 +72,7 @@ export default function ShopDashboard({ shop, onLogout }) {
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPointsModal, setShowPointsModal] = useState(false);
+  const [showManualModal, setShowManualModal] = useState(false);
   const [pointsBalance, setPointsBalance] = useState(() => shop?.points_balance || 0);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -283,7 +285,26 @@ export default function ShopDashboard({ shop, onLogout }) {
 
     const onReprintGranted = (data) => {
       setReprintModal(null);
-      showToast(`✓ Customer approved reprint for #${data.job_code}! Printing...`, 'success');
+      showToast(
+        isBn
+          ? `✓ কাস্টমার #${data.job_code} এর রিপ্রিন্ট অনুমোদন করেছেন! পুনরায় পেমেন্ট বকেয়া করা হয়েছে।`
+          : `✓ Customer approved reprint for #${data.job_code}! Payment reset to Unpaid. Printing...`,
+        'success'
+      );
+      // Update job state: mark unpaid and increment reprint_count so customer pays again
+      setJobs(prev => prev.map(j => {
+        if (j.id === data.job_id || j.job_code === data.job_code) {
+          return {
+            ...j,
+            payment_status: 'unpaid',
+            payment_method: 'cash',
+            reprint_count: (j.reprint_count || 0) + 1,
+            is_reprint: true
+          };
+        }
+        return j;
+      }));
+
       // Trigger reprint for the specific file or all files
       fetch(`/api/jobs/${data.job_id}/files`)
         .then(res => res.json())
@@ -1038,11 +1059,40 @@ export default function ShopDashboard({ shop, onLogout }) {
   const isWipingRef = useRef(false);
 
   // Candidate jobs for Freshly Printed panel:
-  // Exclude purged jobs (!j.files_deleted), limit to maximum 5, excluding dismissed
+  // Shows original print AND reprint copies (if reprinted) so shopkeeper has token for both sets!
   const freshPrintedJobs = useMemo(() => {
-    return jobs
-      .filter(j => (j.status === 'done' || j.status === 'printing') && !j.files_deleted && !dismissedFreshIds.has(j.id))
-      .slice(0, 5);
+    const list = [];
+    const eligibleJobs = jobs.filter(j => (j.status === 'done' || j.status === 'printing') && !j.files_deleted);
+
+    for (const j of eligibleJobs) {
+      const reprintCount = parseInt(j.reprint_count || 0, 10);
+      
+      // If job has reprint(s), add the reprint card(s) on top
+      for (let r = reprintCount; r >= 1; r--) {
+        const reprintKey = `${j.id}_reprint_${r}`;
+        if (!dismissedFreshIds.has(reprintKey) && !dismissedFreshIds.has(j.id)) {
+          list.push({
+            ...j,
+            freshUniqueKey: reprintKey,
+            isReprintCopy: true,
+            reprintNumber: r
+          });
+        }
+      }
+
+      // Initial / original print card
+      const origKey = `${j.id}_orig`;
+      if (!dismissedFreshIds.has(origKey) && !dismissedFreshIds.has(j.id)) {
+        list.push({
+          ...j,
+          freshUniqueKey: origKey,
+          isReprintCopy: false,
+          reprintNumber: 0
+        });
+      }
+    }
+
+    return list.slice(0, 8);
   }, [jobs, dismissedFreshIds]);
 
   // Active (un-purged) freshly printed jobs
@@ -1056,10 +1106,11 @@ export default function ShopDashboard({ shop, onLogout }) {
 
     // Stagger wipe starting from bottom (index total - 1) up to top (index 0)
     listToWipe.forEach((job, index) => {
+      const itemKey = job.freshUniqueKey || job.id;
       const bottomDistance = total - 1 - index; // 0 for the bottom-most item, total-1 for top
       const delay = bottomDistance * 170; // 170ms delay per card from bottom
       setTimeout(() => {
-        setWipingFreshIds(prev => new Set(prev).add(job.id));
+        setWipingFreshIds(prev => new Set(prev).add(itemKey));
       }, delay);
     });
 
@@ -1067,7 +1118,7 @@ export default function ShopDashboard({ shop, onLogout }) {
     setTimeout(() => {
       setDismissedFreshIds(prev => {
         const next = new Set(prev);
-        listToWipe.forEach(j => next.add(j.id));
+        listToWipe.forEach(j => next.add(j.freshUniqueKey || j.id));
         return next;
       });
       setWipingFreshIds(new Set());
@@ -1249,6 +1300,15 @@ export default function ShopDashboard({ shop, onLogout }) {
               >
                 <QrCode className="w-3.5 h-3.5 text-blue-600" />
                 <span className="hidden 2xl:inline">{isBn ? 'স্ট্যান্ডি' : 'Standee'}</span>
+              </button>
+
+              <button
+                onClick={() => setShowManualModal(true)}
+                className="hidden sm:flex px-2 py-1 text-slate-700 hover:text-amber-600 hover:bg-white rounded-xl transition items-center gap-1 text-xs font-bold cursor-pointer"
+                title={isBn ? 'দোকানদার সহায়িকা ও ইউজার গাইড' : 'Shopkeeper Manual & Guide'}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden 2xl:inline">{isBn ? 'সহায়িকা' : 'Manual'}</span>
               </button>
 
               <button
@@ -1471,10 +1531,18 @@ export default function ShopDashboard({ shop, onLogout }) {
 
               <button
                 onClick={() => setShowQrModal(true)}
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-xs"
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
               >
                 <QrCode className="w-3.5 h-3.5" />
                 <span>{isBn ? 'কাস্টম স্ট্যান্ডি পোস্টার' : 'Custom Standee Poster'}</span>
+              </button>
+
+              <button
+                onClick={() => setShowManualModal(true)}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                <span>{isBn ? 'দোকানদার সহায়িকা ও গাইড' : 'Shopkeeper Manual & Guide'}</span>
               </button>
             </div>
           </div>
@@ -2566,21 +2634,30 @@ export default function ShopDashboard({ shop, onLogout }) {
                   const totalPages = fj.total_pages || (fj.files ? fj.files.reduce((acc, f) => acc + (f.page_count || 1) * (f.copies || 1), 0) : 1);
                   const totalCopies = fj.files && fj.files.length > 0 ? fj.files[0].copies || 1 : 1;
                   const isPaid = isJobPaid(fj);
-                  const isWiping = wipingFreshIds.has(fj.id);
+                  const itemKey = fj.freshUniqueKey || fj.id;
+                  const isWiping = wipingFreshIds.has(itemKey);
 
                   return (
                     <div
-                      key={fj.id}
-                      className={`bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-emerald-300 rounded-2xl p-2.5 sm:p-3 space-y-2 transition-all shadow-2xs hover:shadow-xs relative ${
+                      key={itemKey}
+                      className={`bg-white hover:bg-slate-50/60 border ${
+                        fj.isReprintCopy ? 'border-purple-300 bg-purple-50/20' : 'border-slate-200/90'
+                      } hover:border-emerald-300 rounded-2xl p-2.5 sm:p-3 space-y-2 transition-all shadow-2xs hover:shadow-xs relative ${
                         isWiping ? 'animate-wipe-out' : ''
                       }`}
                     >
                       {/* Layer 1: Token, Customer Name, Status & Actions */}
                       <div className="flex items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1 flex-wrap">
                           <span className="text-xs font-black text-blue-700 font-mono tracking-tight bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-lg shrink-0 shadow-2xs">
                             #{fj.job_code}
                           </span>
+                          {fj.isReprintCopy && (
+                            <span className="text-[10px] font-extrabold text-purple-800 bg-purple-100 border border-purple-300 px-1.5 py-0.5 rounded shadow-2xs flex items-center gap-0.5 shrink-0">
+                              <span>🔄</span>
+                              <span>{isBn ? `রিপ্রিন্ট #${fj.reprintNumber || 1}` : `Reprint #${fj.reprintNumber || 1}`}</span>
+                            </span>
+                          )}
                           <span className="text-xs font-extrabold text-slate-800 truncate flex items-center gap-1" title={fj.customer_name || 'Guest'}>
                             <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">{fj.customer_name || (isBn ? 'অতিথি' : 'Guest')}</span>
@@ -2606,7 +2683,7 @@ export default function ShopDashboard({ shop, onLogout }) {
 
                           <button
                             type="button"
-                            onClick={() => setDismissedFreshIds(prev => new Set(prev).add(fj.id))}
+                            onClick={() => setDismissedFreshIds(prev => new Set(prev).add(itemKey))}
                             className="w-5 h-5 rounded-md hover:bg-rose-50 text-slate-300 hover:text-rose-500 flex items-center justify-center transition cursor-pointer shrink-0 ml-0.5"
                             title="Dismiss (Order Handed Over)"
                           >
@@ -2964,6 +3041,14 @@ export default function ShopDashboard({ shop, onLogout }) {
           shop={currentShopData || shop}
           currentPoints={pointsBalance}
           onClose={() => setShowPointsModal(false)}
+        />
+      )}
+
+      {/* Shopkeeper User Manual & Visual Guide Modal */}
+      {showManualModal && (
+        <ShopManualModal
+          shop={currentShopData || shop}
+          onClose={() => setShowManualModal(false)}
         />
       )}
 

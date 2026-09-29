@@ -1,6 +1,35 @@
 [
   {
     "mode": "fallback",
+    "file": "file_1790681122260_lim17.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 464,
+    "timestamp": "2026-09-29T11:25:43.367Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1790681122260_lim17.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 447,
+    "timestamp": "2026-09-29T11:25:32.638Z"
+  },
+  {
+    "mode": "fallback_error",
+    "file": "file_1790681082377_yw0ut.png",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 460,
+    "error": "Command failed: powershell -NoProfile -Command \"Start-Process -FilePath \"F:\\xamppnew\\htdocs\\prntez\\uploads\\temp\\105\\file_1790681082377_yw0ut.png\" -Verb PrintTo -ArgumentList '\"Microsoft Print to PDF\"' -WindowStyle Hidden\"\nStart-Process : This command cannot be run due to the error: No application is associated with the specified file for \r\nthis operation.\r\nAt line:1 char:1\r\n+ Start-Process -FilePath F:\\xamppnew\\htdocs\\prntez\\uploads\\temp\\105\\fi ...\r\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : InvalidOperation: (:) [Start-Process], InvalidOperationException\r\n    + FullyQualifiedErrorId : InvalidOperationException,Microsoft.PowerShell.Commands.StartProcessCommand\r\n \r\n",
+    "timestamp": "2026-09-29T11:24:56.157Z"
+  },
+  {
+    "mode": "fallback",
+    "file": "file_1790678625180_8ym1a.pdf",
+    "printer": "Microsoft Print to PDF",
+    "elapsedMs": 436,
+    "timestamp": "2026-09-29T10:48:32.337Z"
+  },
+  {
+    "mode": "fallback",
     "file": "file_1790666356657_d1epy.pdf",
     "printer": "Microsoft Print to PDF",
     "elapsedMs": 356,

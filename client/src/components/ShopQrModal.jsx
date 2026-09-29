@@ -117,17 +117,75 @@ export default function ShopQrModal({ shop, onClose }) {
 
   // Helper function for rounded rectangles on HTML5 Canvas
   function roundRect(ctx, x, y, width, height, radius) {
+    if (typeof radius === 'number') {
+      radius = { tl: radius, tr: radius, br: radius, bl: radius };
+    } else {
+      radius = { tl: 0, tr: 0, br: 0, bl: 0, ...radius };
+    }
     ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.moveTo(x + radius.tl, y);
+    ctx.lineTo(x + width - radius.tr, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
+    ctx.lineTo(x + width, y + height - radius.br);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
+    ctx.lineTo(x + radius.bl, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
+    ctx.lineTo(x, y + radius.tl);
+    ctx.quadraticCurveTo(x, y, x + radius.tl, y);
     ctx.closePath();
+  }
+
+  // Draw optical viewfinder scanning reticles at corners of QR
+  function drawReticles(ctx, x, y, width, height, bLen, strokeWidth, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Top-Left
+    ctx.beginPath();
+    ctx.moveTo(x, y + bLen);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + bLen, y);
+    ctx.stroke();
+
+    // Top-Right
+    ctx.beginPath();
+    ctx.moveTo(x + width - bLen, y);
+    ctx.lineTo(x + width, y);
+    ctx.lineTo(x + width, y + bLen);
+    ctx.stroke();
+
+    // Bottom-Left
+    ctx.beginPath();
+    ctx.moveTo(x, y + height - bLen);
+    ctx.lineTo(x, y + height);
+    ctx.lineTo(x + bLen, y + height);
+    ctx.stroke();
+
+    // Bottom-Right
+    ctx.beginPath();
+    ctx.moveTo(x + width - bLen, y + height);
+    ctx.lineTo(x + width, y + height);
+    ctx.lineTo(x + width, y + height - bLen);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Helper to draw text with automatic font-size downscaling to fit maxWidth
+  function drawFittedText(ctx, text, x, y, maxWidth, initialFontSize, fontWeight = '700', fontName = 'sans-serif') {
+    if (!text) return;
+    let size = initialFontSize;
+    ctx.font = `${fontWeight} ${size}px ${fontName}`;
+    let measuredWidth = ctx.measureText(text).width;
+    while (measuredWidth > maxWidth && size > 16) {
+      size -= 2;
+      ctx.font = `${fontWeight} ${size}px ${fontName}`;
+      measuredWidth = ctx.measureText(text).width;
+    }
+    ctx.fillText(text, x, y);
   }
 
   // 1. Download High-Resolution Standee / Poster (PNG)
@@ -136,6 +194,16 @@ export default function ShopQrModal({ shop, onClose }) {
     setDownloadSuccess('');
 
     try {
+      // 1. Font ready with 600ms timeout race so it never hangs
+      if (document.fonts) {
+        try {
+          await Promise.race([
+            document.fonts.ready,
+            new Promise((resolve) => setTimeout(resolve, 600))
+          ]);
+        } catch (_) {}
+      }
+
       const posterCanvas = document.createElement('canvas');
       const isA4 = paperFormat === 'a4';
       // 300 DPI A4 is 2480 x 3508 pixels, compact standee is 1200 x 1600
@@ -145,18 +213,26 @@ export default function ShopQrModal({ shop, onClose }) {
       const W = posterCanvas.width;
       const H = posterCanvas.height;
 
+      const fontFamily = '"Outfit", "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
       // Theme color palettes
       let bgGradient, cardBg, textPrimary, textSecondary, accentColor, qrDark, qrLight, badgeBg;
+      let headerGradStops = [];
+      let footerBg = '#0f172a';
+      let borderAccent = '#2563eb';
 
       if (theme === 'minimal') {
         bgGradient = '#ffffff';
         cardBg = '#ffffff';
-        textPrimary = '#000000';
-        textSecondary = '#4b5563';
+        textPrimary = '#0a0a0a';
+        textSecondary = '#52525b';
         accentColor = '#000000';
         qrDark = '#000000';
         qrLight = '#ffffff';
         badgeBg = '#000000';
+        headerGradStops = ['#000000', '#18181b'];
+        footerBg = '#000000';
+        borderAccent = '#000000';
       } else if (theme === 'dark') {
         bgGradient = '#090d16';
         cardBg = '#131b2e';
@@ -166,8 +242,11 @@ export default function ShopQrModal({ shop, onClose }) {
         qrDark = '#ffffff';
         qrLight = '#131b2e';
         badgeBg = '#4f46e5';
+        headerGradStops = ['#1e1b4b', '#3730a3', '#4f46e5'];
+        footerBg = '#050811';
+        borderAccent = '#4f46e5';
       } else if (theme === 'gold') {
-        bgGradient = '#fffbeb';
+        bgGradient = '#fffdf5';
         cardBg = '#ffffff';
         textPrimary = '#78350f';
         textSecondary = '#92400e';
@@ -175,9 +254,12 @@ export default function ShopQrModal({ shop, onClose }) {
         qrDark = '#78350f';
         qrLight = '#ffffff';
         badgeBg = '#d97706';
+        headerGradStops = ['#78350f', '#b45309', '#d97706'];
+        footerBg = '#451a03';
+        borderAccent = '#d97706';
       } else {
-        // Modern Blue
-        bgGradient = '#f0f7ff';
+        // Modern Tech Ocean Blue
+        bgGradient = '#f8fafc';
         cardBg = '#ffffff';
         textPrimary = '#0f172a';
         textSecondary = '#475569';
@@ -185,307 +267,764 @@ export default function ShopQrModal({ shop, onClose }) {
         qrDark = '#1e3a8a';
         qrLight = '#ffffff';
         badgeBg = '#2563eb';
+        headerGradStops = ['#1e3a8a', '#2563eb', '#3b82f6'];
+        footerBg = '#0f172a';
+        borderAccent = '#2563eb';
       }
 
       // Background fill
       ctx.fillStyle = bgGradient;
       ctx.fillRect(0, 0, W, H);
 
-      const fontBengali = '"Hind Siliguri", "Noto Sans Bengali", sans-serif';
-
-      if (isA4) {
-        // FULL A4 POSTER LAYOUT (2480 x 3508)
-        // Outer decorative border
-        ctx.strokeStyle = theme === 'minimal' ? '#000000' : theme === 'dark' ? '#334155' : theme === 'gold' ? '#f59e0b' : '#3b82f6';
-        ctx.lineWidth = 14;
-        roundRect(ctx, 40, 40, W - 80, H - 80, 50);
-        ctx.stroke();
-
-        // Inner Card Box
-        ctx.fillStyle = cardBg;
-        roundRect(ctx, 60, 60, W - 120, H - 120, 44);
-        ctx.fill();
-
-        // Top Header Banner
-        if (theme === 'modern') {
-          const gradient = ctx.createLinearGradient(0, 0, W, 380);
-          gradient.addColorStop(0, '#2563eb');
-          gradient.addColorStop(1, '#1d4ed8');
-          ctx.fillStyle = gradient;
-          roundRect(ctx, 60, 60, W - 120, 320, 44);
-          ctx.fill();
-        } else if (theme === 'dark') {
-          const gradient = ctx.createLinearGradient(0, 0, W, 380);
-          gradient.addColorStop(0, '#4f46e5');
-          gradient.addColorStop(1, '#312e81');
-          ctx.fillStyle = gradient;
-          roundRect(ctx, 60, 60, W - 120, 320, 44);
-          ctx.fill();
-        } else if (theme === 'gold') {
-          const gradient = ctx.createLinearGradient(0, 0, W, 380);
-          gradient.addColorStop(0, '#d97706');
-          gradient.addColorStop(1, '#b45309');
-          ctx.fillStyle = gradient;
-          roundRect(ctx, 60, 60, W - 120, 320, 44);
-          ctx.fill();
-        }
-
-        // Top Badge
-        ctx.fillStyle = theme === 'minimal' ? '#000000' : '#ffffff';
-        ctx.font = `bold 48px ${fontBengali}`;
-        ctx.textAlign = 'center';
-        ctx.fillText(badgeText, W / 2, theme === 'minimal' ? 180 : 250);
-
-        // Shop Title
-        ctx.fillStyle = textPrimary;
-        ctx.font = `900 98px ${fontBengali}`;
-        ctx.textAlign = 'center';
-        ctx.fillText(headline || shop.name, W / 2, 540);
-
-        // Tagline
-        ctx.fillStyle = textSecondary;
-        ctx.font = `600 52px ${fontBengali}`;
-        ctx.fillText(tagline, W / 2, 630);
-
-        // Draw Big QR Code
-        const qrTempCanvas = document.createElement('canvas');
+      // Helper for robust QR source resolution
+      const getQrCanvasSource = async (size) => {
+        let qrSource = canvasRef.current;
         const renderQR = QRCodeLib?.toCanvas || window.QRCode?.toCanvas;
         if (renderQR) {
-          await new Promise((resolve) => {
-            renderQR(
-              qrTempCanvas,
-              shopUrl,
-              {
-                width: 900,
-                margin: 2,
-                color: { dark: qrDark, light: qrLight }
-              },
-              () => resolve()
-            );
-          });
+          try {
+            const qrTempCanvas = document.createElement('canvas');
+            await Promise.race([
+              new Promise((resolve) => {
+                renderQR(
+                  qrTempCanvas,
+                  shopUrl,
+                  {
+                    width: size,
+                    margin: 2,
+                    color: { dark: qrDark, light: qrLight }
+                  },
+                  (err) => {
+                    if (!err && qrTempCanvas.width > 0) {
+                      qrSource = qrTempCanvas;
+                    }
+                    resolve();
+                  }
+                );
+              }),
+              new Promise((resolve) => setTimeout(resolve, 800))
+            ]);
+          } catch (qrErr) {
+            console.warn('QR canvas generation error, falling back:', qrErr);
+          }
         }
+        return qrSource;
+      };
 
-        const qrY = 740;
-        // White border box for QR
+      if (isA4) {
+        // ==============================================================
+        // FULL A4 POSTER LAYOUT (2480 x 3508 pixels @ 300 DPI)
+        // Vertically balanced, high-end retail visual hierarchy
+        // ==============================================================
+
+        // 1. Outer Frame & Inner Card
+        ctx.strokeStyle = borderAccent;
+        ctx.lineWidth = 10;
+        roundRect(ctx, 40, 40, W - 80, H - 80, 56);
+        ctx.stroke();
+
+        ctx.fillStyle = cardBg;
+        roundRect(ctx, 45, 45, W - 90, H - 90, 52);
+        ctx.fill();
+
+        // 2. Top Header Hero Banner (Y: 45 to 660)
+        ctx.save();
+        roundRect(ctx, 45, 45, W - 90, 615, { tl: 52, tr: 52, br: 0, bl: 0 });
+        ctx.clip();
+
+        const headGrad = ctx.createLinearGradient(0, 45, W, 660);
+        headGrad.addColorStop(0, headerGradStops[0]);
+        if (headerGradStops[2]) {
+          headGrad.addColorStop(0.5, headerGradStops[1]);
+          headGrad.addColorStop(1, headerGradStops[2]);
+        } else {
+          headGrad.addColorStop(1, headerGradStops[1]);
+        }
+        ctx.fillStyle = headGrad;
+        ctx.fillRect(45, 45, W - 90, 615);
+
+        // Subtle decorative background ambient glow circles
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+        ctx.beginPath();
+        ctx.arc(200, 100, 260, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(W - 220, 300, 340, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Top Pill Badge
+        const pillW = 900;
+        const pillH = 76;
+        const pillX = (W - pillW) / 2;
+        const pillY = 110;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        roundRect(ctx, pillX, pillY, pillW, pillH, 38);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 3;
+        roundRect(ctx, pillX, pillY, pillW, pillH, 38);
+        ctx.stroke();
+
         ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = 'rgba(0,0,0,0.08)';
-        ctx.shadowBlur = 30;
-        roundRect(ctx, (W - 960) / 2, qrY - 20, 960, 960, 40);
+        ctx.font = `800 36px ${fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`✨ ${badgeText}`, W / 2, pillY + 50);
+
+        // Headline (Shop Name)
+        ctx.fillStyle = '#ffffff';
+        drawFittedText(ctx, headline || shop.name, W / 2, 310, W - 320, 106, '900', fontFamily);
+
+        // Tagline / Subtitle
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+        drawFittedText(ctx, tagline, W / 2, 415, W - 400, 48, '600', fontFamily);
+
+        // Mobile Camera Instruction Pill
+        const camW = 1260;
+        const camH = 80;
+        const camX = (W - camW) / 2;
+        const camY = 495;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        roundRect(ctx, camX, camY, camW, camH, 40);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, camX, camY, camW, camH, 40);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 38px ${fontFamily}`;
+        ctx.fillText(
+          isPosterBn
+            ? '📱 মোবাইল ক্যামেরা দিয়ে স্ক্যান করুন • কোনো অ্যাপ বা হোয়াটসঅ্যাপ লাগবে না'
+            : '📱 Scan with Phone Camera • No App or WhatsApp Needed',
+          W / 2,
+          camY + 52
+        );
+        ctx.restore();
+
+        // 3. QR Code Showcase Card (Y: 710 to 1960)
+        const qrCardW = 1280;
+        const qrCardH = 1240;
+        const qrCardX = (W - qrCardW) / 2;
+        const qrCardY = 710;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.08)';
+        ctx.shadowBlur = 45;
+        ctx.shadowOffsetY = 16;
+        ctx.fillStyle = theme === 'dark' ? '#131b2e' : '#ffffff';
+        roundRect(ctx, qrCardX, qrCardY, qrCardW, qrCardH, 48);
         ctx.fill();
         ctx.shadowColor = 'transparent';
-        ctx.drawImage(qrTempCanvas, (W - 900) / 2, qrY + 10, 900, 900);
 
-        // Counter ID Pill
-        ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#eff6ff';
-        roundRect(ctx, (W - 740) / 2, 1780, 740, 100, 50);
-        ctx.fill();
+        ctx.strokeStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+        ctx.lineWidth = 3.5;
+        roundRect(ctx, qrCardX, qrCardY, qrCardW, qrCardH, 48);
+        ctx.stroke();
+        ctx.restore();
+
+        // Top Floating Callout on QR Card
+        const qrCalloutW = 860;
+        const qrCalloutH = 70;
+        const qrCalloutX = (W - qrCalloutW) / 2;
+        const qrCalloutY = qrCardY + 40;
         ctx.fillStyle = accentColor;
-        ctx.font = `bold 46px monospace`;
-        ctx.fillText(`${idLabel}: ${shop.qr_slug || ''}`, W / 2, 1848);
+        roundRect(ctx, qrCalloutX, qrCalloutY, qrCalloutW, qrCalloutH, 35);
+        ctx.fill();
 
-        // Rates Pill
-        let curY = 1940;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `800 34px ${fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(
+          isPosterBn ? '📷 ক্যামেরা তাক করে স্ক্যান করুন' : '📷 POINT CAMERA TO SCAN & PRINT',
+          W / 2,
+          qrCalloutY + 46
+        );
+
+        // Draw QR code with safe fallback
+        const qrA4Source = await getQrCanvasSource(900);
+        const qrX = (W - 900) / 2;
+        const qrY = qrCardY + 145;
+        if (qrA4Source) {
+          ctx.drawImage(qrA4Source, qrX, qrY, 900, 900);
+        }
+
+        // Corner Reticles around the QR code
+        drawReticles(ctx, qrX - 35, qrY - 35, 970, 970, 65, 10, accentColor);
+
+        // Counter ID Pill directly under QR
+        const idW = 780;
+        const idH = 90;
+        const idX = (W - idW) / 2;
+        const idY = qrCardY + 1105;
+        ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#f1f5f9';
+        roundRect(ctx, idX, idY, idW, idH, 45);
+        ctx.fill();
+        ctx.strokeStyle = theme === 'dark' ? '#334155' : '#cbd5e1';
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, idX, idY, idW, idH, 45);
+        ctx.stroke();
+
+        ctx.fillStyle = accentColor;
+        ctx.font = `800 42px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`🏷️ ${idLabel}: ${shop.qr_slug || ''}`, W / 2, idY + 58);
+
+        // 4. Dual Retail Pricing Board (Y: 2000 to 2380)
+        let curY = 2000;
         if (showPrices) {
-          ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#eff6ff';
-          roundRect(ctx, 160, curY, W - 320, 140, 36);
-          ctx.fill();
+          const cardWidth = 1070;
+          const cardHeight = 370;
+          const leftCardX = 140;
+          const rightCardX = 1270;
 
+          // Left Pricing Card (Black & White)
+          ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#f8fafc';
+          roundRect(ctx, leftCardX, curY, cardWidth, cardHeight, 36);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+          ctx.lineWidth = 3;
+          roundRect(ctx, leftCardX, curY, cardWidth, cardHeight, 36);
+          ctx.stroke();
+
+          // Left Card Badge
+          ctx.fillStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+          roundRect(ctx, leftCardX + 50, curY + 36, 420, 56, 28);
+          ctx.fill();
           ctx.fillStyle = textPrimary;
-          ctx.font = `bold 56px ${fontBengali}`;
-          ctx.fillText(ratesText, W / 2, curY + 92);
-          curY += 180;
-        }
+          ctx.font = `800 28px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(isPosterBn ? '🖤 সাদা-কালো প্রিন্ট' : '🖤 BLACK & WHITE', leftCardX + 260, curY + 74);
 
-        // Privacy Guarantee
-        if (showPrivacyBadge) {
-          ctx.fillStyle = theme === 'dark' ? '#064e3b' : '#ecfdf5';
-          roundRect(ctx, 160, curY, W - 320, 130, 32);
+          // Left Card Price
+          ctx.fillStyle = textPrimary;
+          ctx.font = `900 96px ${fontFamily}`;
+          ctx.fillText(`৳${isPosterBn ? toBnDigits(priceBw) : priceBw}`, leftCardX + cardWidth / 2, curY + 205);
+
+          // Left Card Description
+          ctx.fillStyle = textSecondary;
+          ctx.font = `600 32px ${fontFamily}`;
+          ctx.fillText(
+            isPosterBn ? 'প্রতি পৃষ্ঠা • ঝকঝকে লেজার কোয়ালিটি' : 'per page • crisp laser quality',
+            leftCardX + cardWidth / 2,
+            curY + 280
+          );
+
+          // Right Pricing Card (Color Print)
+          ctx.fillStyle = theme === 'dark' ? '#1e1b4b' : '#eff6ff';
+          roundRect(ctx, rightCardX, curY, cardWidth, cardHeight, 36);
           ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#4338ca' : '#bfdbfe';
+          ctx.lineWidth = 3;
+          roundRect(ctx, rightCardX, curY, cardWidth, cardHeight, 36);
+          ctx.stroke();
 
-          ctx.fillStyle = theme === 'dark' ? '#34d399' : '#047857';
-          ctx.font = `bold 44px ${fontBengali}`;
-          ctx.fillText(privacyText, W / 2, curY + 82);
-          curY += 170;
-        }
-
-        // Custom Notice
-        if (customNotice) {
-          ctx.fillStyle = theme === 'dark' ? '#312e81' : '#fef3c7';
-          roundRect(ctx, 160, curY, W - 320, 130, 32);
+          // Right Card Badge
+          ctx.fillStyle = theme === 'dark' ? '#4338ca' : '#dbeafe';
+          roundRect(ctx, rightCardX + 50, curY + 36, 400, 56, 28);
           ctx.fill();
+          ctx.fillStyle = accentColor;
+          ctx.font = `800 28px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(isPosterBn ? '🌈 রঙিন প্রিন্ট' : '🌈 COLOR PRINT', rightCardX + 250, curY + 74);
 
-          ctx.fillStyle = theme === 'dark' ? '#c7d2fe' : '#92400e';
-          ctx.font = `700 44px ${fontBengali}`;
-          ctx.fillText('📢 ' + customNotice, W / 2, curY + 82);
-          curY += 170;
+          // Right Card Price
+          ctx.fillStyle = accentColor;
+          ctx.font = `900 96px ${fontFamily}`;
+          ctx.fillText(`৳${isPosterBn ? toBnDigits(priceColor) : priceColor}`, rightCardX + cardWidth / 2, curY + 205);
+
+          // Right Card Description
+          ctx.fillStyle = textSecondary;
+          ctx.font = `600 32px ${fontFamily}`;
+          ctx.fillText(
+            isPosterBn ? 'প্রতি পৃষ্ঠা • উজ্জ্বল হাই ডেফিনিশন' : 'per page • vivid high-definition',
+            rightCardX + cardWidth / 2,
+            curY + 280
+          );
+
+          curY += cardHeight + 40;
         }
 
-        // 3-Step Instructions
+        // 5. Illustrated 3-Step Process Flow (Y: ~2410 to 2790)
         if (showInstructions) {
           ctx.fillStyle = textSecondary;
-          ctx.font = `bold 44px ${fontBengali}`;
-          ctx.fillText(stepsText, W / 2, curY + 70);
+          ctx.font = `800 34px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            isPosterBn ? '⚡ কীভাবে প্রিন্ট করবেন — ৩টি সহজ ধাপ' : '⚡ HOW TO PRINT — 3 SIMPLE STEPS',
+            W / 2,
+            curY + 35
+          );
+
+          const stepBoxY = curY + 70;
+          const stepW = 670;
+          const stepH = 240;
+
+          // Step 1
+          const s1X = 140;
+          ctx.fillStyle = cardBg;
+          roundRect(ctx, s1X, stepBoxY, stepW, stepH, 30);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+          ctx.lineWidth = 2.5;
+          roundRect(ctx, s1X, stepBoxY, stepW, stepH, 30);
+          ctx.stroke();
+
+          // Step 1 Circle
+          ctx.fillStyle = accentColor;
+          ctx.beginPath();
+          ctx.arc(s1X + 80, stepBoxY + 75, 42, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `900 42px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(isPosterBn ? '১' : '1', s1X + 80, stepBoxY + 89);
+
+          ctx.textAlign = 'left';
+          ctx.fillStyle = textPrimary;
+          ctx.font = `800 36px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'স্ক্যান করুন' : 'Scan QR', s1X + 150, stepBoxY + 85);
+          ctx.fillStyle = textSecondary;
+          ctx.font = `500 28px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'ফোনের ক্যামেরা দিয়ে স্ক্যান' : 'Point camera to open link', s1X + 50, stepBoxY + 165);
+
+          // Arrow 1-2
+          ctx.textAlign = 'center';
+          ctx.fillStyle = accentColor;
+          ctx.font = `bold 44px ${fontFamily}`;
+          ctx.fillText('➔', 855, stepBoxY + 120);
+
+          // Step 2
+          const s2X = 905;
+          ctx.fillStyle = cardBg;
+          roundRect(ctx, s2X, stepBoxY, stepW, stepH, 30);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+          ctx.lineWidth = 2.5;
+          roundRect(ctx, s2X, stepBoxY, stepW, stepH, 30);
+          ctx.stroke();
+
+          ctx.fillStyle = accentColor;
+          ctx.beginPath();
+          ctx.arc(s2X + 80, stepBoxY + 75, 42, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `900 42px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(isPosterBn ? '২' : '2', s2X + 80, stepBoxY + 89);
+
+          ctx.textAlign = 'left';
+          ctx.fillStyle = textPrimary;
+          ctx.font = `800 36px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'ফাইল দিন' : 'Upload Files', s2X + 150, stepBoxY + 85);
+          ctx.fillStyle = textSecondary;
+          ctx.font = `500 28px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'PDF বা ছবি সিলেক্ট করুন' : 'Choose PDF, docs or photos', s2X + 50, stepBoxY + 165);
+
+          // Arrow 2-3
+          ctx.textAlign = 'center';
+          ctx.fillStyle = accentColor;
+          ctx.font = `bold 44px ${fontFamily}`;
+          ctx.fillText('➔', 1620, stepBoxY + 120);
+
+          // Step 3
+          const s3X = 1670;
+          ctx.fillStyle = cardBg;
+          roundRect(ctx, s3X, stepBoxY, stepW, stepH, 30);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+          ctx.lineWidth = 2.5;
+          roundRect(ctx, s3X, stepBoxY, stepW, stepH, 30);
+          ctx.stroke();
+
+          ctx.fillStyle = accentColor;
+          ctx.beginPath();
+          ctx.arc(s3X + 80, stepBoxY + 75, 42, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `900 42px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(isPosterBn ? '৩' : '3', s3X + 80, stepBoxY + 89);
+
+          ctx.textAlign = 'left';
+          ctx.fillStyle = textPrimary;
+          ctx.font = `800 36px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'প্রিন্ট নিন' : 'Collect Print', s3X + 150, stepBoxY + 85);
+          ctx.fillStyle = textSecondary;
+          ctx.font = `500 28px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'কাউন্টার থেকে প্রিন্ট সংগ্রহ' : 'Instant laser print ready', s3X + 50, stepBoxY + 165);
+
+          curY = stepBoxY + stepH + 40;
+        }
+
+        // 6. Custom Notice & Privacy Trust Banner (Y: ~2830 to 3240)
+        if (customNotice) {
+          ctx.fillStyle = theme === 'dark' ? '#312e81' : '#fef3c7';
+          roundRect(ctx, 140, curY, W - 280, 130, 26);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#4338ca' : '#fde68a';
+          ctx.lineWidth = 2.5;
+          roundRect(ctx, 140, curY, W - 280, 130, 26);
+          ctx.stroke();
+
+          ctx.fillStyle = theme === 'dark' ? '#c7d2fe' : '#92400e';
+          ctx.font = `700 38px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          drawFittedText(ctx, `📢 ${customNotice}`, W / 2, curY + 80, W - 360, 38, '700', fontFamily);
+
+          curY += 155;
+        }
+
+        if (showPrivacyBadge) {
+          const privH = 150;
+          ctx.fillStyle = theme === 'dark' ? '#064e3b' : '#ecfdf5';
+          roundRect(ctx, 140, curY, W - 280, privH, 28);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#047857' : '#a7f3d0';
+          ctx.lineWidth = 2.5;
+          roundRect(ctx, 140, curY, W - 280, privH, 28);
+          ctx.stroke();
+
+          ctx.textAlign = 'center';
+          ctx.fillStyle = theme === 'dark' ? '#6ee7b7' : '#065f46';
+          ctx.font = `800 38px ${fontFamily}`;
+          ctx.fillText(
+            `🛡️ ${isPosterBn ? '১০০% সুরক্ষিত ও প্রাইভেট সেলফ-সার্ভিস' : '100% PRIVATE & SECURE PRINTING'}`,
+            W / 2,
+            curY + 62
+          );
+
+          ctx.fillStyle = theme === 'dark' ? '#a7f3d0' : '#047857';
+          ctx.font = `600 30px ${fontFamily}`;
+          ctx.fillText(
+            isPosterBn
+              ? 'কোনো হোয়াটসঅ্যাপ বা ইমেল লাগবে না • প্রিন্ট শেষে ফাইল স্বয়ংক্রিয়ভাবে মুছে যায়'
+              : 'Zero WhatsApp or Gmail needed • Files are encrypted and automatically shredded after printing',
+            W / 2,
+            curY + 115
+          );
+        }
+
+        // 7. Full-Width Bottom Branded Footer Bar (Y: 3260 to 3508)
+        ctx.save();
+        roundRect(ctx, 45, 3260, W - 90, 203, { tl: 0, tr: 0, br: 52, bl: 52 });
+        ctx.clip();
+
+        ctx.fillStyle = footerBg;
+        ctx.fillRect(45, 3260, W - 90, 203);
+
+        ctx.textAlign = 'center';
+        if (shop?.address) {
+          ctx.fillStyle = '#cbd5e1';
+          ctx.font = `600 32px ${fontFamily}`;
+          ctx.fillText(`📍 ${shop.address}`, W / 2, 3325);
+
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = `500 28px ${fontFamily}`;
+          ctx.fillText('🔒 256-Bit SSL Encrypted • Fast, Direct & Contactless Cloud Print', W / 2, 3375);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `800 34px ${fontFamily}`;
+          ctx.fillText('⚡ Powered by prntez Cloud Print POS • www.prntez.com', W / 2, 3430);
+        } else {
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = `600 32px ${fontFamily}`;
+          ctx.fillText('🔒 256-Bit SSL Encrypted • Fast, Direct & Contactless Cloud Print', W / 2, 3350);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `800 34px ${fontFamily}`;
+          ctx.fillText('⚡ Powered by prntez Cloud Print POS • www.prntez.com', W / 2, 3420);
+        }
+        ctx.restore();
+
+      } else {
+        // ==============================================================
+        // COMPACT STANDEE LAYOUT (1200 x 1600 pixels)
+        // Scaled, high-contrast, clean desk display
+        // ==============================================================
+
+        // Outer Border
+        ctx.strokeStyle = borderAccent;
+        ctx.lineWidth = 6;
+        roundRect(ctx, 20, 20, W - 40, H - 40, 36);
+        ctx.stroke();
+
+        ctx.fillStyle = cardBg;
+        roundRect(ctx, 23, 23, W - 46, H - 46, 33);
+        ctx.fill();
+
+        // Top Header
+        ctx.save();
+        roundRect(ctx, 23, 23, W - 46, 290, { tl: 33, tr: 33, br: 0, bl: 0 });
+        ctx.clip();
+
+        const headGrad = ctx.createLinearGradient(0, 23, W, 310);
+        headGrad.addColorStop(0, headerGradStops[0]);
+        headGrad.addColorStop(1, headerGradStops[1]);
+        ctx.fillStyle = headGrad;
+        ctx.fillRect(23, 23, W - 46, 290);
+
+        // Header decorative glow
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.beginPath();
+        ctx.arc(100, 60, 140, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Top badge
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        roundRect(ctx, (W - 460) / 2, 50, 460, 44, 22);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `800 20px ${fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`✨ ${badgeText}`, W / 2, 79);
+
+        // Shop Title
+        ctx.fillStyle = '#ffffff';
+        drawFittedText(ctx, headline || shop.name, W / 2, 148, W - 160, 54, '900', fontFamily);
+
+        // Tagline
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        drawFittedText(ctx, tagline, W / 2, 204, W - 200, 25, '600', fontFamily);
+
+        // Scan callout pill
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        roundRect(ctx, (W - 640) / 2, 238, 640, 42, 21);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 20px ${fontFamily}`;
+        ctx.fillText(
+          isPosterBn ? '📱 মোবাইল ক্যামেরা দিয়ে স্ক্যান করুন' : '📱 Scan with Phone Camera to Print',
+          W / 2,
+          266
+        );
+        ctx.restore();
+
+        // QR Showcase Card
+        const qrCardW = 600;
+        const qrCardH = 610;
+        const qrCardX = (W - qrCardW) / 2;
+        const qrCardY = 325;
+
+        ctx.fillStyle = theme === 'dark' ? '#131b2e' : '#ffffff';
+        roundRect(ctx, qrCardX, qrCardY, qrCardW, qrCardH, 28);
+        ctx.fill();
+        ctx.strokeStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, qrCardX, qrCardY, qrCardW, qrCardH, 28);
+        ctx.stroke();
+
+        // Draw QR code with safe fallback
+        const qrStandeeSource = await getQrCanvasSource(440);
+        const qrX = (W - 440) / 2;
+        const qrY = qrCardY + 45;
+        if (qrStandeeSource) {
+          ctx.drawImage(qrStandeeSource, qrX, qrY, 440, 440);
+        }
+
+        // Reticles
+        drawReticles(ctx, qrX - 16, qrY - 16, 472, 472, 34, 5, accentColor);
+
+        // Counter ID
+        const idW = 400;
+        const idH = 50;
+        const idX = (W - idW) / 2;
+        const idY = qrCardY + 530;
+        ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#f1f5f9';
+        roundRect(ctx, idX, idY, idW, idH, 25);
+        ctx.fill();
+        ctx.fillStyle = accentColor;
+        ctx.font = '800 22px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`🏷️ ${idLabel}: ${shop.qr_slug || ''}`, W / 2, idY + 33);
+
+        // Pricing Dual Cards
+        let curY = 960;
+        if (showPrices) {
+          const cardW = 510;
+          const cardH = 170;
+
+          // B&W
+          ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#f8fafc';
+          roundRect(ctx, 60, curY, cardW, cardH, 20);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
+          ctx.lineWidth = 2;
+          roundRect(ctx, 60, curY, cardW, cardH, 20);
+          ctx.stroke();
+
+          ctx.fillStyle = textPrimary;
+          ctx.font = `800 18px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(isPosterBn ? '🖤 সাদা-কালো' : '🖤 BLACK & WHITE', 60 + cardW / 2, curY + 38);
+          ctx.font = `900 50px ${fontFamily}`;
+          ctx.fillText(`৳${isPosterBn ? toBnDigits(priceBw) : priceBw}`, 60 + cardW / 2, curY + 102);
+          ctx.fillStyle = textSecondary;
+          ctx.font = `600 16px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'প্রতি পৃষ্ঠা' : 'per page', 60 + cardW / 2, curY + 140);
+
+          // Color
+          ctx.fillStyle = theme === 'dark' ? '#1e1b4b' : '#eff6ff';
+          roundRect(ctx, 630, curY, cardW, cardH, 20);
+          ctx.fill();
+          ctx.strokeStyle = theme === 'dark' ? '#4338ca' : '#bfdbfe';
+          ctx.lineWidth = 2;
+          roundRect(ctx, 630, curY, cardW, cardH, 20);
+          ctx.stroke();
+
+          ctx.fillStyle = accentColor;
+          ctx.font = `800 18px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(isPosterBn ? '🌈 রঙিন প্রিন্ট' : '🌈 COLOR PRINT', 630 + cardW / 2, curY + 38);
+          ctx.font = `900 50px ${fontFamily}`;
+          ctx.fillText(`৳${isPosterBn ? toBnDigits(priceColor) : priceColor}`, 630 + cardW / 2, curY + 102);
+          ctx.fillStyle = textSecondary;
+          ctx.font = `600 16px ${fontFamily}`;
+          ctx.fillText(isPosterBn ? 'প্রতি পৃষ্ঠা' : 'per page', 630 + cardW / 2, curY + 140);
+
+          curY += cardH + 20;
+        }
+
+        // Instructions
+        if (showInstructions) {
+          ctx.fillStyle = textSecondary;
+          ctx.font = `700 20px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            isPosterBn
+              ? '১. স্ক্যান করুন  ➔  ২. ফাইল দিন  ➔  ৩. কাউন্টারে প্রিন্ট সংগ্রহ'
+              : '1. Scan QR  ➔  2. Upload File  ➔  3. Collect Prints',
+            W / 2,
+            curY + 28
+          );
+          curY += 45;
+        }
+
+        // Notice / Privacy
+        if (customNotice) {
+          ctx.fillStyle = theme === 'dark' ? '#312e81' : '#fef3c7';
+          roundRect(ctx, 60, curY, W - 120, 60, 16);
+          ctx.fill();
+          ctx.fillStyle = theme === 'dark' ? '#c7d2fe' : '#92400e';
+          ctx.font = `700 19px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          drawFittedText(ctx, `📢 ${customNotice}`, W / 2, curY + 38, W - 160, 19, '700', fontFamily);
+          curY += 75;
+        }
+
+        if (showPrivacyBadge) {
+          ctx.fillStyle = theme === 'dark' ? '#064e3b' : '#ecfdf5';
+          roundRect(ctx, 60, curY, W - 120, 58, 16);
+          ctx.fill();
+          ctx.fillStyle = theme === 'dark' ? '#34d399' : '#047857';
+          ctx.font = `800 18px ${fontFamily}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            isPosterBn
+              ? '🛡️ নো হোয়াটসঅ্যাপ • প্রিন্ট শেষে ফাইল স্বয়ংক্রিয় মুছে যায়'
+              : '🛡️ Zero WhatsApp • Files Auto-Shred After Printing',
+            W / 2,
+            curY + 36
+          );
         }
 
         // Footer
-        ctx.fillStyle = textSecondary;
-        ctx.font = `36px ${fontBengali}`;
-        ctx.fillText(footerText, W / 2, H - 120);
+        ctx.save();
+        roundRect(ctx, 23, 1475, W - 46, 102, { tl: 0, tr: 0, br: 33, bl: 33 });
+        ctx.clip();
+        ctx.fillStyle = footerBg;
+        ctx.fillRect(23, 1475, W - 46, 102);
 
-      } else {
-        // COMPACT STANDEE LAYOUT (1200 x 1600)
-        // Decorative Top Header Banner
-        if (theme === 'modern') {
-          const gradient = ctx.createLinearGradient(0, 0, 1200, 280);
-          gradient.addColorStop(0, '#2563eb');
-          gradient.addColorStop(1, '#1d4ed8');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, 1200, 260);
-        } else if (theme === 'dark') {
-          const gradient = ctx.createLinearGradient(0, 0, 1200, 280);
-          gradient.addColorStop(0, '#4f46e5');
-          gradient.addColorStop(1, '#312e81');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, 1200, 260);
-        } else if (theme === 'gold') {
-          const gradient = ctx.createLinearGradient(0, 0, 1200, 280);
-          gradient.addColorStop(0, '#d97706');
-          gradient.addColorStop(1, '#b45309');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, 1200, 260);
-        } else {
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, 0, 1200, 20);
-        }
-
-        // Platform Brand Badge
-        ctx.fillStyle = theme === 'minimal' ? '#000000' : '#ffffff';
-        ctx.font = `bold 36px ${fontBengali}`;
         ctx.textAlign = 'center';
-        ctx.fillText(badgeText, 600, theme === 'minimal' ? 80 : 100);
-
-        // Main Card Box (White Card in center)
-        ctx.shadowColor = 'rgba(0,0,0,0.08)';
-        ctx.shadowBlur = 30;
-        ctx.shadowOffsetY = 15;
-        ctx.fillStyle = cardBg;
-        roundRect(ctx, 80, theme === 'minimal' ? 120 : 200, 1040, 1320, 40);
-        ctx.fill();
-        ctx.shadowColor = 'transparent';
-
-        // Shop Name
-        ctx.fillStyle = textPrimary;
-        ctx.font = `800 58px ${fontBengali}`;
-        ctx.textAlign = 'center';
-        ctx.fillText(headline || shop.name, 600, theme === 'minimal' ? 220 : 310);
-
-        // Tagline
-        ctx.fillStyle = textSecondary;
-        ctx.font = `500 30px ${fontBengali}`;
-        ctx.fillText(tagline, 600, theme === 'minimal' ? 280 : 370);
-
-        // Draw QR Code onto Poster
-        const qrTempCanvas = document.createElement('canvas');
-        const renderQR = QRCodeLib?.toCanvas || window.QRCode?.toCanvas;
-        if (renderQR) {
-          await new Promise((resolve) => {
-            renderQR(
-              qrTempCanvas,
-              shopUrl,
-              {
-                width: 520,
-                margin: 2,
-                color: { dark: qrDark, light: qrLight }
-              },
-              () => resolve()
-            );
-          });
-        }
-
-        const qrY = theme === 'minimal' ? 340 : 430;
-        ctx.drawImage(qrTempCanvas, 340, qrY, 520, 520);
-
-        // Counter Slug Pill
-        ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#f1f5f9';
-        roundRect(ctx, 400, qrY + 540, 400, 56, 28);
-        ctx.fill();
-        ctx.fillStyle = accentColor;
-        ctx.font = 'bold 24px monospace';
-        ctx.fillText(`${idLabel}: ${shop.qr_slug || ''}`, 600, qrY + 576);
-
-        // Prices Pill Grid (Optional)
-        let curY = qrY + 630;
-        if (showPrices) {
-          ctx.fillStyle = theme === 'dark' ? '#334155' : '#e2e8f0';
-          roundRect(ctx, 160, curY, 880, 80, 24);
-          ctx.fill();
-
-          ctx.fillStyle = textPrimary;
-          ctx.font = `bold 30px ${fontBengali}`;
-          ctx.fillText(ratesText, 600, curY + 52);
-          curY += 110;
-        }
-
-        // Custom Slogan / Notice (Optional)
-        if (customNotice) {
-          ctx.fillStyle = theme === 'dark' ? '#1e293b' : '#fef3c7';
-          roundRect(ctx, 160, curY, 880, 70, 20);
-          ctx.fill();
-
-          ctx.fillStyle = theme === 'dark' ? '#fde68a' : '#92400e';
-          ctx.font = `600 24px ${fontBengali}`;
-          ctx.fillText('📢 ' + customNotice, 600, curY + 44);
-          curY += 100;
-        }
-
-        // Privacy Guarantee (Optional)
-        if (showPrivacyBadge) {
-          ctx.fillStyle = theme === 'dark' ? '#064e3b' : '#ecfdf5';
-          roundRect(ctx, 160, curY, 880, 68, 20);
-          ctx.fill();
-
-          ctx.fillStyle = theme === 'dark' ? '#34d399' : '#047857';
-          ctx.font = `bold 23px ${fontBengali}`;
-          ctx.fillText(privacyText, 600, curY + 43);
-          curY += 95;
-        }
-
-        // 3-Step Instructions
-        if (showInstructions) {
-          ctx.fillStyle = textSecondary;
-          ctx.font = `bold 22px ${fontBengali}`;
-          ctx.fillText(stepsText, 600, curY + 40);
-        }
-
-        // Footer URL / Address
-        ctx.fillStyle = textSecondary;
-        ctx.font = `20px ${fontBengali}`;
-        ctx.fillText(footerText, 600, 1560);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = `500 18px ${fontFamily}`;
+        ctx.fillText(
+          shop?.address ? `📍 ${shop.address}` : '🔒 256-Bit SSL Encrypted • Fast Cloud Print',
+          W / 2,
+          1515
+        );
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `800 20px ${fontFamily}`;
+        ctx.fillText('⚡ Powered by prntez Cloud Print POS', W / 2, 1550);
+        ctx.restore();
       }
 
-      // Trigger Download with Blob
-      posterCanvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          const formatTag = isA4 ? 'A4_Poster' : 'Desk_Standee';
-          const langTag = isPosterBn ? 'Bangla' : 'English';
-          link.download = `${(shop.name || 'Shop').replace(/\s+/g, '_')}_${formatTag}_${langTag}.png`;
-          link.href = url;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Robust download trigger with direct fallback
+      const triggerDownload = (downloadUrl) => {
+        const link = document.createElement('a');
+        const formatTag = isA4 ? 'A4_Poster' : 'Desk_Standee';
+        const langTag = isPosterBn ? 'Bangla' : 'English';
+        const safeName = (shop?.name || 'Shop').replace(/[^a-zA-Z0-9_\u0980-\u09FF]/g, '_');
+        link.download = `${safeName}_${formatTag}_${langTag}.png`;
+        link.href = downloadUrl;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (link.parentNode) link.parentNode.removeChild(link);
+        }, 300);
+      };
+
+      let downloadExecuted = false;
+      try {
+        if (posterCanvas.toBlob) {
+          posterCanvas.toBlob((blob) => {
+            if (blob) {
+              const blobUrl = URL.createObjectURL(blob);
+              triggerDownload(blobUrl);
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+              downloadExecuted = true;
+            } else {
+              triggerDownload(posterCanvas.toDataURL('image/png'));
+              downloadExecuted = true;
+            }
+            setGenerating(false);
+            setDownloadSuccess(
+              isBn
+                ? `${isA4 ? 'পূর্ণ A4 পোস্টার' : 'ডেস্ক স্ট্যান্ডি'} ডাউনলোড সম্পন্ন হয়েছে!`
+                : `${isA4 ? 'Full A4 Poster' : 'Desk Standee'} Downloaded!`
+            );
+          }, 'image/png');
+        } else {
+          triggerDownload(posterCanvas.toDataURL('image/png'));
+          downloadExecuted = true;
+          setGenerating(false);
           setDownloadSuccess(
-            isBn
-              ? `${isA4 ? 'পূর্ণ A4 পোস্টার' : 'ডেস্ক স্ট্যান্ডি'} (${langTag}) সফলভাবে ডাউনলোড হয়েছে!`
-              : `${isA4 ? 'Full A4 Poster' : 'Desk Standee'} (${langTag}) Downloaded!`
+            isBn ? 'পোস্টার ডাউনলোড সম্পন্ন হয়েছে!' : 'Poster Downloaded!'
           );
         }
+      } catch (blobErr) {
+        console.warn('toBlob error, fallback to dataURL:', blobErr);
+        triggerDownload(posterCanvas.toDataURL('image/png'));
+        downloadExecuted = true;
         setGenerating(false);
-      }, 'image/png');
+        setDownloadSuccess(
+          isBn ? 'পোস্টার ডাউনলোড সম্পন্ন হয়েছে!' : 'Poster Downloaded!'
+        );
+      }
+
+      // Safety timeout: if browser toBlob didn't trigger callback in 1.5s, force download with toDataURL
+      setTimeout(() => {
+        if (!downloadExecuted) {
+          try {
+            triggerDownload(posterCanvas.toDataURL('image/png'));
+            setDownloadSuccess(isBn ? 'পোস্টার ডাউনলোড সম্পন্ন!' : 'Poster Downloaded!');
+          } catch (_) {}
+          setGenerating(false);
+        }
+      }, 1500);
+
     } catch (err) {
       console.error('Download error:', err);
+      // Emergency fallback
+      try {
+        if (canvasRef.current) {
+          const emergencyLink = document.createElement('a');
+          emergencyLink.download = 'Shop_QR_Poster.png';
+          emergencyLink.href = canvasRef.current.toDataURL('image/png');
+          document.body.appendChild(emergencyLink);
+          emergencyLink.click();
+          document.body.removeChild(emergencyLink);
+        }
+      } catch (_) {}
       setGenerating(false);
     }
   };
@@ -561,25 +1100,11 @@ export default function ShopQrModal({ shop, onClose }) {
     const isA4 = paperFormat === 'a4';
 
     // Theme palette mappings for HTML print
-    const borderColor = theme === 'minimal' ? '#000' : theme === 'gold' ? '#f59e0b' : theme === 'dark' ? '#334155' : '#3b82f6';
-    const bgColor = theme === 'dark' ? '#0f172a' : theme === 'gold' ? '#fffbeb' : '#ffffff';
+    const borderColor = theme === 'minimal' ? '#000' : theme === 'gold' ? '#d97706' : theme === 'dark' ? '#4f46e5' : '#2563eb';
+    const headerBg = theme === 'minimal' ? '#000000' : theme === 'gold' ? 'linear-gradient(135deg, #78350f, #d97706)' : theme === 'dark' ? 'linear-gradient(135deg, #1e1b4b, #4f46e5)' : 'linear-gradient(135deg, #1e3a8a, #2563eb, #3b82f6)';
+    const footerBg = theme === 'minimal' ? '#000000' : theme === 'gold' ? '#451a03' : theme === 'dark' ? '#050811' : '#0f172a';
     const textColor = theme === 'dark' ? '#ffffff' : '#0f172a';
-    const badgeBg = theme === 'minimal' ? '#000' : theme === 'gold' ? '#d97706' : theme === 'dark' ? '#4f46e5' : '#2563eb';
-    const taglineColor = theme === 'dark' ? '#94a3b8' : '#475569';
-    const qrBorderColor = theme === 'dark' ? '#334155' : '#cbd5e1';
-    const slugBg = theme === 'dark' ? '#1e293b' : '#eff6ff';
-    const slugColor = theme === 'dark' ? '#818cf8' : '#1d4ed8';
-    const ratesBg = theme === 'dark' ? '#1e293b' : '#eff6ff';
-    const ratesColor = theme === 'dark' ? '#f8fafc' : '#1e3a8a';
-    const ratesBorder = theme === 'dark' ? '#334155' : '#bfdbfe';
-    const privacyBg = theme === 'dark' ? '#064e3b' : '#ecfdf5';
-    const privacyColor = theme === 'dark' ? '#6ee7b7' : '#065f46';
-    const privacyBorder = theme === 'dark' ? '#047857' : '#a7f3d0';
-    const noticeBg = theme === 'dark' ? '#312e81' : '#fef3c7';
-    const noticeColor = theme === 'dark' ? '#c7d2fe' : '#92400e';
-    const noticeBorder = theme === 'dark' ? '#4338ca' : '#fde68a';
-    const stepsColor = theme === 'dark' ? '#94a3b8' : '#475569';
-    const footerColor = theme === 'dark' ? '#64748b' : '#64748b';
+    const bodyBg = theme === 'dark' ? '#090d16' : '#ffffff';
 
     const printHtml = `
       <!DOCTYPE html>
@@ -588,11 +1113,11 @@ export default function ShopQrModal({ shop, onClose }) {
           <title>${headline || shop?.name || 'Shop'} - ${isA4 ? 'A4 Counter Poster' : 'Counter Standee'}</title>
           <link rel="preconnect" href="https://fonts.googleapis.com">
           <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
           <style>
             @page {
               size: ${isA4 ? 'A4 portrait' : 'auto'};
-              margin: ${isA4 ? '6mm' : '10mm'};
+              margin: ${isA4 ? '6mm' : '8mm'};
             }
             * {
               box-sizing: border-box;
@@ -615,241 +1140,293 @@ export default function ShopQrModal({ shop, onClose }) {
               justify-content: center;
               min-height: 100vh;
             }
-            ${isA4 ? `
-              .poster-card {
-                width: 100%;
-                height: 100%;
-                min-height: calc(297mm - 14mm);
-                max-height: calc(297mm - 14mm);
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                align-items: center;
-                border: 4px solid ${borderColor};
-                border-radius: 28px;
-                padding: 24px 32px;
-                text-align: center;
-                background: ${bgColor};
-                color: ${textColor};
-                box-sizing: border-box;
-              }
-              .badge {
-                display: inline-block;
-                background: ${badgeBg};
-                color: #fff;
-                font-size: 15px;
-                font-weight: 800;
-                letter-spacing: 2px;
-                padding: 6px 26px;
-                border-radius: 9999px;
-                text-transform: uppercase;
-                margin-bottom: 8px;
-              }
-              .shop-title {
-                font-size: 38px;
-                font-weight: 900;
-                line-height: 1.15;
-                margin-bottom: 6px;
-              }
-              .tagline {
-                font-size: 19px;
-                font-weight: 600;
-                color: ${taglineColor};
-                margin-bottom: 12px;
-              }
-              .qr-box {
-                display: inline-block;
-                padding: 12px;
-                background: #fff;
-                border: 2px solid ${qrBorderColor};
-                border-radius: 22px;
-                margin-bottom: 10px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-              }
-              .qr-box img {
-                width: 320px;
-                height: 320px;
-                display: block;
-              }
-              .slug-pill {
-                display: inline-block;
-                background: ${slugBg};
-                color: ${slugColor};
-                font-family: monospace;
-                font-size: 16px;
-                font-weight: 800;
-                padding: 6px 22px;
-                border-radius: 10px;
-                margin-bottom: 12px;
-              }
-              .rates-pill {
-                width: 100%;
-                max-width: 600px;
-                margin: 0 auto 8px auto;
-                background: ${ratesBg};
-                color: ${ratesColor};
-                border: 1.5px solid ${ratesBorder};
-                font-size: 20px;
-                font-weight: 800;
-                padding: 10px 20px;
-                border-radius: 14px;
-              }
-              .privacy-pill {
-                width: 100%;
-                max-width: 600px;
-                margin: 0 auto 8px auto;
-                background: ${privacyBg};
-                color: ${privacyColor};
-                border: 1.5px solid ${privacyBorder};
-                font-size: 15px;
-                font-weight: 800;
-                padding: 8px 16px;
-                border-radius: 12px;
-              }
-              .notice-pill {
-                width: 100%;
-                max-width: 600px;
-                margin: 0 auto 8px auto;
-                background: ${noticeBg};
-                color: ${noticeColor};
-                border: 1.5px solid ${noticeBorder};
-                font-size: 15px;
-                font-weight: 700;
-                padding: 8px 16px;
-                border-radius: 12px;
-              }
-              .steps {
-                font-size: 15px;
-                font-weight: 700;
-                color: ${stepsColor};
-                margin-top: 8px;
-                line-height: 1.35;
-              }
-              .address {
-                font-size: 13px;
-                color: ${footerColor};
-                margin-top: 6px;
-              }
-            ` : `
-              .poster-card {
-                width: 100%;
-                max-width: 380px;
-                border: 2px solid ${borderColor};
-                border-radius: 28px;
-                padding: 24px;
-                text-align: center;
-                background: ${bgColor};
-                color: ${textColor};
-                box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-              }
-              .badge {
-                display: inline-block;
-                background: ${badgeBg};
-                color: #fff;
-                font-size: 10px;
-                font-weight: 800;
-                letter-spacing: 2px;
-                padding: 4px 14px;
-                border-radius: 9999px;
-                text-transform: uppercase;
-                margin-bottom: 12px;
-              }
-              .shop-title {
-                font-size: 22px;
-                font-weight: 800;
-                margin-bottom: 4px;
-              }
-              .tagline {
-                font-size: 12px;
-                color: ${taglineColor};
-                margin-bottom: 14px;
-              }
-              .qr-box {
-                display: inline-block;
-                padding: 10px;
-                background: #fff;
-                border: 1px solid ${qrBorderColor};
-                border-radius: 16px;
-                margin-bottom: 12px;
-              }
-              .qr-box img {
-                width: 190px;
-                height: 190px;
-                display: block;
-              }
-              .slug-pill {
-                display: inline-block;
-                background: ${slugBg};
-                color: ${slugColor};
-                font-family: monospace;
-                font-size: 12px;
-                font-weight: 700;
-                padding: 4px 14px;
-                border-radius: 8px;
-                margin-bottom: 10px;
-              }
-              .rates-pill {
-                background: ${ratesBg};
-                color: ${ratesColor};
-                font-size: 11px;
-                font-weight: 700;
-                padding: 7px 12px;
-                border-radius: 10px;
-                margin-bottom: 7px;
-              }
-              .privacy-pill {
-                background: ${privacyBg};
-                color: ${privacyColor};
-                border: 1px solid ${privacyBorder};
-                font-size: 10px;
-                font-weight: 700;
-                padding: 6px 10px;
-                border-radius: 10px;
-                margin-bottom: 7px;
-              }
-              .notice-pill {
-                background: ${noticeBg};
-                color: ${noticeColor};
-                border: 1px solid ${noticeBorder};
-                font-size: 10px;
-                font-weight: 600;
-                padding: 6px 10px;
-                border-radius: 10px;
-                margin-bottom: 7px;
-              }
-              .steps {
-                font-size: 10px;
-                color: ${stepsColor};
-                margin-top: 8px;
-              }
-              .address {
-                font-size: 9px;
-                color: ${footerColor};
-                margin-top: 6px;
-              }
-            `}
+            .poster-card {
+              width: 100%;
+              height: 100%;
+              min-height: ${isA4 ? 'calc(297mm - 14mm)' : 'auto'};
+              max-height: ${isA4 ? 'calc(297mm - 14mm)' : 'auto'};
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              border: 3.5px solid ${borderColor};
+              border-radius: 28px;
+              overflow: hidden;
+              background: ${bodyBg};
+              color: ${textColor};
+              box-sizing: border-box;
+              text-align: center;
+            }
+            .header-banner {
+              background: ${headerBg};
+              color: #ffffff;
+              padding: ${isA4 ? '26px 20px 22px' : '16px 14px'};
+              position: relative;
+            }
+            .badge-pill {
+              display: inline-block;
+              background: rgba(255, 255, 255, 0.22);
+              border: 1px solid rgba(255, 255, 255, 0.4);
+              color: #ffffff;
+              font-size: ${isA4 ? '13px' : '11px'};
+              font-weight: 800;
+              letter-spacing: 1.5px;
+              padding: 5px 22px;
+              border-radius: 9999px;
+              text-transform: uppercase;
+              margin-bottom: 8px;
+            }
+            .shop-title {
+              font-size: ${isA4 ? '38px' : '24px'};
+              font-weight: 900;
+              line-height: 1.15;
+              margin-bottom: 5px;
+              color: #ffffff;
+            }
+            .tagline {
+              font-size: ${isA4 ? '18px' : '13px'};
+              font-weight: 600;
+              color: rgba(255, 255, 255, 0.95);
+              margin-bottom: 10px;
+            }
+            .cam-pill {
+              display: inline-block;
+              background: rgba(0, 0, 0, 0.28);
+              border: 1px solid rgba(255, 255, 255, 0.35);
+              color: #ffffff;
+              font-size: ${isA4 ? '14px' : '11px'};
+              font-weight: 700;
+              padding: 6px 22px;
+              border-radius: 9999px;
+            }
+            .qr-section {
+              padding: ${isA4 ? '16px 24px' : '12px'};
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+            }
+            .qr-box {
+              position: relative;
+              background: #ffffff;
+              padding: 12px;
+              border-radius: 24px;
+              box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+              border: 2px solid #e2e8f0;
+              display: inline-block;
+            }
+            .qr-box img {
+              width: ${isA4 ? '310px' : '220px'};
+              height: ${isA4 ? '310px' : '220px'};
+              display: block;
+            }
+            .qr-callout {
+              background: ${borderColor};
+              color: #fff;
+              font-size: ${isA4 ? '12px' : '10px'};
+              font-weight: 800;
+              letter-spacing: 1px;
+              padding: 4px 18px;
+              border-radius: 9999px;
+              margin-bottom: 8px;
+              display: inline-block;
+            }
+            .slug-pill {
+              display: inline-block;
+              background: ${theme === 'dark' ? '#1e293b' : '#f1f5f9'};
+              color: ${borderColor};
+              font-family: monospace;
+              font-size: ${isA4 ? '17px' : '13px'};
+              font-weight: 800;
+              padding: 6px 24px;
+              border-radius: 12px;
+              border: 1.5px solid #cbd5e1;
+              margin-top: 10px;
+            }
+            .price-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 16px;
+              padding: 0 ${isA4 ? '28px' : '16px'};
+              margin-bottom: 12px;
+            }
+            .price-card {
+              border-radius: 18px;
+              padding: 12px 16px;
+              text-align: center;
+            }
+            .price-card.bw {
+              background: ${theme === 'dark' ? '#1e293b' : '#f8fafc'};
+              border: 2px solid ${theme === 'dark' ? '#334155' : '#e2e8f0'};
+            }
+            .price-card.color {
+              background: ${theme === 'dark' ? '#1e1b4b' : '#eff6ff'};
+              border: 2px solid ${theme === 'dark' ? '#4338ca' : '#bfdbfe'};
+            }
+            .price-tag {
+              font-size: ${isA4 ? '32px' : '24px'};
+              font-weight: 900;
+              line-height: 1.1;
+              margin: 4px 0;
+            }
+            .price-sub {
+              font-size: ${isA4 ? '12px' : '10px'};
+              color: #64748b;
+              font-weight: 600;
+            }
+            .steps-grid {
+              display: grid;
+              grid-template-columns: 1fr auto 1fr auto 1fr;
+              align-items: center;
+              gap: 8px;
+              padding: 0 ${isA4 ? '28px' : '16px'};
+              margin-bottom: 10px;
+            }
+            .step-box {
+              background: #ffffff;
+              border: 1.5px solid #e2e8f0;
+              border-radius: 14px;
+              padding: 8px 10px;
+              text-align: center;
+            }
+            .step-num {
+              display: inline-block;
+              width: 24px;
+              height: 24px;
+              line-height: 24px;
+              border-radius: 50%;
+              background: ${borderColor};
+              color: #ffffff;
+              font-weight: 800;
+              font-size: 13px;
+              margin-bottom: 4px;
+            }
+            .step-title {
+              font-size: ${isA4 ? '13px' : '10px'};
+              font-weight: 800;
+              color: #0f172a;
+            }
+            .step-desc {
+              font-size: ${isA4 ? '10px' : '8px'};
+              color: #64748b;
+            }
+            .step-arrow {
+              font-size: 18px;
+              font-weight: 800;
+              color: ${borderColor};
+            }
+            .notice-card {
+              margin: 0 ${isA4 ? '28px' : '16px'} 8px;
+              background: #fef3c7;
+              border: 1.5px solid #fde68a;
+              color: #92400e;
+              border-radius: 12px;
+              padding: 8px 16px;
+              font-size: ${isA4 ? '14px' : '11px'};
+              font-weight: 700;
+            }
+            .privacy-card {
+              margin: 0 ${isA4 ? '28px' : '16px'} 10px;
+              background: #ecfdf5;
+              border: 1.5px solid #a7f3d0;
+              color: #065f46;
+              border-radius: 12px;
+              padding: 8px 16px;
+              font-size: ${isA4 ? '13px' : '10px'};
+              font-weight: 700;
+            }
+            .footer-bar {
+              background: ${footerBg};
+              color: #ffffff;
+              padding: ${isA4 ? '14px 20px' : '10px 14px'};
+              font-size: ${isA4 ? '12px' : '10px'};
+            }
           </style>
         </head>
         <body>
           <div class="poster-card">
-            <div>
-              <div class="badge">${badgeText}</div>
+            
+            <!-- Top Header Banner -->
+            <div class="header-banner">
+              <div class="badge-pill">✨ ${badgeText}</div>
               <div class="shop-title">${headline || shop?.name || 'Shop'}</div>
               <div class="tagline">${tagline}</div>
+              <div class="cam-pill">
+                ${isPosterBn ? '📱 মোবাইল ক্যামেরা দিয়ে স্ক্যান করুন • কোনো অ্যাপ বা হোয়াটসঅ্যাপ লাগবে না' : '📱 Scan with Phone Camera • No App or WhatsApp Needed'}
+              </div>
             </div>
-            <div>
+
+            <!-- QR Code Hero Showcase -->
+            <div class="qr-section">
+              <div class="qr-callout">
+                ${isPosterBn ? '📷 ক্যামেরা তাক করে স্ক্যান করুন' : '📷 POINT CAMERA TO SCAN & PRINT'}
+              </div>
               <div class="qr-box">
                 <img src="${qrDataUrl}" alt="QR Code" />
               </div>
-              <div><span class="slug-pill">${idLabel}: ${shop?.qr_slug || ''}</span></div>
+              <div>
+                <span class="slug-pill">🏷️ ${idLabel}: ${shop?.qr_slug || ''}</span>
+              </div>
             </div>
-            <div style="width: 100%;">
-              ${showPrices ? `<div class="rates-pill">${ratesText}</div>` : ''}
-              ${showPrivacyBadge ? `<div class="privacy-pill">${privacyText}</div>` : ''}
-              ${customNotice ? `<div class="notice-pill">📢 ${customNotice}</div>` : ''}
-              ${showInstructions ? `<div class="steps">${stepsText}</div>` : ''}
-              <div class="address">${footerText}</div>
+
+            <!-- Dual Pricing Board -->
+            ${showPrices ? `
+              <div class="price-grid">
+                <div class="price-card bw">
+                  <div style="font-weight: 800; font-size: 13px; color: #475569;">${isPosterBn ? '🖤 সাদা-কালো প্রিন্ট' : '🖤 BLACK & WHITE'}</div>
+                  <div class="price-tag" style="color: #0f172a;">৳${isPosterBn ? toBnDigits(priceBw) : priceBw}</div>
+                  <div class="price-sub">${isPosterBn ? 'প্রতি পৃষ্ঠা • ঝকঝকে লেজার কোয়ালিটি' : 'per page • crisp laser quality'}</div>
+                </div>
+                <div class="price-card color">
+                  <div style="font-weight: 800; font-size: 13px; color: ${borderColor};">${isPosterBn ? '🌈 রঙিন প্রিন্ট' : '🌈 COLOR PRINT'}</div>
+                  <div class="price-tag" style="color: ${borderColor};">৳${isPosterBn ? toBnDigits(priceColor) : priceColor}</div>
+                  <div class="price-sub">${isPosterBn ? 'প্রতি পৃষ্ঠা • উজ্জ্বল কালার প্রিন্ট' : 'per page • vivid high-definition'}</div>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- 3-Step Illustrated Guide -->
+            ${showInstructions ? `
+              <div class="steps-grid">
+                <div class="step-box">
+                  <div class="step-num">${isPosterBn ? '১' : '1'}</div>
+                  <div class="step-title">${isPosterBn ? 'স্ক্যান করুন' : 'Scan QR'}</div>
+                  <div class="step-desc">${isPosterBn ? 'ফোনের ক্যামেরা দিয়ে' : 'Open phone camera'}</div>
+                </div>
+                <div class="step-arrow">➔</div>
+                <div class="step-box">
+                  <div class="step-num">${isPosterBn ? '২' : '2'}</div>
+                  <div class="step-title">${isPosterBn ? 'ফাইল দিন' : 'Upload'}</div>
+                  <div class="step-desc">${isPosterBn ? 'PDF বা ছবি দিন' : 'Select PDF or photos'}</div>
+                </div>
+                <div class="step-arrow">➔</div>
+                <div class="step-box">
+                  <div class="step-num">${isPosterBn ? '৩' : '3'}</div>
+                  <div class="step-title">${isPosterBn ? 'প্রিন্ট নিন' : 'Collect'}</div>
+                  <div class="step-desc">${isPosterBn ? 'কাউন্টার থেকে প্রিন্ট' : 'Instant print ready'}</div>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Custom Notice Banner -->
+            ${customNotice ? `
+              <div class="notice-card">📢 ${customNotice}</div>
+            ` : ''}
+
+            <!-- Privacy Trust Banner -->
+            ${showPrivacyBadge ? `
+              <div class="privacy-card">
+                🛡️ ${isPosterBn
+                  ? '১০০% সুরক্ষিত ও প্রাইভেট • কোনো হোয়াটসঅ্যাপ বা ইমেল লাগবে না • প্রিন্ট শেষে ফাইল সাথে সাথে মুছে যায়'
+                  : '100% PRIVATE & SECURE • Zero WhatsApp or Gmail needed • Files auto-shred immediately after printing'}
+              </div>
+            ` : ''}
+
+            <!-- Full-Width Footer Bar -->
+            <div class="footer-bar">
+              ${shop?.address ? `<div style="margin-bottom: 3px; font-weight: 600;">📍 ${shop.address}</div>` : ''}
+              <div style="opacity: 0.85; margin-bottom: 2px;">🔒 256-Bit SSL Encrypted • Fast, Direct & Contactless Cloud Print</div>
+              <div style="font-weight: 800; font-size: ${isA4 ? '13px' : '11px'};">⚡ Powered by prntez Cloud Print POS • www.prntez.com</div>
             </div>
+
           </div>
         </body>
       </html>
@@ -879,8 +1456,8 @@ export default function ShopQrModal({ shop, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl shadow-2xl flex flex-col w-full max-w-4xl h-[92vh] max-h-[850px] overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-2 sm:p-5 animate-in fade-in duration-150">
+      <div className="bg-white rounded-3xl shadow-2xl flex flex-col w-full max-w-5xl lg:max-w-6xl h-[94vh] max-h-[920px] overflow-hidden border border-slate-200">
         
         {/* Modal Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50/80 shrink-0">
@@ -907,10 +1484,10 @@ export default function ShopQrModal({ shop, onClose }) {
         </div>
 
         {/* Modal Body: Split into Settings (Left) and Live Standee Preview (Right) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-100/60">
+        <div className="flex-1 overflow-hidden p-3 sm:p-5 grid grid-cols-1 md:grid-cols-12 gap-5 bg-slate-100/60 min-h-0">
           
           {/* Left Column: Customization Controls (5 cols) */}
-          <div className="md:col-span-5 space-y-3.5 text-xs">
+          <div className="md:col-span-5 space-y-3.5 text-xs overflow-y-auto max-h-full pr-1.5 custom-scrollbar">
             
             {/* Language Selector (Bangla / English) */}
             <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
@@ -1157,109 +1734,176 @@ export default function ShopQrModal({ shop, onClose }) {
           </div>
 
           {/* Right Column: Live Standee / Poster Preview (7 cols) */}
-          <div className="md:col-span-7 flex flex-col items-center justify-center">
+          <div className="md:col-span-7 flex flex-col h-full overflow-y-auto pr-1.5 custom-scrollbar bg-slate-200/50 rounded-2xl p-2.5 sm:p-3 border border-slate-200/80">
             
-            <div className="w-full flex items-center justify-between mb-2 px-1">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+            <div className="w-full flex items-center justify-between mb-3 px-2 sticky top-0 bg-white/95 backdrop-blur-xs py-2 z-10 rounded-xl border border-slate-200 shadow-2xs shrink-0">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span>{isBn ? 'লাইভ প্রিভিউ' : 'Live Preview'}</span>
+                <span>{isBn ? 'লাইভ প্রিভিউ (স্ক্রোল করে দেখুন)' : 'Live Preview (Scroll to view all)'}</span>
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                 {paperFormat === 'a4' ? 'Full A4 (210×297 mm)' : 'Compact Standee (100×150 mm)'}
               </span>
             </div>
 
-            {/* Printable Card Area */}
-            <div
-              ref={printAreaRef}
-              className={`w-full ${paperFormat === 'a4' ? 'max-w-md p-6 sm:p-7' : 'max-w-sm p-6'} rounded-3xl shadow-xl border text-center transition-all duration-200 ${
+            {/* Printable Card Area with Executive Retail Layout */}
+            <div className="w-full flex justify-center pb-8 pt-1">
+              <div
+                ref={printAreaRef}
+              className={`w-full ${paperFormat === 'a4' ? 'max-w-md' : 'max-w-sm'} rounded-3xl shadow-xl border overflow-hidden transition-all duration-200 flex flex-col ${
                 theme === 'minimal'
                   ? 'bg-white border-black text-black'
                   : theme === 'dark'
-                    ? 'bg-slate-900 border-slate-800 text-white shadow-indigo-950/40'
+                    ? 'bg-slate-900 border-indigo-700/60 text-white shadow-indigo-950/40'
                     : theme === 'gold'
-                      ? 'bg-amber-50/90 border-amber-300 text-amber-950'
-                      : 'bg-white border-blue-200 text-slate-900 shadow-blue-500/10'
+                      ? 'bg-white border-amber-400 text-amber-950'
+                      : 'bg-white border-blue-500 text-slate-900 shadow-blue-500/10'
               }`}
             >
-              {/* Header Badge */}
-              <div className="mb-2.5">
-                <span className={`px-3.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest ${
-                  theme === 'minimal'
-                    ? 'bg-black text-white'
-                    : theme === 'dark'
-                      ? 'bg-indigo-600 text-white'
-                      : theme === 'gold'
-                        ? 'bg-amber-600 text-white'
-                        : 'bg-blue-600 text-white'
-                }`}>
-                  {badgeText}
-                </span>
-              </div>
-
-              {/* Shop Headline */}
-              <h2 className={`font-extrabold tracking-tight truncate leading-tight ${paperFormat === 'a4' ? 'text-2xl' : 'text-xl'}`}>
-                {headline || shop.name}
-              </h2>
-              <p className={`text-xs mt-1 font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {tagline}
-              </p>
-
-              {/* QR Code Canvas */}
-              <div className="my-3.5 p-3 bg-white rounded-2xl shadow-inner border border-slate-200/80 inline-block mx-auto">
-                <canvas ref={canvasRef} className={`rounded-lg ${paperFormat === 'a4' ? 'w-52 h-52' : 'w-44 h-44'} block mx-auto`} />
-              </div>
-
-              {/* Slug Code */}
-              <div className="mb-2.5">
-                <span className={`px-3 py-1 rounded-lg text-xs font-mono font-bold ${
-                  theme === 'dark' ? 'bg-slate-800 text-indigo-400' : 'bg-slate-100 text-blue-700'
-                }`}>
-                  {idLabel}: {shop.qr_slug}
-                </span>
-              </div>
-
-              {/* Rates Pill */}
-              {showPrices && (
-                <div className={`p-2 rounded-xl text-xs font-bold mb-2 ${
-                  theme === 'dark' ? 'bg-slate-800/90 text-slate-200 border border-slate-700' : 'bg-slate-100 text-slate-800 border border-slate-200'
-                }`}>
-                  {ratesText}
+              {/* Header Banner */}
+              <div className={`p-4 text-center text-white ${
+                theme === 'minimal'
+                  ? 'bg-black'
+                  : theme === 'dark'
+                    ? 'bg-gradient-to-r from-indigo-950 via-indigo-900 to-indigo-800'
+                    : theme === 'gold'
+                      ? 'bg-gradient-to-r from-amber-800 via-amber-700 to-amber-600'
+                      : 'bg-gradient-to-r from-blue-800 via-blue-600 to-blue-500'
+              }`}>
+                <div className="inline-block px-3 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-white/20 border border-white/30 mb-1.5">
+                  ✨ {badgeText}
                 </div>
-              )}
-
-              {/* Privacy Motto Pill */}
-              {showPrivacyBadge && (
-                <div className={`p-2 rounded-xl text-[10px] font-bold mb-2 flex items-center justify-center gap-1.5 ${
-                  theme === 'dark'
-                    ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
-                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                }`}>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{privacyText}</span>
-                </div>
-              )}
-
-              {/* Custom Notice */}
-              {customNotice && (
-                <div className={`p-2 rounded-xl text-[11px] font-semibold mb-2 ${
-                  theme === 'dark' ? 'bg-indigo-950/60 text-indigo-200 border border-indigo-800/40' : 'bg-amber-50 text-amber-900 border border-amber-200'
-                }`}>
-                  📢 {customNotice}
-                </div>
-              )}
-
-              {/* Instructions */}
-              {showInstructions && (
-                <p className={`text-[10px] leading-tight font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {stepsText}
+                <h2 className="font-extrabold tracking-tight text-xl leading-tight truncate px-2">
+                  {headline || shop.name}
+                </h2>
+                <p className="text-[11px] mt-0.5 font-medium opacity-90 truncate px-2">
+                  {tagline}
                 </p>
-              )}
+                <div className="inline-block mt-2 px-3 py-0.5 rounded-full text-[10px] font-bold bg-black/25 border border-white/25">
+                  {isPosterBn ? '📱 মোবাইল ক্যামেরা দিয়ে স্ক্যান করুন' : '📱 Scan with Phone Camera • No App Needed'}
+                </div>
+              </div>
 
-              {/* Footer */}
-              <p className={`text-[9px] mt-2 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
-                {footerText}
-              </p>
+              {/* Body Content */}
+              <div className="p-4 space-y-3">
+                {/* QR Code Hero Frame with Viewfinder reticles */}
+                <div className="relative p-3 bg-white rounded-2xl shadow-sm border border-slate-200 inline-block mx-auto text-center">
+                  <div className="inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold text-white mb-2 bg-blue-600">
+                    {isPosterBn ? '📷 ক্যামেরা তাক করুন' : '📷 POINT CAMERA TO SCAN'}
+                  </div>
+                  <div className="relative mx-auto inline-block p-1">
+                    <canvas ref={canvasRef} className={`rounded-lg ${paperFormat === 'a4' ? 'w-44 h-44' : 'w-36 h-36'} block mx-auto`} />
+                  </div>
+                  <div className="mt-2">
+                    <span className="px-3 py-1 rounded-lg text-[11px] font-mono font-bold bg-slate-100 text-blue-700 border border-slate-200 inline-block">
+                      🏷️ {idLabel}: {shop.qr_slug}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dual Pricing Cards */}
+                {showPrices && (
+                  <div className="grid grid-cols-2 gap-2 text-left">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                        {isPosterBn ? '🖤 সাদা-কালো' : '🖤 B&W'}
+                      </span>
+                      <div className="text-lg font-black text-slate-900 mt-1">
+                        ৳{isPosterBn ? toBnDigits(priceBw) : priceBw}
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium">
+                        {isPosterBn ? 'প্রতি পৃষ্ঠা' : 'per page'}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200 text-center">
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                        {isPosterBn ? '🌈 রঙিন' : '🌈 COLOR'}
+                      </span>
+                      <div className="text-lg font-black text-blue-600 mt-1">
+                        ৳{isPosterBn ? toBnDigits(priceColor) : priceColor}
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium">
+                        {isPosterBn ? 'প্রতি পৃষ্ঠা' : 'per page'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3-Step Illustrated Guide */}
+                {showInstructions && (
+                  <div className="grid grid-cols-3 gap-1.5 text-center pt-1 border-t border-slate-100">
+                    <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-extrabold inline-flex items-center justify-center mb-0.5">
+                        {isPosterBn ? '১' : '1'}
+                      </span>
+                      <div className="text-[10px] font-extrabold text-slate-800 leading-tight">
+                        {isPosterBn ? 'স্ক্যান' : 'Scan'}
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-extrabold inline-flex items-center justify-center mb-0.5">
+                        {isPosterBn ? '২' : '2'}
+                      </span>
+                      <div className="text-[10px] font-extrabold text-slate-800 leading-tight">
+                        {isPosterBn ? 'আপলোড' : 'Upload'}
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200">
+                      <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-extrabold inline-flex items-center justify-center mb-0.5">
+                        {isPosterBn ? '৩' : '3'}
+                      </span>
+                      <div className="text-[10px] font-extrabold text-slate-800 leading-tight">
+                        {isPosterBn ? 'প্রিন্ট' : 'Collect'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Notice */}
+                {customNotice && (
+                  <div className="p-2 rounded-xl text-[10px] font-bold text-center bg-amber-50 text-amber-900 border border-amber-200 truncate">
+                    📢 {customNotice}
+                  </div>
+                )}
+
+                {/* Privacy Badge */}
+                {showPrivacyBadge && (
+                  <div className="p-2 rounded-xl text-[9px] font-bold text-center bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                    <span>
+                      {isPosterBn
+                        ? '🛡️ নো হোয়াটসঅ্যাপ • ফাইল সাথে সাথে মুছে যায়'
+                        : '🛡️ Zero WhatsApp • Files Auto-Shred After Print'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Branded Footer Bar */}
+              <div className={`p-2.5 text-center text-white mt-auto ${
+                theme === 'minimal'
+                  ? 'bg-black'
+                  : theme === 'dark'
+                    ? 'bg-slate-950'
+                    : theme === 'gold'
+                      ? 'bg-amber-950'
+                      : 'bg-slate-900'
+              }`}>
+                {shop?.address && (
+                  <div className="text-[9px] text-slate-300 font-medium truncate mb-0.5">
+                    📍 {shop.address}
+                  </div>
+                )}
+                <div className="text-[8px] text-slate-400">
+                  🔒 256-Bit SSL Encrypted • Fast Cloud Print
+                </div>
+                <div className="text-[9px] font-extrabold text-white mt-0.5">
+                  ⚡ Powered by prntez Cloud Print POS
+                </div>
+              </div>
+
+            </div>
             </div>
 
           </div>

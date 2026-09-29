@@ -111,6 +111,7 @@ async function migrate() {
     await ensureColumn('print_jobs', 'customer_alias', 'VARCHAR(100) DEFAULT NULL');
     await ensureColumn('print_jobs', 'completed_at', 'DATETIME DEFAULT NULL');
     await ensureColumn('print_jobs', 'download_count', 'INT DEFAULT 0');
+    await ensureColumn('print_jobs', 'reprint_count', 'INT DEFAULT 0');
 
     // Direct guarantee: Ensure auth_code column exists on print_jobs
     try {

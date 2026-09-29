@@ -25,10 +25,34 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const ALLOWED_EXTENSIONS = new Set([
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.txt', '.rtf', '.csv'
+]);
+
+const fileFilter = (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+        return cb(new Error(`File type ${ext || 'unknown'} is not allowed. Only PDF, Office documents, and images are permitted for printing.`));
+    }
+    cb(null, true);
+};
+
+const upload = multer({
+    storage,
+    limits: { fileSize: 50 * 1024 * 1024 },
+    fileFilter
+});
 
 // Upload & Create Print Job
-router.post('/', upload.array('files', 20), async (req, res) => {
+router.post('/', (req, res, next) => {
+    upload.array('files', 20)(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ success: false, error: err.message || 'File upload error' });
+        }
+        next();
+    });
+}, async (req, res) => {
     try {
         const {
             shop_id, shop_slug,

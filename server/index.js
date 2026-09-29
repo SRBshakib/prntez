@@ -197,15 +197,49 @@ io.on('connection', (socket) => {
     });
 
     // Reprint Permission Response: Customer → Shop
-    socket.on('reprint_permission_response', (data) => {
+    socket.on('reprint_permission_response', async (data) => {
         if (data?.shop_id && data?.job_code) {
             const eventName = data.granted ? 'reprint_permission_granted' : 'reprint_permission_denied';
             console.log(`[Socket] Customer ${data.granted ? 'GRANTED' : 'DENIED'} reprint for job ${data.job_code} (${data.file_name || ''})`);
+
+            let newReprintCount = 1;
+            if (data.granted) {
+                try {
+                    const { query } = require('./db');
+                    // Reset payment to 'unpaid' because customer must pay again for the reprint
+                    await query(
+                        "UPDATE print_jobs SET payment_status = 'unpaid', payment_method = 'cash', payment_trx_id = NULL, reprint_count = COALESCE(reprint_count, 0) + 1, updated_at = NOW() WHERE job_code = ? OR id = ?",
+                        [data.job_code, data.job_id || 0]
+                    );
+
+                    const [updatedJob] = await query("SELECT * FROM print_jobs WHERE job_code = ? OR id = ?", [data.job_code, data.job_id || 0]);
+                    if (updatedJob) {
+                        newReprintCount = updatedJob.reprint_count || 1;
+                        const updatePayload = {
+                            job_id: updatedJob.id,
+                            job_code: updatedJob.job_code,
+                            status: updatedJob.status,
+                            payment_status: 'unpaid',
+                            payment_method: 'cash',
+                            reprint_count: newReprintCount,
+                            is_reprint: true
+                        };
+                        io.to(`shop_${data.shop_id}`).emit('job_updated', updatePayload);
+                        io.to(`job_${data.job_code}`).emit('job_updated', updatePayload);
+                    }
+                } catch (dbErr) {
+                    console.error('[Socket] Error updating job on reprint grant:', dbErr);
+                }
+            }
+
             io.to(`shop_${data.shop_id}`).emit(eventName, {
                 job_id: data.job_id,
                 job_code: data.job_code,
                 file_id: data.file_id,
-                file_name: data.file_name
+                file_name: data.file_name,
+                payment_status: 'unpaid',
+                reprint_count: newReprintCount,
+                is_reprint: true
             });
         }
     });
