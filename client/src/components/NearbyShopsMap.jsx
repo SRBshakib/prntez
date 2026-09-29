@@ -429,7 +429,7 @@ export default function NearbyShopsMap({
         </div>
 
         {/* Radius Selector Pills */}
-        <div className="flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm text-xs">
+        <div className="flex items-center gap-1 sm:gap-1.5 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm text-xs overflow-x-auto max-w-full">
           <span className="text-[11px] font-bold text-slate-400 px-2 flex items-center gap-1">
             <MapPin className="w-3 h-3 text-blue-600" />
             <span>Radius:</span>

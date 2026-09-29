@@ -34,6 +34,9 @@ router.get('/public', async (req, res) => {
                    COALESCE(allow_bkash_payment, 1) as allow_bkash_payment,
                    COALESCE(allow_nagad_payment, 1) as allow_nagad_payment,
                    COALESCE(allow_online_payment, 1) as allow_online_payment,
+                   COALESCE(allow_binding, 1) as allow_binding,
+                   COALESCE(allow_photo, 1) as allow_photo,
+                   COALESCE(allow_edit, 1) as allow_edit,
                    COALESCE(latitude, 23.8151) as latitude,
                    COALESCE(longitude, 90.4255) as longitude
             FROM shops WHERE status = 'active'
@@ -75,6 +78,10 @@ router.get('/by-slug/:slug', async (req, res) => {
                    COALESCE(allow_bkash_payment, 1) as allow_bkash_payment,
                    COALESCE(allow_nagad_payment, 1) as allow_nagad_payment,
                    COALESCE(allow_online_payment, 1) as allow_online_payment,
+                   COALESCE(allow_binding, 1) as allow_binding,
+                   COALESCE(allow_photo, 1) as allow_photo,
+                   COALESCE(allow_edit, 1) as allow_edit,
+                   COALESCE(allow_discount, 1) as allow_discount,
                    COALESCE(discount_min_pages, 50) as discount_min_pages,
                    COALESCE(discount_percent, 10.00) as discount_percent,
                    COALESCE(discount_tier2_pages, 100) as discount_tier2_pages,
@@ -115,12 +122,16 @@ router.put('/:id', async (req, res) => {
             nagad_number, nagad_type, nagad_qr_image, nagad_merchant_id, nagad_public_key, nagad_private_key, uddoktapay_api_key,
             allow_cash_payment, allow_bkash_payment, allow_nagad_payment, allow_online_payment,
             discount_min_pages, discount_percent, discount_tier2_pages, discount_tier2_percent,
-            trade_license, trade_license_image, shop_image, tagline, owner_name, alt_phone, nid_number, maps_url, services_offered
+            trade_license, trade_license_image, shop_image, tagline, owner_name, alt_phone, nid_number, maps_url, services_offered,
+            allow_binding, allow_photo, allow_edit, allow_discount
         } = req.body;
 
         await query(`
             UPDATE shops 
             SET name = COALESCE(?, name),
+                allow_binding = COALESCE(?, allow_binding),
+                allow_photo = COALESCE(?, allow_photo),
+                allow_edit = COALESCE(?, allow_edit),
                 phone = COALESCE(?, phone),
                 address = COALESCE(?, address),
                 price_bw = COALESCE(?, price_bw),
@@ -163,6 +174,7 @@ router.put('/:id', async (req, res) => {
                 discount_percent = COALESCE(?, discount_percent),
                 discount_tier2_pages = COALESCE(?, discount_tier2_pages),
                 discount_tier2_percent = COALESCE(?, discount_tier2_percent),
+                allow_discount = COALESCE(?, allow_discount),
                 trade_license = COALESCE(?, trade_license),
                 trade_license_image = COALESCE(?, trade_license_image),
                 shop_image = COALESCE(?, shop_image),
@@ -174,7 +186,11 @@ router.put('/:id', async (req, res) => {
                 services_offered = COALESCE(?, services_offered)
             WHERE id = ?
         `, [
-            name || null, phone || null, address || null,
+            name || null,
+            allow_binding !== undefined ? (allow_binding ? 1 : 0) : null,
+            allow_photo !== undefined ? (allow_photo ? 1 : 0) : null,
+            allow_edit !== undefined ? (allow_edit ? 1 : 0) : null,
+            phone || null, address || null,
             price_bw !== undefined && price_bw !== '' ? parseFloat(price_bw) : null,
             price_color !== undefined && price_color !== '' ? parseFloat(price_color) : null,
             price_legal !== undefined && price_legal !== '' ? parseFloat(price_legal) : null,
@@ -215,6 +231,7 @@ router.put('/:id', async (req, res) => {
             discount_percent !== undefined ? parseFloat(discount_percent) : null,
             discount_tier2_pages !== undefined ? parseInt(discount_tier2_pages, 10) : null,
             discount_tier2_percent !== undefined ? parseFloat(discount_tier2_percent) : null,
+            allow_discount !== undefined ? (allow_discount ? 1 : 0) : null,
             trade_license !== undefined ? trade_license : null,
             trade_license_image !== undefined ? trade_license_image : null,
             shop_image !== undefined ? shop_image : null,

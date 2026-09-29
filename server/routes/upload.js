@@ -136,15 +136,18 @@ router.post('/', upload.array('files', 20), async (req, res) => {
 
             // Apply Bulk Discount (Feature 7)
             discountApplied = 0;
-            const minPages1 = parseInt(shopRow.discount_min_pages, 10) || 50;
-            const pct1 = parseFloat(shopRow.discount_percent) || 10;
-            const minPages2 = parseInt(shopRow.discount_tier2_pages, 10) || 100;
-            const pct2 = parseFloat(shopRow.discount_tier2_percent) || 15;
+            const isDiscountActive = shopRow.allow_discount !== 0 && shopRow.allow_discount !== '0' && shopRow.allow_discount !== false;
+            if (isDiscountActive) {
+                const minPages1 = parseInt(shopRow.discount_min_pages, 10) || 50;
+                const pct1 = parseFloat(shopRow.discount_percent) || 10;
+                const minPages2 = parseInt(shopRow.discount_tier2_pages, 10) || 100;
+                const pct2 = parseFloat(shopRow.discount_tier2_percent) || 15;
 
-            if (totalPages >= minPages2 && pct2 > 0) {
-                discountApplied = (grandTotal * pct2) / 100.0;
-            } else if (totalPages >= minPages1 && pct1 > 0) {
-                discountApplied = (grandTotal * pct1) / 100.0;
+                if (totalPages >= minPages2 && pct2 > 0) {
+                    discountApplied = (grandTotal * pct2) / 100.0;
+                } else if (totalPages >= minPages1 && pct1 > 0) {
+                    discountApplied = (grandTotal * pct1) / 100.0;
+                }
             }
             grandTotal = Math.max(0, grandTotal - discountApplied);
         } else if (svcType === 'photo') {
@@ -218,15 +221,18 @@ router.post('/', upload.array('files', 20), async (req, res) => {
 
             // Apply Bulk Discount (Feature 7)
             discountApplied = 0;
-            const minPages1 = parseInt(shopRow.discount_min_pages, 10) || 50;
-            const pct1 = parseFloat(shopRow.discount_percent) || 10;
-            const minPages2 = parseInt(shopRow.discount_tier2_pages, 10) || 100;
-            const pct2 = parseFloat(shopRow.discount_tier2_percent) || 15;
+            const isDiscountActive2 = shopRow.allow_discount !== 0 && shopRow.allow_discount !== '0' && shopRow.allow_discount !== false;
+            if (isDiscountActive2) {
+                const minPages1 = parseInt(shopRow.discount_min_pages, 10) || 50;
+                const pct1 = parseFloat(shopRow.discount_percent) || 10;
+                const minPages2 = parseInt(shopRow.discount_tier2_pages, 10) || 100;
+                const pct2 = parseFloat(shopRow.discount_tier2_percent) || 15;
 
-            if (totalPages >= minPages2 && pct2 > 0) {
-                discountApplied = (grandTotal * pct2) / 100.0;
-            } else if (totalPages >= minPages1 && pct1 > 0) {
-                discountApplied = (grandTotal * pct1) / 100.0;
+                if (totalPages >= minPages2 && pct2 > 0) {
+                    discountApplied = (grandTotal * pct2) / 100.0;
+                } else if (totalPages >= minPages1 && pct1 > 0) {
+                    discountApplied = (grandTotal * pct1) / 100.0;
+                }
             }
             grandTotal = Math.max(0, grandTotal - discountApplied);
         }

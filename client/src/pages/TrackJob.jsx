@@ -8,6 +8,7 @@ import confetti from 'canvas-confetti';
 import { socket, playChime } from '../socket';
 import GoogleAdSense from '../components/GoogleAdSense';
 import BrandSponsorCard from '../components/BrandSponsorCard';
+import { useLanguage } from '../context/LanguageContext';
 
 // Official Brand Logos
 const BkashLogo = ({ className = "w-4 h-4" }) => (
@@ -32,6 +33,7 @@ const NagadLogo = ({ className = "w-4 h-4" }) => (
 );
 
 export default function TrackJob({ jobCode, onBack }) {
+  const { t, isBn } = useLanguage();
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -419,7 +421,7 @@ export default function TrackJob({ jobCode, onBack }) {
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <p className="text-xs font-semibold text-slate-600">Retrieving live order status...</p>
+          <p className="text-xs font-semibold text-slate-600">{t('trackJob.retrievingStatus', 'Retrieving live order status...')}</p>
         </div>
       </div>
     );
@@ -429,13 +431,13 @@ export default function TrackJob({ jobCode, onBack }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 text-center max-w-sm w-full space-y-3">
-          <p className="text-sm font-bold text-slate-800">Order Not Found</p>
-          <p className="text-xs text-slate-500">{error || 'Please verify your 4-digit code.'}</p>
+          <p className="text-sm font-bold text-slate-800">{t('trackJob.orderNotFound', 'Order Not Found')}</p>
+          <p className="text-xs text-slate-500">{error || t('trackJob.verifyCode', 'Please verify your 4-digit code.')}</p>
           <button
             onClick={onBack}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition"
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition cursor-pointer"
           >
-            Go Back
+            {t('trackJob.goBack', 'Go Back')}
           </button>
         </div>
       </div>
@@ -456,15 +458,15 @@ export default function TrackJob({ jobCode, onBack }) {
         <div className="flex items-center justify-between px-0.5">
           <button
             onClick={onBack}
-            className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition flex items-center gap-1.5 text-xs font-semibold"
+            className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>New Order</span>
+            <span>{t('common.newOrder', 'New Order')}</span>
           </button>
 
           <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] sm:text-[11px] font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Live Real-Time Tracker</span>
+            <span>{t('trackJob.liveTracker', 'Live Real-Time Tracker')}</span>
           </span>
         </div>
 
@@ -474,27 +476,64 @@ export default function TrackJob({ jobCode, onBack }) {
             <div className="flex items-center gap-2 min-w-0">
               <Bell className="w-4 h-4 text-indigo-600 shrink-0" />
               <p className="text-[11px] text-indigo-900 font-medium truncate">
-                Get sound & push alerts when print is ready
+                {t('trackJob.pushAlertSub', 'Get sound & push alerts when print is ready')}
               </p>
             </div>
             <button
               onClick={requestNotificationPermission}
-              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] shrink-0 transition"
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] shrink-0 transition cursor-pointer"
             >
-              Enable Alert
+              {t('trackJob.enableAlert', 'Enable Alert')}
             </button>
           </div>
+        )}
+
+        {/* Brand Collaboration Sponsor Card */}
+        {brandSponsor && (
+          <BrandSponsorCard sponsor={brandSponsor} />
+        )}
+
+        {/* Promo / Partner Ad Space */}
+        {promoAd && (
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[10px] uppercase shrink-0 border border-indigo-200">
+                {promoAd.badge}
+              </span>
+              <p className="font-medium text-slate-700 truncate">{promoAd.text}</p>
+            </div>
+            {promoAd.link && (
+              <a
+                href={promoAd.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 font-bold text-xs hover:underline shrink-0"
+              >
+                {t('common.learnMore', 'Learn More →')}
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Google AdSense Space */}
+        {adsenseConfig?.enabled && (
+          <GoogleAdSense
+            client={adsenseConfig.clientId}
+            slot={adsenseConfig.slotTrack}
+            format="auto"
+            className="pt-1"
+          />
         )}
 
         {/* Order Ticket Card */}
         <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 shadow-xs border border-slate-200/90 text-center space-y-3 sm:space-y-4">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Your Pickup Token</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{t('trackJob.pickupToken', 'Your Pickup Token')}</span>
             <div className="flex items-center justify-center gap-2 mt-0.5 sm:mt-1">
               <h1 className="text-3xl sm:text-4xl font-extrabold text-blue-600 tracking-tight font-mono">#{job.job_code}</h1>
               <button
                 onClick={copyCode}
-                className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition"
+                className="p-1.5 sm:p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition cursor-pointer"
                 title="Copy Code"
               >
                 {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
@@ -502,7 +541,7 @@ export default function TrackJob({ jobCode, onBack }) {
             </div>
             {job.auth_code && (
               <div className="flex items-center justify-center gap-1.5 mt-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Auth:</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">{t('trackJob.authCode', 'Auth')}:</span>
                 <span
                   onClick={() => {
                     navigator.clipboard.writeText(job.auth_code);
@@ -514,10 +553,10 @@ export default function TrackJob({ jobCode, onBack }) {
                 >
                   {job.auth_code}
                 </span>
-                {copiedAuth && <span className="text-[10px] font-bold text-emerald-600">Copied!</span>}
+                {copiedAuth && <span className="text-[10px] font-bold text-emerald-600">{t('common.copied', 'Copied!')}</span>}
               </div>
             )}
-            <p className="text-[11px] text-slate-400 mt-1">Show this token at the print counter</p>
+            <p className="text-[11px] text-slate-400 mt-1">{t('trackJob.showAtCounter', 'Show this token at the print counter')}</p>
           </div>
 
           <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100 flex items-center justify-between text-left">
@@ -527,30 +566,30 @@ export default function TrackJob({ jobCode, onBack }) {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Customer</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase">{t('trackJob.customer', 'Customer')}</p>
                   {job.service_type === 'edit' ? (
                     <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black px-1.5 py-0.2 rounded-md uppercase">
-                      ✏️ Edit & Print
+                      {t('trackJob.editPrint', '✏️ Edit & Print')}
                     </span>
                   ) : job.service_type === 'photo' ? (
                     <span className="bg-pink-100 text-pink-900 border border-pink-300 text-[9px] font-black px-1.5 py-0.2 rounded-md uppercase">
-                      🖼️ Photo Print
+                      {t('trackJob.photoPrint', '🖼️ Photo Print')}
                     </span>
                   ) : job.service_type === 'bind' ? (
                     <span className="bg-purple-100 text-purple-900 border border-purple-300 text-[9px] font-black px-1.5 py-0.2 rounded-md uppercase">
-                      📖 Binding
+                      {t('trackJob.binding', '📖 Binding')}
                     </span>
                   ) : null}
                 </div>
-                <p className="text-xs font-bold text-slate-800 truncate max-w-[140px] sm:max-w-[220px]">{job.customer_name || 'Guest'}</p>
+                <p className="text-xs font-bold text-slate-800 truncate max-w-[140px] sm:max-w-[220px]">{job.customer_name || t('common.guest', 'Guest')}</p>
               </div>
             </div>
             <div className="text-right shrink-0">
-              <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Due</p>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase">{t('trackJob.totalDue', 'Total Due')}</p>
               <div className="flex items-center justify-end gap-1.5">
                 {job.service_type === 'edit' && parseFloat(job.total_price || 0) === 0 ? (
                   <span className="text-xs font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
-                    Custom Quote
+                    {t('trackJob.customQuote', 'Custom Quote')}
                   </span>
                 ) : (
                   <p className="text-sm sm:text-base font-extrabold text-slate-900">৳{parseFloat(job.total_price || 0).toFixed(2)}</p>
@@ -575,19 +614,19 @@ export default function TrackJob({ jobCode, onBack }) {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="font-black text-[11px] sm:text-xs uppercase tracking-wide">
                       {job.payment_method === 'cash' || !job.payment_method
-                        ? 'Printed! Ready for Pickup — Pay Cash at Counter'
-                        : 'Ready for Pickup! Make Payment'}
+                        ? t('trackJob.printedReadyCash', 'Printed! Ready for Pickup — Pay Cash at Counter')
+                        : t('trackJob.readyMakePayment', 'Ready for Pickup! Make Payment')}
                     </p>
                     <span className="text-[9px] font-black uppercase tracking-wider bg-white text-orange-700 px-1.5 py-0.2 rounded-full">
-                      {isMfsPending ? 'Verification Pending' : (job.payment_method === 'cash' || !job.payment_method ? 'Cash Due' : 'Payment Due')}
+                      {isMfsPending ? t('trackJob.verificationPending', 'Verification Pending') : (job.payment_method === 'cash' || !job.payment_method ? t('trackJob.cashDueLabel', 'Cash Due') : t('trackJob.paymentDue', 'Payment Due'))}
                     </span>
                   </div>
                   <p className="text-[10px] sm:text-[11px] text-white/95 mt-0.5 leading-snug">
                     {isMfsPending
-                      ? `Printouts are ready! The shopkeeper is verifying your last 4 digits (****${job.payment_trx_id || ''}) to release your documents.`
+                      ? t('trackJob.mfsPendingDesc', 'Printouts are ready! The shopkeeper is verifying your last 4 digits to release your documents.')
                       : (job.payment_method === 'cash' || !job.payment_method
-                          ? `Your printouts are ready at the counter! Please hand ৳${parseFloat(job.total_price || 0).toFixed(2)} cash to the counter person to collect.`
-                          : `Printouts are ready at the counter! Please pay ৳${parseFloat(job.total_price || 0).toFixed(2)} to collect your documents.`)}
+                          ? t('trackJob.printoutsReadyCash', 'Your printouts are ready at the counter! Please hand cash to the counter person to collect.')
+                          : t('trackJob.printoutsReadyPay', 'Printouts are ready at the counter! Please make payment to collect your documents.'))}
                   </p>
                 </div>
               </div>
@@ -599,9 +638,9 @@ export default function TrackJob({ jobCode, onBack }) {
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 flex items-center gap-2.5 text-left animate-in fade-in">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <div>
-                <p className="font-extrabold text-xs">Payment Received Successfully!</p>
+                <p className="font-extrabold text-xs">{t('trackJob.paymentReceived', 'Payment Received Successfully!')}</p>
                 <p className="text-[10px] text-emerald-700 mt-0.5">
-                  Trx ID: <span className="font-mono font-bold">{paymentSuccessTrx}</span> · Order marked as Paid
+                  Trx ID: <span className="font-mono font-bold">{paymentSuccessTrx}</span> · {t('trackJob.orderMarkedPaid', 'Order marked as Paid')}
                 </p>
               </div>
             </div>
@@ -612,7 +651,7 @@ export default function TrackJob({ jobCode, onBack }) {
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 flex items-center gap-1">
                 <CreditCard className="w-3.5 h-3.5 text-blue-600" />
-                <span>Payment Status</span>
+                <span>{t('trackJob.paymentStatus', 'Payment Status')}</span>
               </span>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                 job.payment_status === 'paid' || job.payment_status === 'paid_cash' || job.payment_status === 'paid_bkash'
@@ -621,11 +660,11 @@ export default function TrackJob({ jobCode, onBack }) {
                     ? 'bg-pink-100 text-pink-800 border border-pink-300 animate-pulse'
                     : 'bg-rose-50 text-rose-700 border border-rose-200'
               }`}>
-                {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? '✓ Paid (Cash)' :
-                 job.payment_status === 'paid_bkash' ? '✓ Paid (Online / MFS)' :
-                 job.payment_status === 'mfs_pending' ? '⏳ MFS Pending Verification' :
-                 (job.payment_method === 'cash' || !job.payment_method) ? '💵 Cash Due at Counter' :
-                 '● Unpaid'}
+                {job.payment_status === 'paid' || job.payment_status === 'paid_cash' ? t('trackJob.paidCash', '✓ Paid (Cash at Counter)') :
+                 job.payment_status === 'paid_bkash' ? t('trackJob.paidOnline', '✓ Paid (Online / MFS)') :
+                 job.payment_status === 'mfs_pending' ? t('trackJob.mfsPending', '⏳ MFS Pending Verification') :
+                 (job.payment_method === 'cash' || !job.payment_method) ? t('trackJob.cashDue', '💵 Cash Due at Counter') :
+                 `● ${t('common.unpaid', 'Unpaid')}`}
               </span>
             </div>
 
@@ -640,40 +679,38 @@ export default function TrackJob({ jobCode, onBack }) {
                   <>
                     <div className="flex items-center gap-2">
                       <Printer className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <p className="font-extrabold text-emerald-800 text-sm">Printed ✓</p>
+                      <p className="font-extrabold text-emerald-800 text-sm">{t('trackJob.printedVerified', 'Printed ✓')}</p>
                       <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-200 text-amber-900 border border-amber-400 animate-pulse">
-                        PAYMENT PENDING
+                        {t('trackJob.paymentPending', 'PAYMENT PENDING')}
                       </span>
                     </div>
                     <p className="text-amber-900 leading-relaxed">
-                      Your documents are <strong>printed and ready</strong> but held at the counter until bKash/Nagad payment is verified.
-                      Your last 4 digits <strong className="font-mono">****{job.payment_trx_id || ''}</strong> are with the shopkeeper — 
-                      they'll confirm from their {job.payment_method === 'bkash' ? 'bKash' : 'Nagad'} app.
+                      {t('trackJob.printedReadyHeld', 'Your documents are printed and ready but held at the counter until bKash/Nagad payment is verified.')}
+                      {' '}<strong className="font-mono">****{job.payment_trx_id || ''}</strong>
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="font-extrabold text-pink-900 flex items-center gap-1.5">
                       <CreditCard className="w-3.5 h-3.5 text-pink-600" />
-                      bKash/Nagad Payment Sent — Awaiting Shop Verification
+                      {t('trackJob.mfsSentAwaiting', 'bKash/Nagad Payment Sent — Awaiting Shop Verification')}
                     </p>
                     <p className="text-pink-700 leading-relaxed">
-                      Your payment with last 4 digits <strong className="font-mono">****{job.payment_trx_id || ''}</strong> has been submitted. 
-                      The shopkeeper will verify by matching these digits in their {job.payment_method === 'bkash' ? 'bKash' : 'Nagad'} app.
+                      {t('trackJob.mfsSubmittedDesc', 'Your payment with last 4 digits has been submitted. The shopkeeper will verify by matching these digits.')} <strong className="font-mono">****{job.payment_trx_id || ''}</strong>
                     </p>
                   </>
                 )}
 
                 {/* Instant Gateway alternative */}
                 <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500">Want instant confirmation?</span>
+                  <span className="text-[10px] text-slate-500">{t('trackJob.wantInstant', 'Want instant confirmation?')}</span>
                   <button
                     type="button"
                     onClick={() => handleInitiateOnlinePay('bkash')}
                     disabled={payingMethod !== null}
                     className="text-[11px] font-bold text-pink-700 hover:text-pink-900 flex items-center gap-1 cursor-pointer underline"
                   >
-                    {payingMethod === 'bkash' ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>⚡ Pay with bKash Gateway →</span>}
+                    {payingMethod === 'bkash' ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>{t('trackJob.payBkashGateway', '⚡ Pay with bKash Gateway →')}</span>}
                   </button>
                 </div>
               </div>
@@ -689,9 +726,9 @@ export default function TrackJob({ jobCode, onBack }) {
                     <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-2.5 flex items-start gap-2.5">
                       <span className="text-base leading-none mt-0.5">💵</span>
                       <div className="space-y-0.5 text-xs">
-                        <p className="font-bold text-emerald-950">Cash Payment Selected</p>
+                        <p className="font-bold text-emerald-950">{t('trackJob.cashPaymentSelected', 'Cash Payment Selected')}</p>
                         <p className="text-[11px] text-emerald-800">
-                          Please hand <strong>৳{job.total_price || 0}</strong> cash to the shopkeeper when picking up your printouts.
+                          {t('trackJob.cashPaymentNotice', 'Please hand cash to the shopkeeper when picking up your printouts.')}
                         </p>
                       </div>
                     </div>
@@ -707,9 +744,9 @@ export default function TrackJob({ jobCode, onBack }) {
                       >
                         <CreditCard className="w-3.5 h-3.5 text-pink-600" />
                         <span>
-                          Want to pay online with {job.allow_bkash_payment !== 0 && job.allow_nagad_payment !== 0 ? 'bKash / Nagad' : job.allow_bkash_payment !== 0 ? 'bKash' : 'Nagad'} instead?
+                          {t('trackJob.wantPayOnlineBkashNagad', 'Want to pay online with bKash / Nagad instead?')}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-bold ml-0.5">{showOnlinePayOptions ? '▲ Hide' : '▼ Pay Online'}</span>
+                        <span className="text-[10px] text-slate-500 font-bold ml-0.5">{showOnlinePayOptions ? t('trackJob.hideOnline', '▲ Hide') : t('trackJob.payOnlineToggle', '▼ Pay Online')}</span>
                       </button>
                     </div>
                   )}
@@ -728,19 +765,19 @@ export default function TrackJob({ jobCode, onBack }) {
                           <div className="text-[10px] text-slate-600 space-y-0.5">
                             <p className="font-extrabold text-slate-800 text-xs flex items-center gap-1">
                               <QrCode className="w-3.5 h-3.5 text-blue-600" />
-                              Scan {job.shop_name || 'Shop'} Counter QR
+                              {t('trackJob.scanShopQr', 'Scan Shop Counter QR')}
                             </p>
-                            <p className="text-slate-500">Scan using bKash / Nagad App to pay directly to this shop's merchant account.</p>
+                            <p className="text-slate-500">{t('trackJob.scanQrDesc', "Scan using bKash / Nagad App to pay directly to this shop's merchant account.")}</p>
                           </div>
                         </div>
                       )}
 
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                          Choose How to Pay:
+                          {t('trackJob.chooseHowToPay', 'Choose How to Pay:')}
                         </span>
                         <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          Instant Online & App Payment
+                          {t('trackJob.instantOnline', 'Instant Online & App Payment')}
                         </span>
                       </div>
 
@@ -761,7 +798,7 @@ export default function TrackJob({ jobCode, onBack }) {
                                 <span className="w-6 h-6 rounded-lg bg-white flex items-center justify-center p-0.5 shrink-0 shadow-xs">
                                   <img src="/bkash-logo.png" alt="bKash" className="w-full h-full object-contain" />
                                 </span>
-                                <span>Pay with bKash</span>
+                                <span>{t('trackJob.payWithBkash', 'Pay with bKash')}</span>
                               </>
                             )}
                           </button>
@@ -782,7 +819,7 @@ export default function TrackJob({ jobCode, onBack }) {
                                 <span className="w-6 h-6 rounded-lg bg-white flex items-center justify-center p-0.5 shrink-0 shadow-xs">
                                   <img src="/nagad-logo.png" alt="Nagad" className="w-full h-full object-contain" />
                                 </span>
-                                <span>Pay with Nagad</span>
+                                <span>{t('trackJob.payWithNagad', 'Pay with Nagad')}</span>
                               </>
                             )}
                           </button>
@@ -797,20 +834,20 @@ export default function TrackJob({ jobCode, onBack }) {
                             onClick={() => setShowManualInput(true)}
                             className="w-full text-center text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 p-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
                           >
-                            <span>📱 Sent money via bKash App? Enter last 4 digits</span>
+                            <span>{t('trackJob.sentViaApp', '📱 Sent money via bKash App? Enter last 4 digits')}</span>
                           </button>
                         ) : (
                           <div className="bg-pink-50/60 border border-pink-200 rounded-xl p-3 space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="text-[11px] font-bold text-slate-800">
-                                Enter last 4 digits of your bKash number:
+                                {t('trackJob.enterLast4', 'Enter last 4 digits of your bKash number:')}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => setShowManualInput(false)}
                                 className="text-[10px] text-slate-400 hover:text-slate-600"
                               >
-                                Cancel
+                                {t('common.cancel', 'Cancel')}
                               </button>
                             </div>
                             <div className="flex items-center gap-2">
@@ -829,11 +866,11 @@ export default function TrackJob({ jobCode, onBack }) {
                                 disabled={submittingManual || manualDigits.length !== 4}
                                 className="flex-1 py-1.5 px-3 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1"
                               >
-                                {submittingManual ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>Submit for Verification</span>}
+                                {submittingManual ? <Loader2 className="w-3 h-3 animate-spin" /> : <span>{t('trackJob.submitVerification', 'Submit for Verification')}</span>}
                               </button>
                             </div>
                             <p className="text-[9px] text-slate-500">
-                              Shopkeeper will verify your transaction using these digits at the counter.
+                              {t('trackJob.shopkeeperVerify', 'Shopkeeper will verify your transaction using these digits at the counter.')}
                             </p>
                           </div>
                         )}
@@ -846,7 +883,7 @@ export default function TrackJob({ jobCode, onBack }) {
                       {shopBkashNumber && (
                         <div className="pt-1.5 flex items-center justify-between text-[10px] text-slate-500">
                           <span>
-                            {job.shop_bkash_type === 'merchant' ? 'Merchant No:' : 'Shop MFS:'} <strong className="font-mono text-slate-800">{shopBkashNumber}</strong>
+                            {job.shop_bkash_type === 'merchant' ? t('trackJob.merchantNo', 'Merchant No:') : t('trackJob.shopMFS', 'Shop MFS:')} <strong className="font-mono text-slate-800">{shopBkashNumber}</strong>
                           </span>
                           <button
                             onClick={() => {
@@ -856,7 +893,7 @@ export default function TrackJob({ jobCode, onBack }) {
                             }}
                             className="text-blue-600 font-bold hover:underline"
                           >
-                            {copiedBkash ? 'Copied' : 'Copy'}
+                            {copiedBkash ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}
                           </button>
                         </div>
                       )}
@@ -875,24 +912,24 @@ export default function TrackJob({ jobCode, onBack }) {
                   <FileText className="w-3.5 h-3.5 text-blue-600" />
                   <span>
                     {job.service_type === 'edit'
-                      ? `Your Files for Editing (${job.files.length} ${job.files.length === 1 ? 'file' : 'files'})`
+                      ? `${t('trackJob.yourFilesEdit', 'Your Files for Editing')} (${job.files.length} ${job.files.length === 1 ? t('trackJob.file', 'file') : t('trackJob.files', 'files')})`
                       : job.service_type === 'photo'
-                      ? `Your Photos for Print (${job.files.length} ${job.files.length === 1 ? 'item' : 'items'})`
-                      : `Your Documents (${job.files.length} ${job.files.length === 1 ? 'file' : 'files'})`}
+                      ? `${t('trackJob.yourPhotos', 'Your Photos for Print')} (${job.files.length} ${job.files.length === 1 ? t('trackJob.item', 'item') : t('trackJob.items', 'items')})`
+                      : `${t('trackJob.yourDocuments', 'Your Documents')} (${job.files.length} ${job.files.length === 1 ? t('trackJob.file', 'file') : t('trackJob.files', 'files')})`}
                   </span>
                 </span>
                 <div className="flex items-center gap-1.5">
                   {job.files_deleted ? (
                     <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 bg-slate-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Lock className="w-2.5 h-2.5" /> Storage Wiped
+                      <Lock className="w-2.5 h-2.5" /> {t('trackJob.storageWiped', 'Storage Wiped')}
                     </span>
                   ) : job.service_type === 'edit' ? (
                     <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                      ✏️ Edit & Modification
+                      {t('trackJob.editModification', '✏️ Edit & Modification')}
                     </span>
                   ) : (
                     <span className="text-[10px] font-bold text-slate-400">
-                      {job.total_pages || job.files.reduce((acc, f) => acc + (f.page_count || 1) * (f.copies || 1), 0)} Total Pages
+                      {job.total_pages || job.files.reduce((acc, f) => acc + (f.page_count || 1) * (f.copies || 1), 0)} {t('trackJob.totalPages', 'Total Pages')}
                     </span>
                   )}
                 </div>
@@ -918,7 +955,7 @@ export default function TrackJob({ jobCode, onBack }) {
                       {job.service_type === 'edit' ? (
                         <>
                           <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 font-bold">
-                            ✏️ Sent for Editing
+                            {t('trackJob.sentForEditing', '✏️ Sent for Editing')}
                           </span>
                           {job.service_detail && (
                             <span className="bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 text-amber-900 font-semibold" title={job.service_detail}>
@@ -926,68 +963,68 @@ export default function TrackJob({ jobCode, onBack }) {
                             </span>
                           )}
                           <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
-                            📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                            📄 {file.page_count || 1} {file.page_count === 1 ? t('trackJob.page', 'Page') : t('trackJob.pagesLabel', 'Pages')}
                           </span>
                           <span className="bg-blue-50/80 px-1.5 sm:px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
-                            🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                            🖨️ {file.copies || 1}x {file.copies === 1 ? t('trackJob.copyLabel', 'Copy') : t('trackJob.copiesLabel', 'Copies')}
                           </span>
                           <span className={`px-1.5 sm:px-2 py-0.5 rounded-md border font-bold ${
                             file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
                           }`}>
-                            {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                            {file.color_mode === 'color' ? t('trackJob.color', '🎨 Color') : t('trackJob.bw', '⬛ B&W')}
                           </span>
                           <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
                             📐 {file.paper_size || 'A4'}
                           </span>
                           <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
-                            {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                            {file.sides === 'double' ? t('trackJob.twoSided', '🔄 2-Sided') : t('trackJob.oneSided', '1-Sided')}
                           </span>
                           <span className="bg-amber-50/60 px-2 py-0.5 rounded-md border border-amber-200 text-amber-800 text-[9px] font-bold">
-                            ⏳ Manual Shop Editing
+                            {t('trackJob.manualShopEditing', '⏳ Manual Shop Editing')}
                           </span>
                         </>
                       ) : job.service_type === 'photo' ? (
                         <>
                           <span className="bg-pink-100 text-pink-900 px-2 py-0.5 rounded-md border border-pink-300 font-bold">
-                            🖼️ {job.service_detail === 'passport_8' ? '8x Passport' : job.service_detail === 'stamp_4' ? '4x Stamp' : job.service_detail === 'photo_4r' ? '4R Photo (4×6)' : job.service_detail === 'photo_a4' ? 'A4 Glossy' : '4x Passport'}
+                            🖼️ {job.service_detail === 'passport_8' ? t('trackJob.passport8', '8x Passport') : job.service_detail === 'stamp_4' ? t('trackJob.stamp4', '4x Stamp') : job.service_detail === 'photo_4r' ? t('trackJob.photo4r', '4R Photo (4×6)') : job.service_detail === 'photo_a4' ? t('trackJob.photoA4Glossy', 'A4 Glossy') : t('trackJob.passport4', '4x Passport')}
                           </span>
-                          <span className="bg-blue-50/80 px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
-                            📷 {file.copies || 1}x Set
+                          <span className="bg-blue-50/80 px-1.5 sm:px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
+                            📷 {file.copies || 1}x {t('trackJob.set', 'Set')}
                           </span>
                           <span className="bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
-                            ✨ Glossy Photo Paper
+                            {t('trackJob.glossyPhotoPaper', '✨ Glossy Photo Paper')}
                           </span>
                         </>
                       ) : (
                         <>
                           {job.service_type === 'bind' && (
                             <span className="bg-purple-100 text-purple-900 px-2 py-0.5 rounded-md border border-purple-300 font-bold">
-                              📖 {job.service_detail === 'tape' ? 'Tape Binding' : job.service_detail === 'hardcover' ? 'Hardcover Thesis' : 'Spiral Binding'}
+                              📖 {job.service_detail === 'tape' ? t('trackJob.tapeBinding', 'Tape Binding') : job.service_detail === 'hardcover' ? t('trackJob.hardcoverThesis', 'Hardcover Thesis') : t('trackJob.spiralBinding', 'Spiral Binding')}
                             </span>
                           )}
                           <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-700 font-semibold">
-                            📄 {file.page_count || 1} {file.page_count === 1 ? 'Page' : 'Pages'}
+                            📄 {file.page_count || 1} {file.page_count === 1 ? t('trackJob.page', 'Page') : t('trackJob.pagesLabel', 'Pages')}
                           </span>
                           <span className="bg-blue-50/80 px-1.5 sm:px-2 py-0.5 rounded-md border border-blue-200 text-blue-700 font-bold">
-                            🖨️ {file.copies || 1}x {file.copies === 1 ? 'Copy' : 'Copies'}
+                            🖨️ {file.copies || 1}x {file.copies === 1 ? t('trackJob.copyLabel', 'Copy') : t('trackJob.copiesLabel', 'Copies')}
                           </span>
                           <span className={`px-1.5 sm:px-2 py-0.5 rounded-md border font-bold ${
                             file.color_mode === 'color' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
                           }`}>
-                            {file.color_mode === 'color' ? '🎨 Color' : '⬛ B&W'}
+                            {file.color_mode === 'color' ? t('trackJob.color', '🎨 Color') : t('trackJob.bw', '⬛ B&W')}
                           </span>
                           <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
                             📐 {file.paper_size || 'A4'}
                           </span>
                           <span className="bg-slate-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 text-slate-600 font-semibold">
-                            {file.sides === 'double' ? '🔄 2-Sided' : '1-Sided'}
+                            {file.sides === 'double' ? t('trackJob.twoSided', '🔄 2-Sided') : t('trackJob.oneSided', '1-Sided')}
                           </span>
                         </>
                       )}
 
                       {job.files_deleted ? (
                         <span className="bg-slate-100 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-300 text-slate-500 font-bold text-[9px]">
-                          🔒 Purged
+                          {t('trackJob.purged', '🔒 Purged')}
                         </span>
                       ) : null}
                     </div>
@@ -1019,7 +1056,7 @@ export default function TrackJob({ jobCode, onBack }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-extrabold text-xs flex items-center gap-1.5">
-                        <span>{cd.status === 'deleted' ? 'Files Purged (Privacy Protected)' : 'Privacy & Auto-Deletion'}</span>
+                        <span>{cd.status === 'deleted' ? t('trackJob.filesPurged', 'Files Purged (Privacy Protected)') : t('trackJob.privacyAutoDeletion', 'Privacy & Auto-Deletion')}</span>
                       </span>
                       <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shrink-0 shadow-2xs ${
                         cd.status === 'deleted'
@@ -1028,7 +1065,7 @@ export default function TrackJob({ jobCode, onBack }) {
                             ? 'bg-rose-600 text-white animate-pulse'
                             : 'bg-emerald-700 text-white'
                       }`}>
-                        {cd.status === 'deleted' ? '🔒 Purged' : `⏳ ${cd.timeString || cd.label}`}
+                        {cd.status === 'deleted' ? t('trackJob.purged', '🔒 Purged') : `⏳ ${cd.timeString || cd.label}`}
                       </span>
                     </div>
                     <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 leading-relaxed">{cd.desc}</p>
@@ -1039,19 +1076,19 @@ export default function TrackJob({ jobCode, onBack }) {
                 {job.status === 'done' && !job.files_deleted && (
                   <div className="pt-2.5 border-t border-rose-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="text-[10px] sm:text-[11px] text-slate-600 font-medium">
-                      <span>Don't want to wait for timer? Wipe files now:</span>
+                      <span>{t('trackJob.deleteNowPrompt', "Don't want to wait for timer? Wipe files now:")}</span>
                     </div>
 
                     {confirmDelete ? (
                       <div className="flex items-center gap-1.5 self-end sm:self-auto animate-in fade-in">
-                        <span className="text-[10px] font-bold text-rose-700">Permanent delete?</span>
+                        <span className="text-[10px] font-bold text-rose-700">{t('trackJob.permanentDelete', 'Permanent delete?')}</span>
                         <button
                           type="button"
                           onClick={() => setConfirmDelete(false)}
                           disabled={isDeletingFiles}
                           className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold rounded-lg transition cursor-pointer"
                         >
-                          Cancel
+                          {t('common.cancel', 'Cancel')}
                         </button>
                         <button
                           type="button"
@@ -1062,12 +1099,12 @@ export default function TrackJob({ jobCode, onBack }) {
                           {isDeletingFiles ? (
                             <>
                               <Loader2 className="w-3 h-3 animate-spin" />
-                              <span>Purging...</span>
+                              <span>{t('trackJob.purging', 'Purging...')}</span>
                             </>
                           ) : (
                             <>
                               <Trash2 className="w-3 h-3" />
-                              <span>Yes, Delete Now</span>
+                              <span>{t('trackJob.yesDeleteNow', 'Yes, Delete Now')}</span>
                             </>
                           )}
                         </button>
@@ -1081,7 +1118,7 @@ export default function TrackJob({ jobCode, onBack }) {
                         title="Permanently wipe uploaded document files from the server immediately"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Delete My Files Now</span>
+                        <span>{t('trackJob.deleteMyFiles', 'Delete My Files Now')}</span>
                       </button>
                     )}
                   </div>
@@ -1090,7 +1127,7 @@ export default function TrackJob({ jobCode, onBack }) {
                 {fileDeleteSuccess && (
                   <div className="bg-emerald-100/90 border border-emerald-300 rounded-xl p-2 text-[10px] sm:text-[11px] text-emerald-800 font-semibold flex items-center gap-1.5 animate-in fade-in">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Your documents were permanently wiped from server disk!</span>
+                    <span>{t('trackJob.filesWiped', 'Your documents were permanently wiped from server disk!')}</span>
                   </div>
                 )}
               </div>
@@ -1102,32 +1139,32 @@ export default function TrackJob({ jobCode, onBack }) {
             {[
               {
                 id: 'pending',
-                label: job.service_type === 'photo' ? 'Photo Order Received' : job.service_type === 'edit' ? 'Edit Request Received' : job.service_type === 'bind' ? 'Print & Binding Queued' : 'Order Received',
-                desc: job.service_type === 'photo' ? 'Queued at photo studio counter' : job.service_type === 'edit' ? 'Queued for shop editing' : 'Queued at print counter',
+                label: job.service_type === 'photo' ? t('trackJob.photoOrderReceived', 'Photo Order Received') : job.service_type === 'edit' ? t('trackJob.editRequestReceived', 'Edit Request Received') : job.service_type === 'bind' ? t('trackJob.printBindingQueued', 'Print & Binding Queued') : t('trackJob.orderReceived', 'Order Received'),
+                desc: job.service_type === 'photo' ? t('trackJob.queuedPhotoStudio', 'Queued at photo studio counter') : job.service_type === 'edit' ? t('trackJob.queuedForEditing', 'Queued for shop editing') : t('trackJob.queuedAtCounter', 'Queued at print counter'),
                 icon: Clock
               },
               {
                 id: 'printing',
-                label: job.service_type === 'photo' ? 'Photo Processing & Printing' : job.service_type === 'edit' ? 'Editing & Printing in Progress' : job.service_type === 'bind' ? 'Printing & Binding in Progress' : 'Printing in Progress',
-                desc: job.service_type === 'photo' ? 'Shop is editing and printing your photos' : job.service_type === 'edit' ? 'Shopkeeper is editing your document' : 'Being printed right now',
+                label: job.service_type === 'photo' ? t('trackJob.photoProcessing', 'Photo Processing & Printing') : job.service_type === 'edit' ? t('trackJob.editingPrinting', 'Editing & Printing in Progress') : job.service_type === 'bind' ? t('trackJob.printBindingProgress', 'Printing & Binding in Progress') : t('trackJob.printingInProgress', 'Printing in Progress'),
+                desc: job.service_type === 'photo' ? t('trackJob.shopEditingPhotos', 'Shop is editing and printing your photos') : job.service_type === 'edit' ? t('trackJob.shopEditingDoc', 'Shopkeeper is editing your document') : t('trackJob.beingPrinted', 'Being printed right now'),
                 icon: job.service_type === 'photo' ? ImageIcon : Printer
               },
               {
                 id: 'done',
                 label: isPrinted && isUnpaid
                   ? (isMfsPending 
-                      ? 'Ready for Pickup · Verification Pending' 
-                      : (job.payment_method === 'cash' || !job.payment_method ? '✨ Ready for Pickup! Pay Cash at Counter' : '✨ Ready for Pickup! Make Payment'))
+                      ? t('trackJob.readyVerifyPending', 'Ready for Pickup · Verification Pending') 
+                      : (job.payment_method === 'cash' || !job.payment_method ? t('trackJob.readyPayCash', '✨ Ready for Pickup! Pay Cash at Counter') : t('trackJob.readyMakePaymentStep', '✨ Ready for Pickup! Make Payment')))
                   : isPrinted
-                    ? '✨ Ready for Pickup! (Paid ✓)'
-                    : 'Ready for Pickup!',
+                    ? t('trackJob.readyPaidPickup', '✨ Ready for Pickup! (Paid ✓)')
+                    : t('trackJob.readyForPickup', 'Ready for Pickup!'),
                 desc: isPrinted && isUnpaid
                   ? (isMfsPending
                       ? `Complete! Shop is verifying your last 4 digits (****${job.payment_trx_id || ''}) to release your order.`
                       : (job.payment_method === 'cash' || !job.payment_method
                           ? `Your ${job.service_type === 'photo' ? 'photos are' : job.service_type === 'edit' ? 'edited document is' : 'order is'} ready! Hand ৳${parseFloat(job.total_price || 0).toFixed(2)} cash at the counter to collect.`
                           : `Your ${job.service_type === 'photo' ? 'photos are' : job.service_type === 'edit' ? 'edited document is' : 'order is'} ready! Please make payment (৳${parseFloat(job.total_price || 0).toFixed(2)}) to collect.`))
-                  : `Collect your ${job.service_type === 'photo' ? 'photo prints' : job.service_type === 'edit' ? 'edited documents' : 'printout'} at the counter`,
+                  : (job.service_type === 'photo' ? t('trackJob.collectPhotos', 'Collect your photo prints at the counter') : job.service_type === 'edit' ? t('trackJob.collectEdited', 'Collect your edited documents at the counter') : t('trackJob.collectAt', 'Collect your printout at the counter')),
                 icon: isPrinted && isUnpaid ? AlertTriangle : CheckCircle2,
                 isAttention: isPrinted && isUnpaid
               }
@@ -1170,7 +1207,7 @@ export default function TrackJob({ jobCode, onBack }) {
                       </p>
                       {step.isAttention && state === 'active' && (
                         <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-400">
-                          {isMfsPending ? 'Pending' : 'Make Payment'}
+                          {isMfsPending ? t('common.pending', 'Pending') : t('trackJob.makePayment', 'Make Payment')}
                         </span>
                       )}
                     </div>
@@ -1226,42 +1263,6 @@ export default function TrackJob({ jobCode, onBack }) {
 
         </div>
 
-        {/* Brand Collaboration Sponsor Card */}
-        {brandSponsor && (
-          <BrandSponsorCard sponsor={brandSponsor} />
-        )}
-
-        {/* Promo / Partner Ad Space */}
-        {promoAd && (
-          <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[10px] uppercase shrink-0 border border-indigo-200">
-                {promoAd.badge}
-              </span>
-              <p className="font-medium text-slate-700 truncate">{promoAd.text}</p>
-            </div>
-            {promoAd.link && (
-              <a
-                href={promoAd.link}
-                target="_blank"
-                rel="noreferrer"
-                className="text-indigo-600 font-bold text-xs hover:underline shrink-0"
-              >
-                Learn More →
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* Google AdSense Space */}
-        {adsenseConfig?.enabled && (
-          <GoogleAdSense
-            client={adsenseConfig.clientId}
-            slot={adsenseConfig.slotTrack}
-            format="auto"
-            className="pt-2"
-          />
-        )}
 
         {/* Download Permission Modal (Shop -> Customer) */}
         {dlRequest && (
@@ -1271,19 +1272,19 @@ export default function TrackJob({ jobCode, onBack }) {
                 <Download className="w-7 h-7" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-lg font-extrabold text-slate-800">Download Permission</h3>
+                <h3 className="text-lg font-extrabold text-slate-800">{t('trackJob.downloadPermission', 'Download Permission')}</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  <span className="font-bold text-slate-700">{dlRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to download:
+                  <span className="font-bold text-slate-700">{dlRequest.shop_name || 'The shopkeeper'}</span> {t('trackJob.requestingDownload', 'is requesting permission to download:')}
                 </p>
                 {/* Specific Document Name Badge */}
                 <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 truncate text-left flex items-center gap-2">
                   <FileText className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span className="truncate">{dlRequest.file_name || 'Uploaded Document(s)'}</span>
+                  <span className="truncate">{dlRequest.file_name || t('trackJob.uploadedDocuments', 'Uploaded Document(s)')}</span>
                 </div>
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-800 font-medium flex items-start gap-2 text-left">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-                <span>This document will be downloaded to the shop computer.</span>
+                <span>{t('trackJob.downloadToShopPC', 'This document will be downloaded to the shop computer.')}</span>
               </div>
               <div className="flex gap-2.5 pt-1">
                 <button
@@ -1300,7 +1301,7 @@ export default function TrackJob({ jobCode, onBack }) {
                   }}
                   className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition border border-slate-200 cursor-pointer"
                 >
-                  Deny
+                  {t('common.deny', 'Deny')}
                 </button>
                 <button
                   onClick={() => {
@@ -1317,10 +1318,10 @@ export default function TrackJob({ jobCode, onBack }) {
                   className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
-                  Allow Download
+                  {t('trackJob.allowDownload', 'Allow Download')}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-400">Expires in 60 seconds.</p>
+              <p className="text-[10px] text-slate-400">{t('trackJob.expiresIn60', 'Expires in 60 seconds.')}</p>
             </div>
           </div>
         )}
@@ -1333,19 +1334,19 @@ export default function TrackJob({ jobCode, onBack }) {
                 <Printer className="w-7 h-7" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-lg font-extrabold text-slate-800">Reprint Permission</h3>
+                <h3 className="text-lg font-extrabold text-slate-800">{t('trackJob.reprintPermission', 'Reprint Permission')}</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  <span className="font-bold text-slate-700">{reprintRequest.shop_name || 'The shopkeeper'}</span> is requesting permission to reprint:
+                  <span className="font-bold text-slate-700">{reprintRequest.shop_name || 'The shopkeeper'}</span> {t('trackJob.requestingReprint', 'is requesting permission to reprint:')}
                 </p>
                 {/* Specific Document Name Badge */}
                 <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 truncate text-left flex items-center gap-2">
                   <FileText className="w-4 h-4 text-rose-500 shrink-0" />
-                  <span className="truncate">{reprintRequest.file_name || 'Uploaded Document'}</span>
+                  <span className="truncate">{reprintRequest.file_name || t('trackJob.uploadedDocuments', 'Uploaded Document(s)')}</span>
                 </div>
               </div>
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-[11px] text-blue-800 font-medium flex items-start gap-2 text-left">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
-                <span>An extra copy of this document will be printed at the counter.</span>
+                <span>{t('trackJob.extraCopyPrinted', 'An extra copy of this document will be printed at the counter.')}</span>
               </div>
               <div className="flex gap-2.5 pt-1">
                 <button
@@ -1362,7 +1363,7 @@ export default function TrackJob({ jobCode, onBack }) {
                   }}
                   className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition border border-slate-200 cursor-pointer"
                 >
-                  Deny
+                  {t('common.deny', 'Deny')}
                 </button>
                 <button
                   onClick={() => {
@@ -1379,10 +1380,10 @@ export default function TrackJob({ jobCode, onBack }) {
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  Allow Reprint
+                  {t('trackJob.allowReprint', 'Allow Reprint')}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-400">Expires in 60 seconds.</p>
+              <p className="text-[10px] text-slate-400">{t('trackJob.expiresIn60', 'Expires in 60 seconds.')}</p>
             </div>
           </div>
         )}

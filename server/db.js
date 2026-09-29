@@ -51,6 +51,9 @@ async function migrate() {
     await ensureColumn('shops', 'price_bind_tape', 'DECIMAL(10,2) DEFAULT 20.00');
     await ensureColumn('shops', 'price_bind_hardcover', 'DECIMAL(10,2) DEFAULT 300.00');
     await ensureColumn('shops', 'price_edit', 'DECIMAL(10,2) DEFAULT 30.00');
+    await ensureColumn('shops', 'allow_binding', 'TINYINT(1) DEFAULT 1');
+    await ensureColumn('shops', 'allow_photo', 'TINYINT(1) DEFAULT 1');
+    await ensureColumn('shops', 'allow_edit', 'TINYINT(1) DEFAULT 1');
     await ensureColumn('shops', 'counter_notice', "VARCHAR(255) DEFAULT 'High-quality laser printing & document services available.'");
     await ensureColumn('shops', 'password', 'VARCHAR(255) DEFAULT NULL');
     await ensureColumn('shops', 'opening_time', "VARCHAR(10) DEFAULT '08:00'");
@@ -74,6 +77,7 @@ async function migrate() {
     await ensureColumn('shops', 'discount_percent', 'DECIMAL(5,2) DEFAULT 10.00');
     await ensureColumn('shops', 'discount_tier2_pages', 'INT DEFAULT 100');
     await ensureColumn('shops', 'discount_tier2_percent', 'DECIMAL(5,2) DEFAULT 15.00');
+    await ensureColumn('shops', 'allow_discount', 'TINYINT(1) DEFAULT 1');
     await ensureColumn('shops', 'allow_cash_payment', 'TINYINT(1) DEFAULT 1');
     await ensureColumn('shops', 'allow_bkash_payment', 'TINYINT(1) DEFAULT 1');
     await ensureColumn('shops', 'allow_nagad_payment', 'TINYINT(1) DEFAULT 1');

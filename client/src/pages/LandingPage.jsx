@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import NearbyShopsMap from '../components/NearbyShopsMap';
 import ProcessHeroAnimation from '../components/ProcessHeroAnimation';
+import { useLanguage } from '../context/LanguageContext';
 
 // ─── Scroll Reveal Hook ────────────────────────────────────
 function useScrollReveal() {
@@ -91,6 +92,7 @@ function StatCard({ icon: Icon, value, label, color, delay }) {
 
 // ─── Hero Animated Document Shred Graphic ──────────────────
 function DocumentHeroGraphic() {
+  const { t } = useLanguage();
   const [step, setStep] = useState(0);
   const [particles, setParticles] = useState([]);
 
@@ -183,22 +185,22 @@ function DocumentHeroGraphic() {
         >
           {step === 0 && (
             <span className="flex items-center gap-1.5">
-              <UploadCloud className="w-3.5 h-3.5" /> Uploading...
+              <UploadCloud className="w-3.5 h-3.5" /> {t('landing.uploading', 'Uploading...')}
             </span>
           )}
           {step === 1 && (
             <span className="flex items-center gap-1.5">
-              <Printer className="w-3.5 h-3.5" /> Printing...
+              <Printer className="w-3.5 h-3.5" /> {t('landing.printing', 'Printing...')}
             </span>
           )}
           {step === 2 && (
             <span className="flex items-center gap-1.5">
-              <Trash2 className="w-3.5 h-3.5" /> Shredding file...
+              <Trash2 className="w-3.5 h-3.5" /> {t('landing.shreddingFile', 'Shredding file...')}
             </span>
           )}
           {step === 3 && (
             <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> Zero Trace ✓
+              <ShieldCheck className="w-3.5 h-3.5" /> {t('landing.zeroTrace', 'Zero Trace ✓')}
             </span>
           )}
         </div>
@@ -228,6 +230,7 @@ function isShopOpen(shop) {
 
 // ─── Main Landing Page Component ───────────────────────────
 export default function LandingPage({ onNavigate }) {
+  const { t, isBn } = useLanguage();
   const [trackCode, setTrackCode] = useState('');
   const [recentOrders, setRecentOrders] = useState([]);
   const [stats, setStats] = useState({ shops: 0, customers: 0, jobsCompleted: 0, pagesPrinted: 0 });
@@ -349,34 +352,34 @@ export default function LandingPage({ onNavigate }) {
               <div className="animate-fade-up inline-flex items-center gap-2.5 px-4 py-2 bg-emerald-500/15 text-emerald-300 rounded-full text-xs font-bold border border-emerald-500/25 backdrop-blur-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-live-pulse shadow-[0_0_8px_#34d399]" />
                 <ShieldCheck className="w-4 h-4 shrink-0" />
-                <span className="tracking-wide uppercase text-[11px]">Privacy-First Cloud Printing</span>
+                <span className="tracking-wide uppercase text-[11px]">{t('landing.privacyBadge', 'Privacy-First Cloud Printing')}</span>
               </div>
 
               {/* Main Headline */}
               <h1 className="animate-fade-up text-3xl sm:text-4xl xl:text-[52px] font-black text-white leading-[1.1] tracking-tight" style={{ animationDelay: '100ms' }}>
-                Your Documents.{' '}
+                {t('landing.heroTitle1', 'Your Documents.')}{' '}
                 <br className="hidden sm:block" />
-                Your Privacy.{' '}
+                {t('landing.heroTitle2', 'Your Privacy.')}{' '}
                 <br />
                 <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                  Zero Trace.
+                  {t('landing.heroTitle3', 'Zero Trace.')}
                 </span>
               </h1>
 
               {/* Mission Statement */}
               <p className="animate-fade-up text-base sm:text-lg text-slate-400 font-medium leading-relaxed max-w-lg" style={{ animationDelay: '200ms' }}>
-                Never send personal or confidential documents over{' '}
-                <strong className="text-rose-400">WhatsApp or Gmail</strong> to print shops. Stop leaving your phone number, email address, and files in strangers' downloads or galleries. Scan the counter QR, print in 15 seconds, and files are{' '}
-                <span className="text-emerald-400 font-bold">automatically shredded</span> with zero trace.
+                {t('landing.heroMission', 'Never send personal or confidential documents over')}{' '}
+                <strong className="text-rose-400">{t('landing.heroWhatsAppGmail', 'WhatsApp or Gmail')}</strong> {t('landing.heroMissionEnd', 'to print shops. Stop leaving your phone number, email address, and files in strangers\' downloads or galleries. Scan the counter QR, print in 15 seconds, and files are')}{' '}
+                <span className="text-emerald-400 font-bold">{t('landing.heroAutoShred', 'automatically shredded')}</span> {t('landing.heroAutoShredEnd', 'with zero trace.')}
               </p>
 
               {/* Key Value Badges */}
               <div className="animate-fade-up grid grid-cols-2 sm:grid-cols-4 gap-3" style={{ animationDelay: '300ms' }}>
                 {[
-                  { icon: PhoneOff, label: 'Zero Contact', sub: 'No WhatsApp / Gmail', color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/25' },
-                  { icon: Trash2, label: 'Auto-Shred', sub: 'Post-print purge', color: 'text-blue-400 bg-blue-500/15 border-blue-500/25' },
-                  { icon: Lock, label: 'Anonymous', sub: 'No login needed', color: 'text-violet-400 bg-violet-500/15 border-violet-500/25' },
-                  { icon: Zap, label: '15s Speed', sub: 'Instant token', color: 'text-amber-400 bg-amber-500/15 border-amber-500/25' }
+                  { icon: PhoneOff, label: t('landing.badgeZeroContact', 'Zero Contact'), sub: t('landing.badgeZeroContactSub', 'No WhatsApp / Gmail'), color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/25' },
+                  { icon: Trash2, label: t('landing.badgeAutoShred', 'Auto-Shred'), sub: t('landing.badgeAutoShredSub', 'Post-print purge'), color: 'text-blue-400 bg-blue-500/15 border-blue-500/25' },
+                  { icon: Lock, label: t('landing.badgeAnonymous', 'Anonymous'), sub: t('landing.badgeAnonymousSub', 'No login needed'), color: 'text-violet-400 bg-violet-500/15 border-violet-500/25' },
+                  { icon: Zap, label: t('landing.badge15s', '15s Speed'), sub: t('landing.badge15sSub', 'Instant token'), color: 'text-amber-400 bg-amber-500/15 border-amber-500/25' }
                 ].map((item) => (
                   <div key={item.label} className={`flex items-center gap-2.5 p-2.5 rounded-xl border backdrop-blur-sm ${item.color}`}>
                     <item.icon className="w-4 h-4 shrink-0" />
@@ -395,7 +398,7 @@ export default function LandingPage({ onNavigate }) {
                   className="px-7 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white font-extrabold rounded-2xl text-sm sm:text-base shadow-xl shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2.5"
                 >
                   <UploadCloud className="w-5 h-5" />
-                  <span>Print Securely — It's Free</span>
+                  <span>{t('landing.ctaPrintSecure', 'Print Securely — It\'s Free')}</span>
                   <ArrowRight className="w-5 h-5" />
                 </button>
                 <button
@@ -405,7 +408,7 @@ export default function LandingPage({ onNavigate }) {
                   className="px-5 py-4 bg-white/10 hover:bg-white/15 text-white/90 font-bold rounded-2xl text-sm border border-white/15 hover:border-white/25 backdrop-blur-sm transition-all duration-200 flex items-center gap-2"
                 >
                   <ShieldAlert className="w-4 h-4 text-rose-400" />
-                  <span>Why WhatsApp & Gmail Are Risky</span>
+                  <span>{t('landing.ctaWhyRisky', 'Why WhatsApp & Gmail Are Risky')}</span>
                 </button>
               </div>
             </div>
@@ -433,13 +436,13 @@ export default function LandingPage({ onNavigate }) {
           <div className="text-center space-y-3 mb-12 scroll-reveal">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-200/70">
               <ShieldAlert className="w-3.5 h-3.5" />
-              <span>Privacy Reality Check</span>
+              <span>{t('landing.privacyReality', 'Privacy Reality Check')}</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              What Actually Happens to Your Files?
+              {t('landing.privacyTitle', 'What Actually Happens to Your Files?')}
             </h2>
             <p className="text-sm sm:text-base text-slate-500 max-w-2xl mx-auto leading-relaxed">
-              Most people don't realize how much personal data they expose at a print shop counter.
+              {t('landing.privacySub', 'Most people don\'t realize how much personal data they expose at a print shop counter.')}
             </p>
           </div>
 
@@ -453,18 +456,18 @@ export default function LandingPage({ onNavigate }) {
                     <MessageCircle className="w-6 h-6" />
                   </div>
                   <span className="text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">
-                    High Risk
+                    {t('landing.highRisk', 'High Risk')}
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">WhatsApp Printing</h3>
-                  <p className="text-xs text-slate-500 mt-1">What you share without realizing</p>
+                  <h3 className="text-lg font-bold text-slate-900">{t('landing.whatsappPrinting', 'WhatsApp Printing')}</h3>
+                  <p className="text-xs text-slate-500 mt-1">{t('landing.whatsappSub', 'What you share without realizing')}</p>
                 </div>
                 <div className="space-y-2.5">
                   {[
-                    'Your personal phone number stored forever',
-                    'Files sit in stranger phone galleries permanently',
-                    'PDFs heavily compressed — blurry text output'
+                    t('landing.whatsappRisk1', 'Your personal phone number stored forever'),
+                    t('landing.whatsappRisk2', 'Files sit in stranger phone galleries permanently'),
+                    t('landing.whatsappRisk3', 'PDFs heavily compressed — blurry text output')
                   ].map((text, idx) => (
                     <div key={idx} className="flex items-start gap-2.5 text-xs text-rose-800">
                       <X className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
@@ -475,7 +478,7 @@ export default function LandingPage({ onNavigate }) {
               </div>
               <div className="mt-6 pt-4 border-t border-rose-200/60 text-[11px] font-bold text-rose-600 flex items-center gap-1.5">
                 <Lock className="w-4 h-4" />
-                <span>Your data is never deleted</span>
+                <span>{t('landing.dataNotDeleted', 'Your data is never deleted')}</span>
               </div>
             </div>
 
@@ -487,18 +490,18 @@ export default function LandingPage({ onNavigate }) {
                     <Mail className="w-6 h-6" />
                   </div>
                   <span className="text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
-                    Outdated
+                    {t('landing.outdated', 'Outdated')}
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Gmail & USB Drives</h3>
-                  <p className="text-xs text-slate-500 mt-1">Slow, exposed, and risky</p>
+                  <h3 className="text-lg font-bold text-slate-900">{t('landing.gmailUsb', 'Gmail & USB Drives')}</h3>
+                  <p className="text-xs text-slate-500 mt-1">{t('landing.gmailSub', 'Slow, exposed, and risky')}</p>
                 </div>
                 <div className="space-y-2.5">
                   {[
-                    'Files saved in public PC Downloads folder',
-                    '5-min wait while shopkeeper finds your email',
-                    'USB drives carry malware and trojans'
+                    t('landing.gmailRisk1', 'Files saved in public PC Downloads folder'),
+                    t('landing.gmailRisk2', '5-min wait while shopkeeper finds your email'),
+                    t('landing.gmailRisk3', 'USB drives carry malware and trojans')
                   ].map((text, idx) => (
                     <div key={idx} className="flex items-start gap-2.5 text-xs text-amber-900">
                       <X className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -509,14 +512,14 @@ export default function LandingPage({ onNavigate }) {
               </div>
               <div className="mt-6 pt-4 border-t border-amber-200/60 text-[11px] font-bold text-amber-700 flex items-center gap-1.5">
                 <Lock className="w-4 h-4" />
-                <span>Files left on public machines</span>
+                <span>{t('landing.filesLeftPublic', 'Files left on public machines')}</span>
               </div>
             </div>
 
             {/* The prntez Standard Card */}
             <div className="scroll-reveal bg-gradient-to-b from-blue-50/80 via-white to-emerald-50/60 rounded-3xl p-7 border-2 border-blue-500/80 shadow-xl shadow-blue-500/10 flex flex-col justify-between relative overflow-hidden ring-4 ring-blue-500/10">
               <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-extrabold uppercase tracking-wider py-1 px-4 rounded-bl-xl shadow-sm">
-                Recommended
+                {t('landing.recommended', 'Recommended')}
               </div>
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
@@ -524,19 +527,19 @@ export default function LandingPage({ onNavigate }) {
                     <Printer className="w-6 h-6" />
                   </div>
                   <span className="text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 mr-20">
-                    100% Private
+                    {t('landing.hundredPrivate', '100% Private')}
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">The prntez Standard</h3>
-                  <p className="text-xs text-blue-600 font-semibold mt-1">Instant, Contactless & Auto-Purged</p>
+                  <h3 className="text-lg font-bold text-slate-900">{t('landing.prntezStandard', 'The prntez Standard')}</h3>
+                  <p className="text-xs text-blue-600 font-semibold mt-1">{t('landing.prntezSub', 'Instant, Contactless & Auto-Purged')}</p>
                 </div>
                 <div className="space-y-2.5">
                   {[
-                    'Zero contact sharing — no phone, no email',
-                    'Files shredded from server after printing',
-                    'Lossless quality — no compression ever',
-                    '15-second 4-digit token for counter pickup'
+                    t('landing.prntezBenefit1', 'Zero contact sharing — no phone, no email'),
+                    t('landing.prntezBenefit2', 'Files shredded from server after printing'),
+                    t('landing.prntezBenefit3', 'Lossless quality — no compression ever'),
+                    t('landing.prntezBenefit4', '15-second 4-digit token for counter pickup')
                   ].map((item, idx) => (
                     <div key={idx} className="flex items-start gap-2.5 text-xs text-slate-800 font-medium">
                       <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -548,13 +551,13 @@ export default function LandingPage({ onNavigate }) {
               <div className="mt-6 pt-4 border-t border-slate-200 text-[11px] font-extrabold text-emerald-700 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Total Privacy Guaranteed</span>
+                  <span>{t('landing.totalPrivacy', 'Total Privacy Guaranteed')}</span>
                 </span>
                 <button
                   onClick={() => onNavigate('upload')}
                   className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-xs font-bold"
                 >
-                  Try Now
+                  {t('landing.tryNow', 'Try Now')}
                 </button>
               </div>
             </div>
@@ -569,13 +572,13 @@ export default function LandingPage({ onNavigate }) {
           <div className="text-center mb-10 scroll-reveal">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold border border-indigo-200 mb-3">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Interactive Demo</span>
+              <span>{t('landing.interactiveDemo', 'Interactive Demo')}</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-              See How It Works — In Real Time
+              {t('landing.demoTitle', 'See How It Works — In Real Time')}
             </h2>
             <p className="text-sm sm:text-base text-slate-500 mt-2 max-w-xl mx-auto">
-              Watch the complete journey from QR scan to secure file purge. Click through each step.
+              {t('landing.demoSub', 'Watch the complete journey from QR scan to secure file purge. Click through each step.')}
             </p>
           </div>
 
@@ -593,13 +596,13 @@ export default function LandingPage({ onNavigate }) {
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-live-pulse" />
               <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Live Campus & Market Network</span>
+              <span>{t('landing.liveCampus', 'Live Campus & Market Network')}</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
-              Nearby Registered Print Shops
+              {t('landing.nearbyShops', 'Nearby Registered Print Shops')}
             </h2>
             <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Find verified print counters near you. Check real-time rates and print directly from your browser.
+              {t('landing.nearbyShopsSub', 'Find verified print counters near you. Check real-time rates and print directly from your browser.')}
             </p>
           </div>
 
@@ -612,7 +615,7 @@ export default function LandingPage({ onNavigate }) {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by campus, area, or shop name..."
+                  placeholder={t('landing.searchPlaceholder', 'Search by campus, area, or shop name...')}
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-10 pr-10 py-3 text-sm font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition"
                 />
                 {searchQuery && (
@@ -638,7 +641,7 @@ export default function LandingPage({ onNavigate }) {
                   }`}
                 >
                   <Store className="w-3.5 h-3.5" />
-                  <span>All Shops ({shops.length})</span>
+                  <span>{t('landing.allShops', 'All Shops')} ({shops.length})</span>
                 </button>
 
                 <button
@@ -651,7 +654,7 @@ export default function LandingPage({ onNavigate }) {
                   }`}
                 >
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span>Open Now ({shops.filter(isShopOpen).length})</span>
+                  <span>{t('landing.openNow', 'Open Now')} ({shops.filter(isShopOpen).length})</span>
                 </button>
 
                 <button
@@ -664,7 +667,7 @@ export default function LandingPage({ onNavigate }) {
                   }`}
                 >
                   <Tag className="w-3.5 h-3.5" />
-                  <span>Student Discounts</span>
+                  <span>{t('landing.studentDiscounts', 'Student Discounts')}</span>
                 </button>
               </div>
             </div>
@@ -672,7 +675,7 @@ export default function LandingPage({ onNavigate }) {
             {/* Popular Area Chips & Tip */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 text-xs">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Popular:</span>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('landing.popular', 'Popular:')}</span>
                 {['IUB', 'Test', 'Dhaka'].map((area) => (
                   <button
                     key={area}
@@ -693,13 +696,13 @@ export default function LandingPage({ onNavigate }) {
                     onClick={() => setSearchQuery('')}
                     className="text-xs text-blue-600 font-bold hover:underline ml-1"
                   >
-                    Reset
+                    {t('common.reset', 'Reset')}
                   </button>
                 )}
               </div>
               <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span>Click any shop marker to view rates & print</span>
+                <span>{t('landing.clickShopMarker', 'Click any shop marker to view rates & print')}</span>
               </div>
             </div>
           </div>
@@ -722,7 +725,7 @@ export default function LandingPage({ onNavigate }) {
           {loadingShops && (
             <div className="text-center py-16">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
-              <p className="text-sm font-bold text-slate-600">Discovering nearby print shops...</p>
+              <p className="text-sm font-bold text-slate-600">{t('landing.discoveringShops', 'Discovering nearby print shops...')}</p>
             </div>
           )}
 
@@ -731,7 +734,7 @@ export default function LandingPage({ onNavigate }) {
               <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
                 <Search className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-bold text-slate-800">No print shops found</h3>
+              <h3 className="text-base font-bold text-slate-800">{t('landing.noShopsFound', 'No print shops found')}</h3>
               <p className="text-xs text-slate-500">
                 We couldn't find any shops matching "{searchQuery}".
               </p>
@@ -742,7 +745,7 @@ export default function LandingPage({ onNavigate }) {
                 }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition"
               >
-                Reset Search
+                {t('landing.resetSearch', 'Reset Search')}
               </button>
             </div>
           )}
@@ -757,35 +760,35 @@ export default function LandingPage({ onNavigate }) {
             <div className="flex items-center justify-center gap-2 py-2.5 bg-slate-50 border-b border-slate-100">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-live-pulse" />
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-                Live Platform Stats
+                {t('landing.livePlatformStats', 'Live Platform Stats')}
               </span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-100">
               <StatCard
                 icon={Store}
                 value={stats.shops}
-                label="Active Shops"
+                label={t('landing.activeShops', 'Active Shops')}
                 color="bg-blue-50 text-blue-600"
                 delay={0}
               />
               <StatCard
                 icon={Users}
                 value={stats.customers}
-                label="Registered Users"
+                label={t('landing.registeredUsers', 'Registered Users')}
                 color="bg-indigo-50 text-indigo-600"
                 delay={100}
               />
               <StatCard
                 icon={CheckCircle}
                 value={stats.jobsCompleted}
-                label="Jobs Completed"
+                label={t('landing.jobsCompleted', 'Jobs Completed')}
                 color="bg-emerald-50 text-emerald-600"
                 delay={200}
               />
               <StatCard
                 icon={FileText}
                 value={stats.pagesPrinted}
-                label="Pages Printed"
+                label={t('landing.pagesPrinted', 'Pages Printed')}
                 color="bg-violet-50 text-violet-600"
                 delay={300}
               />
@@ -802,9 +805,9 @@ export default function LandingPage({ onNavigate }) {
               <Search className="w-7 h-7" />
             </div>
             <div>
-              <h2 className="text-xl font-extrabold text-slate-900">Track Your Order</h2>
+              <h2 className="text-xl font-extrabold text-slate-900">{t('landing.trackYourOrder', 'Track Your Order')}</h2>
               <p className="text-sm text-slate-500 mt-1">
-                Enter the job code you received after uploading
+                {t('landing.trackSub', 'Enter the job code you received after uploading')}
               </p>
             </div>
 
@@ -822,14 +825,14 @@ export default function LandingPage({ onNavigate }) {
                 className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition shadow-md shadow-indigo-500/25 flex items-center gap-1.5 active:scale-[0.97]"
               >
                 <Search className="w-4 h-4" />
-                <span>Track</span>
+                <span>{t('landing.track', 'Track')}</span>
               </button>
             </form>
 
             {/* Recent Orders List */}
             {recentOrders.length > 0 && (
               <div className="pt-2 text-left border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Your Recent Orders</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('landing.yourRecentOrders', 'Your Recent Orders')}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {recentOrders.map((o, idx) => (
                     <button
@@ -859,31 +862,31 @@ export default function LandingPage({ onNavigate }) {
             <div className="relative z-10 space-y-5">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-[11px] font-bold text-blue-300 border border-white/10">
                 <Store className="w-3 h-3" />
-                <span>For Print Shop Owners</span>
+                <span>{t('landing.forShopOwners', 'For Print Shop Owners')}</span>
               </div>
 
               <h2 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
-                Modernize Your Print Counter
+                {t('landing.modernizeCounter', 'Modernize Your Print Counter')}
               </h2>
               <p className="text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
-                Accept print orders wirelessly. Let customers upload from their phones while you focus on printing. Real-time queue, auto-pricing, and a professional QR standee — all free.
+                {t('landing.modernizeSub', 'Accept print orders wirelessly. Let customers upload from their phones while you focus on printing. Real-time queue, auto-pricing, and a professional QR standee — all free.')}
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/15">
                   <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                  <span className="text-[11px] font-bold text-emerald-300">Files auto-purge after printing</span>
+                  <span className="text-[11px] font-bold text-emerald-300">{t('landing.filesAutoPurge', 'Files auto-purge after printing')}</span>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-full border border-blue-500/15">
                   <Zap className="w-3 h-3 text-blue-400" />
-                  <span className="text-[11px] font-bold text-blue-300">No more WhatsApp/Gmail chaos</span>
+                  <span className="text-[11px] font-bold text-blue-300">{t('landing.noMoreWhatsApp', 'No more WhatsApp/Gmail chaos')}</span>
                 </div>
               </div>
 
               {statsLoaded && stats.shops > 0 && (
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/15 rounded-full text-[11px] font-bold text-emerald-300 border border-emerald-500/20">
                   <Sparkles className="w-3 h-3" />
-                  <span>{stats.shops} shops already registered — join them!</span>
+                  <span>{stats.shops} {t('landing.shopsRegistered', 'shops already registered — join them!')}</span>
                 </div>
               )}
 
@@ -891,7 +894,7 @@ export default function LandingPage({ onNavigate }) {
                 onClick={() => onNavigate('shop')}
                 className="px-7 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-sm shadow-lg shadow-blue-600/30 hover:shadow-blue-500/40 transition-all duration-200 inline-flex items-center gap-2 active:scale-[0.97]"
               >
-                <span>Register Your Shop — It's Free</span>
+                <span>{t('landing.registerShopFree', 'Register Your Shop — It\'s Free')}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -906,10 +909,10 @@ export default function LandingPage({ onNavigate }) {
             <Printer className="w-4 h-4 text-blue-600" />
             <span className="tracking-tight">prntez</span>
             <span className="text-slate-300">·</span>
-            <span className="text-xs text-slate-400 font-normal">Privacy-First Cloud Printing</span>
+            <span className="text-xs text-slate-400 font-normal">{t('landing.footerTagline', 'Privacy-First Cloud Printing')}</span>
           </div>
           <div className="text-xs text-slate-400">
-            © {new Date().getFullYear()} prntez · Your documents are always auto-purged
+            © {new Date().getFullYear()} prntez · {t('landing.footerCopyright', 'Your documents are always auto-purged')}
           </div>
         </div>
       </footer>
@@ -935,14 +938,14 @@ export default function LandingPage({ onNavigate }) {
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[11px] font-bold border border-blue-100 mb-2">
                 <Store className="w-3 h-3" />
-                <span>Shop Counter Standee</span>
+                <span>{t('landing.shopCounterStandee', 'Shop Counter Standee')}</span>
               </div>
               <h3 className="text-xl font-black text-slate-900 leading-tight">
                 {qrModalShop.name}
               </h3>
               <p className="text-xs text-slate-500 mt-1 flex items-center justify-center gap-1 font-medium">
                 <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                <span>{qrModalShop.address || 'Campus Print Counter'}</span>
+                <span>{qrModalShop.address || t('landing.campusCounter', 'Campus Print Counter')}</span>
               </p>
             </div>
 
@@ -959,15 +962,15 @@ export default function LandingPage({ onNavigate }) {
                 </div>
               )}
               <div className="text-[10px] font-mono font-bold text-slate-300 mt-2">
-                Scan with any phone camera
+                {t('landing.scanWithCamera', 'Scan with any phone camera')}
               </div>
             </div>
 
             <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-left space-y-1">
-              <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">How to print:</div>
-              <div className="text-[11px] text-slate-500">1. Point camera at QR code above</div>
-              <div className="text-[11px] text-slate-500">2. Upload your PDF or images</div>
-              <div className="text-[11px] text-slate-500">3. Pick up prints from counter (Auto-purged!)</div>
+              <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">{t('landing.howToPrint', 'How to print:')}</div>
+              <div className="text-[11px] text-slate-500">{t('landing.howStep1', '1. Point camera at QR code above')}</div>
+              <div className="text-[11px] text-slate-500">{t('landing.howStep2', '2. Upload your PDF or images')}</div>
+              <div className="text-[11px] text-slate-500">{t('landing.howStep3', '3. Pick up prints from counter (Auto-purged!)')}</div>
             </div>
 
             <div className="space-y-2 pt-1">
@@ -980,7 +983,7 @@ export default function LandingPage({ onNavigate }) {
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 active:scale-[0.98]"
               >
                 <UploadCloud className="w-4 h-4" />
-                <span>Open Upload on This Device</span>
+                <span>{t('landing.openUploadDevice', 'Open Upload on This Device')}</span>
               </button>
 
               <button
@@ -995,12 +998,12 @@ export default function LandingPage({ onNavigate }) {
                 {copiedLink ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="text-emerald-700">Link Copied!</span>
+                    <span className="text-emerald-700">{t('landing.linkCopied', 'Link Copied!')}</span>
                   </>
                 ) : (
                   <>
                     <Copy className="w-3.5 h-3.5" />
-                    <span>Copy Shop Print Link</span>
+                    <span>{t('landing.copyShopLink', 'Copy Shop Print Link')}</span>
                   </>
                 )}
               </button>

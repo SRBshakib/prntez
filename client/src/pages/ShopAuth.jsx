@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Store, KeyRound, Mail, User, Phone, MapPin, ArrowRight, Loader2, Info, CheckCircle2 } from 'lucide-react';
+import LanguageToggle from '../components/LanguageToggle';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function ShopAuth({ onLoginSuccess }) {
+  const { t, isBn } = useLanguage();
   const [tab, setTab] = useState('login'); // 'login' | 'register'
   
   // Login Form
@@ -229,30 +232,43 @@ export default function ShopAuth({ onLoginSuccess }) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-200 w-full max-w-md space-y-6">
+      <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 w-full max-w-md space-y-5">
         
-        {/* Logo */}
+        {/* Top bar with Language Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-blue-600 font-extrabold text-sm tracking-tight">
+            <Store className="w-4 h-4" />
+            <span>prntez</span>
+          </div>
+          <LanguageToggle />
+        </div>
+
+        {/* Header */}
         <div className="text-center space-y-1">
           <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto shadow-md shadow-blue-500/20">
             <Store className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-extrabold text-slate-800">Shopkeeper Portal</h2>
-          <p className="text-xs text-slate-500">Manage your real-time print counter</p>
+          <h2 className="text-xl font-extrabold text-slate-800">
+            {tab === 'login' ? t('auth.shopLogin', 'Shop Owner Login') : t('auth.shopRegister', 'Register Print Shop')}
+          </h2>
+          <p className="text-xs text-slate-500">
+            {tab === 'login' ? t('auth.loginSub', 'Manage your print shop live counter & queue') : t('auth.registerSub', 'Create your digital counter and accept uploads')}
+          </p>
         </div>
 
         {/* Tab Switcher */}
         <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
           <button
             onClick={() => { setTab('login'); setError(''); setIsGoogleReg(false); }}
-            className={`py-2 text-xs font-bold rounded-lg transition ${tab === 'login' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'}`}
+            className={`py-2 text-xs font-bold rounded-lg transition cursor-pointer ${tab === 'login' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'}`}
           >
-            Shop Login
+            {t('auth.shopLogin', 'Shop Login')}
           </button>
           <button
             onClick={() => { setTab('register'); setError(''); }}
-            className={`py-2 text-xs font-bold rounded-lg transition ${tab === 'register' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'}`}
+            className={`py-2 text-xs font-bold rounded-lg transition cursor-pointer ${tab === 'register' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500'}`}
           >
-            Register Shop
+            {t('auth.shopRegister', 'Register Shop')}
           </button>
         </div>
 
@@ -272,7 +288,7 @@ export default function ShopAuth({ onLoginSuccess }) {
                 <div id="google-btn-login-container" className="flex justify-center w-full min-h-[44px]" />
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-slate-200" />
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">or sign in with password</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('auth.orGoogle', 'or sign in with password')}</span>
                   <div className="flex-1 h-px bg-slate-200" />
                 </div>
               </div>
@@ -280,7 +296,7 @@ export default function ShopAuth({ onLoginSuccess }) {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Email Address</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.email', 'Email Address')}</label>
                 <input
                   type="email"
                   required
@@ -291,7 +307,7 @@ export default function ShopAuth({ onLoginSuccess }) {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Password</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.password', 'Password')}</label>
                 <input
                   type="password"
                   required
@@ -306,7 +322,7 @@ export default function ShopAuth({ onLoginSuccess }) {
                 disabled={loading}
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Open POS Dashboard</span>}
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{t('auth.loginBtn', 'Open POS Dashboard')}</span>}
               </button>
             </form>
           </div>
@@ -319,7 +335,7 @@ export default function ShopAuth({ onLoginSuccess }) {
                 <div id="google-btn-register-container" className="flex justify-center w-full min-h-[44px]" />
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-slate-200" />
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">or register manually</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('auth.orGoogle', 'or register manually')}</span>
                   <div className="flex-1 h-px bg-slate-200" />
                 </div>
               </div>
@@ -337,7 +353,7 @@ export default function ShopAuth({ onLoginSuccess }) {
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-blue-900 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" /> Google Account Connected
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" /> {t('auth.googleConnected', 'Google Account Connected')}
                   </p>
                   <p className="text-xs text-blue-700 truncate">{googleProfile.email}</p>
                 </div>
@@ -346,11 +362,11 @@ export default function ShopAuth({ onLoginSuccess }) {
 
             <form onSubmit={handleRegister} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Shop Name</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.shopName', 'Shop Name')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Modern Xerox & Print"
+                  placeholder={isBn ? "যেমন: আধুনিক জেরক্স অ্যান্ড প্রিন্ট" : "e.g. Modern Xerox & Print"}
                   value={regName}
                   onChange={e => setRegName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -359,7 +375,7 @@ export default function ShopAuth({ onLoginSuccess }) {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">Email</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.email', 'Email')}</label>
                   <input
                     type="email"
                     required
@@ -370,12 +386,12 @@ export default function ShopAuth({ onLoginSuccess }) {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">Password</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.password', 'Password')}</label>
                   <input
                     type="password"
                     required={!isGoogleReg}
                     disabled={isGoogleReg}
-                    placeholder={isGoogleReg ? 'Managed by Google' : ''}
+                    placeholder={isGoogleReg ? t('auth.managedByGoogle', 'Managed by Google') : ''}
                     value={regPassword}
                     onChange={e => setRegPassword(e.target.value)}
                     className={`w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition ${isGoogleReg ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50'}`}
@@ -385,7 +401,7 @@ export default function ShopAuth({ onLoginSuccess }) {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">B&W Rate (৳)</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.bwRate', 'B&W Rate (৳)')}</label>
                   <input
                     type="number"
                     step="0.5"
@@ -395,7 +411,7 @@ export default function ShopAuth({ onLoginSuccess }) {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">Color Rate (৳)</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.colorRate', 'Color Rate (৳)')}</label>
                   <input
                     type="number"
                     step="0.5"
@@ -407,7 +423,7 @@ export default function ShopAuth({ onLoginSuccess }) {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Phone Number</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.phone', 'Phone Number')}</label>
                 <input
                   type="tel"
                   placeholder="017XXXXXXXX"
@@ -418,10 +434,10 @@ export default function ShopAuth({ onLoginSuccess }) {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Address / Counter Location</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">{t('auth.address', 'Address / Counter Location')}</label>
                 <input
                   type="text"
-                  placeholder="e.g. TSC, Ground Floor, Dhaka University"
+                  placeholder={isBn ? "যেমন: গ্রাউন্ড ফ্লোর, টিএসসি, ঢাকা বিশ্ববিদ্যালয়" : "e.g. TSC, Ground Floor, Dhaka University"}
                   value={regAddress}
                   onChange={e => setRegAddress(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -436,7 +452,7 @@ export default function ShopAuth({ onLoginSuccess }) {
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <span>{isGoogleReg ? 'Complete Google Registration' : 'Create Shop Counter'}</span>
+                  <span>{isGoogleReg ? t('auth.completeGoogleReg', 'Complete Google Registration') : t('auth.registerBtn', 'Create Shop Counter')}</span>
                 )}
               </button>
             </form>

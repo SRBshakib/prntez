@@ -7,7 +7,11 @@ import ShopAuth from './pages/ShopAuth';
 import AdminDashboard from './pages/AdminDashboard';
 import { Printer, Store, ShieldCheck, Search, ArrowRight, Home } from 'lucide-react';
 
+import LanguageToggle from './components/LanguageToggle';
+import { useLanguage } from './context/LanguageContext';
+
 export default function App() {
+  const { t, isBn } = useLanguage();
   const [view, setView] = useState('home'); // 'home' | 'upload' | 'track' | 'shop' | 'admin'
   const [jobCode, setJobCode] = useState('');
   const [shopSlug, setShopSlug] = useState('');
@@ -112,37 +116,40 @@ export default function App() {
       
       {/* Top Header Navigation (shown for home, upload, track views) */}
       {view !== 'shop' && view !== 'admin' && (
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6">
-          <div className="max-w-5xl mx-auto flex items-center justify-between h-16">
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-3 sm:px-6">
+          <div className="max-w-5xl mx-auto flex items-center justify-between h-14 sm:h-16 gap-2">
             <div
               onClick={() => navigateTo('home')}
-              className="flex items-center gap-2 text-blue-600 font-extrabold text-xl cursor-pointer select-none tracking-tight"
+              className="flex items-center gap-1.5 sm:gap-2 text-blue-600 font-extrabold text-lg sm:text-xl cursor-pointer select-none tracking-tight shrink-0"
             >
-              <Printer className="w-6 h-6" />
+              <Printer className="w-5 h-5 sm:w-6 sm:h-6" />
               <span>prntez</span>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2.5">
+              <LanguageToggle />
+
               {view !== 'home' && (
                 <button
                   onClick={() => navigateTo('home')}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
+                  className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                  title={t('common.home', 'Home')}
                 >
                   <Home className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Home</span>
+                  <span className="hidden md:inline">{t('common.home', 'Home')}</span>
                 </button>
               )}
               <button
                 onClick={() => navigateTo('shop')}
-                className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
+                className="px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center gap-1 sm:gap-1.5 transition border border-blue-200/80 cursor-pointer shrink-0"
               >
                 <Store className="w-3.5 h-3.5" />
-                <span>Shop POS</span>
+                <span className="whitespace-nowrap">{isBn ? 'দোকান POS' : 'Shop POS'}</span>
               </button>
               <button
                 onClick={() => navigateTo('admin')}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"
-                title="Admin Hub"
+                className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0"
+                title={t('common.adminHub', 'Admin Hub')}
               >
                 <ShieldCheck className="w-4 h-4" />
               </button>

@@ -15,6 +15,8 @@ import ShopQrModal from '../components/ShopQrModal';
 import ShopToolsModal from '../components/ShopToolsModal';
 import ShopProfileModal from '../components/ShopProfileModal';
 import ShopPointsModal from '../components/ShopPointsModal';
+import LanguageToggle from '../components/LanguageToggle';
+import { useLanguage } from '../context/LanguageContext';
 
 // Formatting helpers for order timestamps (e.g. "Sep 21, 11:49 PM" and "(Done 11:49 PM)")
 function formatOrderDate(dateString) {
@@ -41,6 +43,7 @@ function isJobPaid(j) {
 }
 
 export default function ShopDashboard({ shop, onLogout }) {
+  const { t, isBn } = useLanguage();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('pending'); // 'pending' | 'printing' | 'done' | 'all'
@@ -63,7 +66,7 @@ export default function ShopDashboard({ shop, onLogout }) {
   const [spoolLog, setSpoolLog] = useState([]);
   const [showSpoolLog, setShowSpoolLog] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [profileModalTab, setProfileModalTab] = useState('general');
   const [showQrModal, setShowQrModal] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -1106,48 +1109,48 @@ export default function ShopDashboard({ shop, onLogout }) {
       )}
 
       {/* Top Navbar */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 max-w-7xl mx-auto">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16 max-w-[1720px] mx-auto gap-2">
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-blue-600 font-extrabold text-lg tracking-tight">
-              <Printer className="w-5 h-5" />
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-blue-600 font-extrabold text-base sm:text-lg tracking-tight">
+              <Printer className="w-5 h-5 shrink-0" />
               <span>prntez</span>
             </div>
-            <div className="h-5 w-px bg-slate-200 hidden sm:block"></div>
-            <div className="font-bold text-slate-800 text-xs hidden sm:block truncate max-w-[160px]">{shop?.name}</div>
+            <div className="h-4 w-px bg-slate-200 hidden sm:block"></div>
+            <div className="font-bold text-slate-800 text-xs hidden md:block truncate max-w-[120px] lg:max-w-[160px]">{shop?.name}</div>
 
             {/* WebSocket Live Badge */}
-            <div className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+            <div className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold ${
               wsConnected ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-              <span>{wsConnected ? 'Live' : 'Offline'}</span>
+              <span>{wsConnected ? t('shopDashboard.connected', 'Live') : t('shopDashboard.offline', 'Offline')}</span>
             </div>
 
             {/* Shop Open / Closed Quick Toggle (Feature 3) */}
             <button
               onClick={handleToggleOpenClose}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold border transition cursor-pointer ${
                 !currentShopData.is_closed
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
                   : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
               }`}
               title="Toggle Shop Open/Closed status for customers"
             >
-              <span className={`w-2 h-2 rounded-full ${!currentShopData.is_closed ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-              <span>{!currentShopData.is_closed ? 'Open Now' : 'Closed'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${!currentShopData.is_closed ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+              <span>{!currentShopData.is_closed ? (isBn ? 'খোলা' : 'Open') : (isBn ? 'বন্ধ' : 'Closed')}</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
             {/* Print Hardware & Mode Controls (Grouped Pill) */}
             <div className="hidden md:flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 gap-1">
               {/* Spool / Simulate Mode */}
               <button
                 onClick={() => { setShowSpoolLog(s => !s); fetchSpoolLog(); }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
                   isSimulating
                     ? 'bg-amber-100/90 text-amber-900 border border-amber-300 shadow-xs'
                     : bridgeConnected
@@ -1160,10 +1163,10 @@ export default function ShopDashboard({ shop, onLogout }) {
                   isSimulating ? 'bg-amber-500 animate-pulse' :
                   bridgeConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
                 }`}></span>
-                <span className="max-w-[110px] truncate">{
-                  isSimulating ? 'Simulate' :
+                <span className="max-w-[90px] lg:max-w-[120px] truncate">{
+                  isSimulating ? (isBn ? 'সিমুলেট' : 'Simulate') :
                   bridgeConnected ? defaultPrinter :
-                  'No Printer'
+                  (isBn ? 'প্রিন্টার নেই' : 'No Printer')
                 }</span>
               </button>
 
@@ -1180,7 +1183,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                     'success'
                   );
                 }}
-                className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
                   printMode === 'browser'
                     ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
                     : 'bg-indigo-600 text-white shadow-xs'
@@ -1188,7 +1191,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                 title="Toggle between Manual Print Dialog (Ctrl+P) and Silent Hardware Spool"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>{printMode === 'browser' ? 'Dialog (Ctrl+P)' : 'Silent'}</span>
+                <span>{printMode === 'browser' ? (isBn ? 'ডায়ালগ' : 'Dialog') : (isBn ? 'সাইলেন্ট' : 'Silent')}</span>
               </button>
 
               {/* Auto-Print Toggle */}
@@ -1198,29 +1201,21 @@ export default function ShopDashboard({ shop, onLogout }) {
                   setAutoPrint(next);
                   showToast(next ? '⚡ Auto-Print ON' : 'Auto-Print Disabled', next ? 'success' : 'info');
                 }}
-                className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
+                className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
                   autoPrint ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-500 hover:bg-white'
                 }`}
                 title="Auto-Print Orders"
               >
                 <Zap className="w-3.5 h-3.5" />
-                <span>{autoPrint ? 'Auto: ON' : 'Auto: OFF'}</span>
+                <span>{autoPrint ? (isBn ? 'অটো: চালু' : 'Auto: ON') : (isBn ? 'অটো: বন্ধ' : 'Auto: OFF')}</span>
               </button>
             </div>
 
-            {/* Admin File Retention Timer Badge */}
-            <div 
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-700 rounded-xl text-xs font-bold border border-slate-200/80 shadow-2xs"
-              title={`Admin Policy: Auto-deletes printed files after ${cleanupSettings?.success_minutes || 30} mins, unprinted after ${cleanupSettings?.unsuccess_minutes >= 60 ? `${Math.round(cleanupSettings.unsuccess_minutes / 60)}h` : `${cleanupSettings.unsuccess_minutes}m`}`}
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-              <span>Retention: <strong className="text-slate-900">{cleanupSettings?.enabled ? `${cleanupSettings?.success_minutes || 30}m` : 'Off'}</strong></span>
-            </div>
 
             {/* Shop Loyalty Rewards Points Pill */}
             <button
               onClick={() => setShowPointsModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl text-xs font-black shadow-xs hover:shadow transition border border-amber-300/40"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl text-xs font-black shadow-xs hover:shadow transition border border-amber-300/40 shrink-0 cursor-pointer"
               title="Shop Loyalty Points & Offers"
             >
               <Star className="w-3.5 h-3.5 fill-amber-200 text-amber-100 animate-pulse" />
@@ -1228,57 +1223,68 @@ export default function ShopDashboard({ shop, onLogout }) {
             </button>
 
             {/* Shop Management Tools */}
-            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-2xl border border-slate-200/60">
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-50 p-0.5 sm:p-1 rounded-2xl border border-slate-200/60 shrink-0">
               <button
                 onClick={() => setShowToolsModal(true)}
-                className="px-2.5 py-1 text-slate-700 hover:text-indigo-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
-                title="Print Tools & Calculators"
+                className="px-2 py-1 text-slate-700 hover:text-indigo-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold cursor-pointer"
+                title={isBn ? 'টুলস ও ক্যালকুলেটর' : 'Print Tools & Calculators'}
               >
                 <Wrench className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden xl:inline">Tools</span>
+                <span className="hidden 2xl:inline">{isBn ? 'টুলস' : 'Tools'}</span>
               </button>
 
               <button
                 onClick={() => { setShowAnalyticsModal(true); fetchAnalytics(); }}
-                className="px-2.5 py-1 text-slate-700 hover:text-indigo-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
-                title="Analytics & Reports"
+                className="hidden sm:flex px-2 py-1 text-slate-700 hover:text-indigo-600 hover:bg-white rounded-xl transition items-center gap-1 text-xs font-bold cursor-pointer"
+                title={isBn ? 'অ্যানালিটিক্স ও রিপোর্ট' : 'Analytics & Reports'}
               >
                 <BarChart3 className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden xl:inline">Analytics</span>
+                <span className="hidden 2xl:inline">{isBn ? 'বিশ্লেষণ' : 'Analytics'}</span>
               </button>
 
               <button
                 onClick={() => setShowQrModal(true)}
-                className="px-2.5 py-1 text-slate-700 hover:text-blue-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
-                title="Print QR Standee / Poster"
+                className="hidden sm:flex px-2 py-1 text-slate-700 hover:text-blue-600 hover:bg-white rounded-xl transition items-center gap-1 text-xs font-bold cursor-pointer"
+                title={isBn ? 'কাউন্টার QR স্ট্যান্ডি' : 'Print QR Standee'}
               >
                 <QrCode className="w-3.5 h-3.5 text-blue-600" />
-                <span className="hidden xl:inline">QR Standee</span>
+                <span className="hidden 2xl:inline">{isBn ? 'স্ট্যান্ডি' : 'Standee'}</span>
               </button>
 
               <button
-                onClick={() => setShowProfileModal(true)}
-                className="px-2.5 py-1 text-slate-700 hover:text-emerald-600 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
-                title="Profile & Verification"
+                onClick={() => {
+                  setProfileModalTab('general');
+                  setShowProfileModal(true);
+                }}
+                className="hidden sm:flex px-2 py-1 text-slate-700 hover:text-emerald-600 hover:bg-white rounded-xl transition items-center gap-1 text-xs font-bold cursor-pointer"
+                title={isBn ? 'দোকান প্রোফাইল ও ভেরিফিকেশন' : 'Profile & Verification'}
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden xl:inline">Profile</span>
+                <span className="hidden 2xl:inline">{isBn ? 'প্রোফাইল' : 'Profile'}</span>
               </button>
 
               <button
-                onClick={() => setShowSettingsModal(true)}
-                className="px-2.5 py-1 text-slate-700 hover:text-slate-900 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold"
-                title="Shop Settings & Rates"
+                onClick={() => {
+                  setProfileModalTab('pricing');
+                  setShowProfileModal(true);
+                }}
+                className="px-2 py-1 text-slate-700 hover:text-slate-900 hover:bg-white rounded-xl transition flex items-center gap-1 text-xs font-bold cursor-pointer"
+                title={isBn ? 'প্রিন্ট রেট ও মূল্য সেটিংস' : 'Shop Settings & Rates'}
               >
                 <Store className="w-3.5 h-3.5 text-slate-600" />
-                <span className="hidden xl:inline">Rates</span>
+                <span className="hidden 2xl:inline">{isBn ? 'রেটস' : 'Rates'}</span>
               </button>
+            </div>
+
+            {/* Language Switcher */}
+            <div className="shrink-0">
+              <LanguageToggle />
             </div>
 
             {/* Audio Chime Toggle */}
             <button
               onClick={() => setAudioEnabled(!audioEnabled)}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+              className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0"
               title={audioEnabled ? 'Sound ON' : 'Sound OFF'}
             >
               {audioEnabled ? <Volume2 className="w-4 h-4 text-blue-600" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
@@ -1287,8 +1293,8 @@ export default function ShopDashboard({ shop, onLogout }) {
             {/* Logout */}
             <button
               onClick={onLogout}
-              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
-              title="Logout"
+              className="p-1.5 sm:p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer shrink-0"
+              title={t('shopDashboard.logout', 'Logout')}
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -1304,7 +1310,7 @@ export default function ShopDashboard({ shop, onLogout }) {
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  🖨️ Print Spool Log
+                  🖨️ {isBn ? 'প্রিন্ট স্পুল লগ' : 'Print Spool Log'}
                 </h3>
                 {isSimulating && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -1316,11 +1322,11 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <button
                   onClick={fetchSpoolLog}
                   className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                >Refresh</button>
+                >{ isBn ? 'রিফ্রেশ' : 'Refresh'}</button>
                 <button
                   onClick={clearSpoolLogAction}
                   className="px-2.5 py-1 text-xs rounded-lg bg-rose-900/40 hover:bg-rose-900/60 text-rose-300 transition"
-                >Clear Log</button>
+                >{isBn ? 'লগ মুছুন' : 'Clear Log'}</button>
                 <button
                   onClick={() => setShowSpoolLog(false)}
                   className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition font-bold"
@@ -1330,7 +1336,7 @@ export default function ShopDashboard({ shop, onLogout }) {
 
             {spoolLog.length === 0 ? (
               <div className="text-center py-6 text-slate-500 text-xs">
-                No print jobs in log. Click 🖨️ Print on any order card to test.
+                {isBn ? 'লগে কোনো প্রিন্ট জব নেই। টেস্ট করতে যেকোনো অর্ডারে 🖨️ প্রিন্ট ক্লিক করুন।' : 'No print jobs in log. Click 🖨️ Print on any order card to test.'}
               </div>
             ) : (
               <div className="overflow-x-auto max-h-52">
@@ -1425,14 +1431,14 @@ export default function ShopDashboard({ shop, onLogout }) {
       )}
 
       {/* Main Layout Container (Extended Widescreen Layout) */}
-      <div className="max-w-[1720px] mx-auto px-3 sm:px-4 lg:px-6 py-4 w-full flex-1 flex flex-col lg:flex-row gap-4">
+      <div className="max-w-[1720px] mx-auto px-2.5 sm:px-4 lg:px-6 py-3 sm:py-4 w-full flex-1 flex flex-col lg:flex-row gap-3 sm:gap-4">
         
         {/* Left Sidebar: Counter QR & Local Folder Sync */}
-        <aside className="w-full lg:w-56 xl:w-60 shrink-0 space-y-3.5">
+        <aside className="order-2 lg:order-1 w-full lg:w-56 xl:w-60 shrink-0 space-y-3 sm:space-y-3.5">
           
           {/* Counter QR Card */}
           <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 text-center space-y-2.5">
-            <h3 className="font-bold text-xs text-slate-800">Counter QR Code</h3>
+            <h3 className="font-bold text-xs text-slate-800">{isBn ? 'কাউন্টার QR কোড' : 'Counter QR Code'}</h3>
             <div className="p-2.5 bg-slate-50 rounded-xl flex justify-center items-center border border-slate-100">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(window.location.origin + '/?shop=' + shop?.qr_slug)}`}
@@ -1448,7 +1454,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                   title="Download Raw QR Image"
                 >
                   <Download className="w-3 h-3" />
-                  <span>Save QR</span>
+                  <span>{isBn ? 'QR সেভ' : 'Save QR'}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -1459,7 +1465,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                   title="Copy Customer Link"
                 >
                   <Copy className="w-3 h-3" />
-                  <span>Copy Link</span>
+                  <span>{isBn ? 'লিংক কপি' : 'Copy Link'}</span>
                 </button>
               </div>
 
@@ -1468,7 +1474,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-xs"
               >
                 <QrCode className="w-3.5 h-3.5" />
-                <span>Custom Standee Poster</span>
+                <span>{isBn ? 'কাস্টম স্ট্যান্ডি পোস্টার' : 'Custom Standee Poster'}</span>
               </button>
             </div>
           </div>
@@ -1510,7 +1516,7 @@ export default function ShopDashboard({ shop, onLogout }) {
         </aside>
 
         {/* Main POS Queue Area */}
-        <main className="flex-1 min-w-0 space-y-4">
+        <main className="order-1 lg:order-2 flex-1 min-w-0 space-y-3 sm:space-y-4">
           
           {/* Google AdSense Space (Top Banner) */}
           {adsenseConfig?.enabled && (
@@ -1532,12 +1538,12 @@ export default function ShopDashboard({ shop, onLogout }) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400">Pending</span>
+                <span className="text-[11px] font-semibold text-slate-400">{t('shopDashboard.filterPending', 'Pending')}</span>
                 <Clock className="w-4 h-4 text-amber-500" />
               </div>
               <div className="flex items-baseline justify-between mt-1">
                 <h3 className="text-xl font-extrabold text-amber-600">{stats.pending}</h3>
-                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">In Queue</span>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">{isBn ? 'কিউতে' : 'In Queue'}</span>
               </div>
             </div>
 
@@ -1549,12 +1555,12 @@ export default function ShopDashboard({ shop, onLogout }) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400">Done Today</span>
+                <span className="text-[11px] font-semibold text-slate-400">{isBn ? 'আজকে সম্পন্ন' : 'Done Today'}</span>
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
               </div>
               <div className="flex items-baseline justify-between mt-1">
                 <h3 className="text-xl font-extrabold text-emerald-600">{stats.done}</h3>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Completed</span>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{t('shopDashboard.completedJobs', 'Completed')}</span>
               </div>
             </div>
 
@@ -1566,13 +1572,13 @@ export default function ShopDashboard({ shop, onLogout }) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400">Today's Revenue</span>
+                <span className="text-[11px] font-semibold text-slate-400">{t('shopDashboard.todayEarnings', "Today's Revenue")}</span>
                 <CreditCard className="w-4 h-4 text-blue-600" />
               </div>
               <div className="flex items-baseline justify-between mt-1">
                 <h3 className="text-xl font-extrabold text-slate-900 font-mono">৳{stats.todayRevenue.toFixed(2)}</h3>
                 <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                  {stats.total} {stats.total === 1 ? 'Order' : 'Orders'}
+                  {stats.total} {stats.total === 1 ? (isBn ? 'অর্ডার' : 'Order') : (isBn ? 'অর্ডার' : 'Orders')}
                 </span>
               </div>
             </div>
@@ -1583,7 +1589,7 @@ export default function ShopDashboard({ shop, onLogout }) {
               title={`Admin configured file deletion: Automatically wipes completed files after ${cleanupSettings?.success_minutes || 30} mins to protect customer privacy.`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-400">Auto-Delete Timer</span>
+                <span className="text-[11px] font-semibold text-slate-400">{isBn ? 'অটো-ডিলিট টাইমার' : 'Auto-Delete Timer'}</span>
                 <Trash2 className="w-4 h-4 text-rose-500" />
               </div>
               <div className="flex items-baseline justify-between mt-1">
@@ -1591,7 +1597,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                   {cleanupSettings?.enabled ? `${cleanupSettings?.success_minutes || 30}m` : 'Off'}
                 </h3>
                 <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded">
-                  Admin Policy
+                  {isBn ? 'অ্যাডমিন নীতি' : 'Admin Policy'}
                 </span>
               </div>
             </div>
@@ -1603,9 +1609,9 @@ export default function ShopDashboard({ shop, onLogout }) {
             {/* Filter Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
               {[
-                { id: 'pending', label: 'Pending', count: stats.pending, key: '1' },
-                { id: 'done', label: 'Done', count: stats.done, key: '2' },
-                { id: 'all', label: 'All Orders', count: stats.total, key: '3' }
+                { id: 'pending', label: isBn ? 'বাকি' : 'Pending', count: stats.pending, key: '1' },
+                { id: 'done', label: isBn ? 'সম্পন্ন' : 'Done', count: stats.done, key: '2' },
+                { id: 'all', label: t('shopDashboard.filterAll', 'All Orders'), count: stats.total, key: '3' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1634,7 +1640,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                   className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95 cursor-pointer"
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>Print All ({stats.pending})</span>
+                  <span>{isBn ? `সব প্রিন্ট (${stats.pending})` : `Print All (${stats.pending})`}</span>
                 </button>
               )}
 
@@ -1643,7 +1649,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search token, auth, customer... (/)"
+                  placeholder={isBn ? 'টোকেন, অথ কোড, কাস্টমার... (/)' : 'Search token, auth, customer... (/)'}
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -1657,13 +1663,13 @@ export default function ShopDashboard({ shop, onLogout }) {
           {loading ? (
             <div className="bg-white rounded-2xl p-10 text-center border border-slate-200">
               <RefreshCw className="w-5 h-5 animate-spin text-blue-600 mx-auto mb-2" />
-              <p className="text-xs font-semibold text-slate-500">Loading queue...</p>
+              <p className="text-xs font-semibold text-slate-500">{t('common.loading', 'Loading queue...')}</p>
             </div>
           ) : filteredJobs.length === 0 ? (
             <div className="bg-white rounded-2xl p-10 text-center border border-slate-200">
               <Printer className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <h3 className="font-bold text-slate-700 text-xs">No orders in this view</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">Incoming customer jobs appear automatically in real-time.</p>
+              <h3 className="font-bold text-slate-700 text-xs">{t('shopDashboard.noOrders', 'No orders in this view')}</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">{t('shopDashboard.noOrdersSub', 'Incoming customer jobs appear automatically in real-time.')}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1714,7 +1720,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                         {/* Customer Name */}
                         <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1 shrink-0" title={job.customer_name}>
                           <span>👤</span>
-                          <span className="truncate max-w-[200px]">{job.customer_name || 'Guest Customer'}</span>
+                          <span className="truncate max-w-[200px]">{job.customer_name || (isBn ? 'অতিথি কাস্টমার' : 'Guest Customer')}</span>
                         </span>
 
                         {/* Service Type Badge */}
@@ -2017,7 +2023,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                               title="Preview document"
                             >
                               <Eye className="w-3.5 h-3.5 text-blue-600" />
-                              <span>Preview</span>
+                              <span>{isBn ? 'প্রিভিউ' : 'Preview'}</span>
                             </button>
                           ) : isDone ? (
                             <span
@@ -2025,7 +2031,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                               title="Preview locked after printing for privacy"
                             >
                               <Lock className="w-3 h-3 text-slate-400" />
-                              <span>Locked</span>
+                              <span>{isBn ? 'লকড' : 'Locked'}</span>
                             </span>
                           ) : null}
 
@@ -2068,7 +2074,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                               className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
                             >
                               <Zap className="w-3.5 h-3.5" />
-                              <span>Print</span>
+                              <span>{isBn ? 'প্রিন্ট' : 'Print'}</span>
                             </button>
                           )}
 
@@ -2081,7 +2087,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                               title="Reprint requires customer verification"
                             >
                               <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Reprint</span>
+                              <span>{isBn ? 'রিপ্রিন্ট' : 'Reprint'}</span>
                             </button>
                           )}
 
@@ -2094,7 +2100,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                               title="Customer handed cash? Click to mark Paid (Cash) & complete"
                             >
                               <span>💵</span>
-                              <span>Collect ৳{parseFloat(job.total_price || 0).toFixed(0)} Cash</span>
+                              <span>{isBn ? `৳${parseFloat(job.total_price || 0).toFixed(0)} ক্যাশ নিন` : `Collect ৳${parseFloat(job.total_price || 0).toFixed(0)} Cash`}</span>
                             </button>
                           ) : !isDone ? (
                             <button
@@ -2103,12 +2109,12 @@ export default function ShopDashboard({ shop, onLogout }) {
                               className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
                             >
                               <Check className="w-3.5 h-3.5" />
-                              <span>Done</span>
+                              <span>{isBn ? 'সম্পন্ন' : 'Done'}</span>
                             </button>
                           ) : (
                             <span className="text-[11px] font-bold text-emerald-700 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1 shadow-2xs">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Done</span>
+                              <span>{isBn ? 'সম্পন্ন' : 'Done'}</span>
                             </span>
                           )}
 
@@ -2140,12 +2146,12 @@ export default function ShopDashboard({ shop, onLogout }) {
                               return (
                                 <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
                                   <span className={`w-2 h-2 rounded-full ${isDone ? 'bg-emerald-500' : 'bg-blue-600'}`}></span>
-                                  <span>Multi-File Order ({job.files.length} Documents)</span>
+                                  <span>{isBn ? `মাল্টি-ফাইল অর্ডার (${job.files.length}টি ডকুমেন্ট)` : `Multi-File Order (${job.files.length} Documents)`}</span>
                                   {!isDone && (
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                       printedCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
                                     }`}>
-                                      {printedCount}/{job.files.length} Printed
+                                      {printedCount}/{job.files.length} {isBn ? 'প্রিন্টেড' : 'Printed'}
                                     </span>
                                   )}
                                 </span>
@@ -2510,7 +2516,7 @@ export default function ShopDashboard({ shop, onLogout }) {
         </main>
 
         {/* Right Sidebar: Freshly Printed Orders Panel (Counter Pickup) */}
-        <aside className="w-full lg:w-72 xl:w-80 shrink-0 space-y-3.5">
+        <aside className="order-3 lg:order-3 w-full lg:w-72 xl:w-80 shrink-0 space-y-3.5">
           <div className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-xs border border-emerald-200/90 space-y-3 sticky top-20">
             
             {/* Header */}
@@ -2522,10 +2528,10 @@ export default function ShopDashboard({ shop, onLogout }) {
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
                   <h3 className="font-extrabold text-xs sm:text-sm text-slate-800 tracking-tight whitespace-nowrap">
-                    Freshly Printed
+                    {isBn ? 'সদ্য প্রিন্টেড' : 'Freshly Printed'}
                   </h3>
                   <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold shadow-2xs shrink-0">
-                    {activeFreshJobs.length} Ready
+                    {activeFreshJobs.length} {isBn ? 'রেডি' : 'Ready'}
                   </span>
                 </div>
 
@@ -2537,11 +2543,11 @@ export default function ShopDashboard({ shop, onLogout }) {
                     className="text-[11px] text-slate-600 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0 shadow-2xs border border-slate-200/60"
                     title="Wipe completed orders from the bottom up"
                   >
-                    <span>🧹 Wipe</span>
+                    <span>🧹 {isBn ? 'মুছুন' : 'Wipe'}</span>
                   </button>
                 )}
               </div>
-              <p className="text-[10px] text-slate-400 font-medium pl-4.5 truncate">Counter Pickup · Hand over to customer</p>
+              <p className="text-[10px] text-slate-400 font-medium pl-4.5 truncate">{isBn ? 'কাউন্টার থেকে কাস্টমারকে দিন' : 'Counter Pickup · Hand over to customer'}</p>
             </div>
 
             {/* List of Freshly Printed Cards */}
@@ -2550,8 +2556,8 @@ export default function ShopDashboard({ shop, onLogout }) {
                 <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                 </div>
-                <p className="font-bold text-slate-700 text-xs">All Printed Orders Cleared</p>
-                <p className="text-[10px] text-slate-400">When you complete an order, it appears here for counter pickup.</p>
+                <p className="font-bold text-slate-700 text-xs">{isBn ? 'সব প্রিন্টেড অর্ডার ক্লিয়ার' : 'All Printed Orders Cleared'}</p>
+                <p className="text-[10px] text-slate-400">{isBn ? 'অর্ডার সম্পন্ন করলে কাউন্টার পিকআপের জন্য এখানে দেখাবে।' : 'When you complete an order, it appears here for counter pickup.'}</p>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[75vh] overflow-y-auto pr-0.5">
@@ -2577,14 +2583,14 @@ export default function ShopDashboard({ shop, onLogout }) {
                           </span>
                           <span className="text-xs font-extrabold text-slate-800 truncate flex items-center gap-1" title={fj.customer_name || 'Guest'}>
                             <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span className="truncate">{fj.customer_name || 'Guest'}</span>
+                            <span className="truncate">{fj.customer_name || (isBn ? 'অতিথি' : 'Guest')}</span>
                           </span>
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            <span>Ready</span>
+                            <span>{isBn ? 'রেডি' : 'Ready'}</span>
                           </span>
 
                           {fj.customer_phone && (
@@ -2625,7 +2631,7 @@ export default function ShopDashboard({ shop, onLogout }) {
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200/90 px-1.5 py-0.5 rounded shadow-2xs whitespace-nowrap">
-                            {totalPages} {totalPages === 1 ? 'Page' : 'Pages'}
+                            {totalPages} {totalPages === 1 ? (isBn ? 'পৃষ্ঠা' : 'Page') : (isBn ? 'পৃষ্ঠা' : 'Pages')}
                           </span>
 
                           <span className="text-xs font-black font-mono text-slate-900 tracking-tight whitespace-nowrap">
@@ -2637,7 +2643,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                               : 'bg-amber-100 text-amber-900 border border-amber-300'
                           }`}>
-                            {isPaid ? '✓ PAID' : 'CASH DUE'}
+                            {isPaid ? (isBn ? '✓ পেইড' : '✓ PAID') : (isBn ? 'ক্যাশ বাকি' : 'CASH DUE')}
                           </span>
                         </div>
                       </div>
@@ -2688,7 +2694,7 @@ export default function ShopDashboard({ shop, onLogout }) {
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-extrabold text-base text-slate-900">Requesting Customer Approval</h3>
+              <h3 className="font-extrabold text-base text-slate-900">{isBn ? 'কাস্টমারের অনুমোদন চাওয়া হচ্ছে' : 'Requesting Customer Approval'}</h3>
               <p className="text-xs text-slate-500">Order #{reprintModal.job?.job_code} {reprintModal.job?.customer_name ? `· ${reprintModal.job.customer_name}` : ''}</p>
             </div>
 
@@ -2696,7 +2702,7 @@ export default function ShopDashboard({ shop, onLogout }) {
             <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5 space-y-2 text-left">
               <div className="flex items-center gap-2 font-bold text-xs text-amber-900">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-                <span>Waiting for Customer to Grant Reprint...</span>
+                <span>{isBn ? 'কাস্টমারের রিপ্রিন্ট অনুমোদনের অপেক্ষায়...' : 'Waiting for Customer to Grant Reprint...'}</span>
               </div>
               <p className="text-[11px] text-amber-800 leading-relaxed">
                 A reprint prompt has been sent in real-time to the customer's live tracking screen. When they tap <strong>Allow Reprint</strong>, printing will begin automatically.
@@ -2733,7 +2739,7 @@ export default function ShopDashboard({ shop, onLogout }) {
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-extrabold text-base text-slate-900">Requesting Download Permission</h3>
+              <h3 className="font-extrabold text-base text-slate-900">{isBn ? 'ডাউনলোড অনুমতি চাওয়া হচ্ছে' : 'Requesting Download Permission'}</h3>
               <p className="text-xs text-slate-500">Order #{downloadModal.job?.job_code} {downloadModal.job?.customer_name ? `· ${downloadModal.job.customer_name}` : ''}</p>
             </div>
 
@@ -2741,7 +2747,7 @@ export default function ShopDashboard({ shop, onLogout }) {
             <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-3.5 space-y-2 text-left">
               <div className="flex items-center gap-2 font-bold text-xs text-blue-900">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping"></span>
-                <span>Waiting for Customer Consent...</span>
+                <span>{isBn ? 'কাস্টমারের সম্মতির অপেক্ষায়...' : 'Waiting for Customer Consent...'}</span>
               </div>
               <p className="text-[11px] text-blue-800 leading-relaxed">
                 A download permission request has been sent to the customer's live tracking screen. Once granted, the file will download directly to your computer.
@@ -2768,380 +2774,6 @@ export default function ShopDashboard({ shop, onLogout }) {
         </div>
       )}
 
-      {/* Shop Rates & Customer Notice Editor Modal */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                  <Store className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm sm:text-base text-slate-800">Shop Rates & Customer Notice</h3>
-                  <p className="text-[11px] text-slate-400">Set rates for documents, photo studio & binding. Updates reflect live on QR page.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs transition cursor-pointer"
-              >✕</button>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setSavingShopSettings(true);
-                try {
-                  const res = await fetch(`/api/shops/${shop.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(currentShopData)
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    showToast('Shop rates & notice updated!', 'success');
-                    if (data.shop) {
-                      setCurrentShopData(data.shop);
-                      localStorage.setItem('prntez_shop', JSON.stringify(data.shop));
-                    }
-                    setShowSettingsModal(false);
-                  }
-                } catch (_) {
-                  showToast('Failed to update shop details', 'error');
-                } finally {
-                  setSavingShopSettings(false);
-                }
-              }}
-              className="flex-1 overflow-y-auto pr-1 mt-4 space-y-4 text-xs"
-            >
-              {/* Counter Notice / Customer Promo Text */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">
-                  📢 Counter Promo / Notice to Customers
-                </label>
-                <textarea
-                  rows="2"
-                  placeholder="e.g. Passport photo printing & Spiral binding available! 10% off on 100+ pages."
-                  value={currentShopData.counter_notice || ''}
-                  onChange={e => setCurrentShopData({ ...currentShopData, counter_notice: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-[10px] text-slate-400 mt-0.5">This banner appears at the top of your customer upload page.</p>
-              </div>
-
-              {/* 2-Column Grid for Rates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                
-                {/* Left Column: Print Rates & Photo Studio Rates */}
-                <div className="space-y-3.5">
-                  {/* Document Pricing Grid */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                    <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
-                      <span>🖨️</span> Document Print Rates
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">B&W (৳/page)</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={currentShopData.price_bw || '2.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_bw: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Color (৳/page)</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={currentShopData.price_color || '10.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_color: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-blue-600 focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Legal Sheet Extra (৳)</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={currentShopData.price_legal || '3.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_legal: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">A3 Sheet Extra (৳)</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={currentShopData.price_a3 || '15.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_a3: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Photo Print Pricing Grid */}
-                  <div className="p-3.5 bg-pink-50/50 rounded-2xl border border-pink-200/80 space-y-2.5">
-                    <label className="font-bold text-pink-900 flex items-center gap-1.5 text-xs">
-                      <span>🖼️</span> Photo Studio Rates (Glossy Paper)
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Passport 4-Pack (৳)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.price_passport_4 || '30.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_passport_4: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-pink-700 focus:ring-2 focus:ring-pink-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Passport 8-Pack (৳)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.price_passport_8 || '50.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_passport_8: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-pink-700 focus:ring-2 focus:ring-pink-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Stamp 4-Pack (৳)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.price_stamp_4 || '20.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_stamp_4: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-pink-700 focus:ring-2 focus:ring-pink-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">4R Photo 4x6" (৳)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.price_photo_4r || '20.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_photo_4r: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500"
-                        />
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">A4 Photo Sheet (৳)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.price_photo_a4 || '60.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_photo_a4: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pink-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Binding, Hours, Payment & Bulk Discounts */}
-                <div className="space-y-3.5">
-                  {/* Binding Rates Grid */}
-                  <div className="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-200/80 space-y-2.5">
-                    <label className="font-bold text-purple-900 flex items-center gap-1.5 text-xs">
-                      <span>📖</span> Book Binding Extra Rates
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Spiral Binding (৳)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.price_bind_spiral || '30.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_bind_spiral: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-purple-700 focus:ring-2 focus:ring-purple-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Tape Binding (৳)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.price_bind_tape || '20.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_bind_tape: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-purple-700 focus:ring-2 focus:ring-purple-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Hardcover (৳)</label>
-                        <input
-                          type="number"
-                          step="5"
-                          value={currentShopData.price_bind_hardcover || '300.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_bind_hardcover: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-purple-700 focus:ring-2 focus:ring-purple-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Document Editing Fee Card */}
-                  <div className="p-3.5 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-2.5">
-                    <label className="font-bold text-amber-900 flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1.5">
-                        <span>✏️</span> Document Editing Fee (Word / Photoshop)
-                      </span>
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Base Edit Charge / File (৳)</label>
-                        <input
-                          type="number"
-                          step="5"
-                          value={currentShopData.price_edit || '30.00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, price_edit: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-amber-800 focus:ring-2 focus:ring-amber-500"
-                        />
-                      </div>
-                      <div className="flex items-center text-[10px] text-amber-800/80 italic pt-1 sm:pt-0">
-                        Added to normal print rates when customer chooses Edit & Print.
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Operating Hours */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                    <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                        Operating Hours & Status
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentShopData({ ...currentShopData, is_closed: currentShopData.is_closed ? 0 : 1 })}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition ${
-                          !currentShopData.is_closed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                        }`}
-                      >
-                        {!currentShopData.is_closed ? '🟢 Currently OPEN' : '🔴 Currently CLOSED'}
-                      </button>
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-500 block mb-0.5">Opening Time</label>
-                        <input
-                          type="time"
-                          value={currentShopData.opening_time || '08:00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, opening_time: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-500 block mb-0.5">Closing Time</label>
-                        <input
-                          type="time"
-                          value={currentShopData.closing_time || '22:00'}
-                          onChange={e => setCurrentShopData({ ...currentShopData, closing_time: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Online Payment Numbers */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                    <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
-                      <CreditCard className="w-3.5 h-3.5 text-pink-600" />
-                      Payment Numbers (bKash & Nagad)
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-500 block mb-0.5">bKash (Personal/Merchant)</label>
-                        <input
-                          type="tel"
-                          placeholder="017XXXXXXXX"
-                          value={currentShopData.bkash_number || ''}
-                          onChange={e => setCurrentShopData({ ...currentShopData, bkash_number: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-500 block mb-0.5">Nagad Number</label>
-                        <input
-                          type="tel"
-                          placeholder="018XXXXXXXX"
-                          value={currentShopData.nagad_number || ''}
-                          onChange={e => setCurrentShopData({ ...currentShopData, nagad_number: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bulk Discount Rules */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                    <label className="font-bold text-slate-700 flex items-center gap-1.5 text-xs">
-                      <Percent className="w-3.5 h-3.5 text-amber-600" />
-                      Auto Bulk Discounts
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Min Pages</label>
-                        <input
-                          type="number"
-                          value={currentShopData.discount_min_pages || 50}
-                          onChange={e => setCurrentShopData({ ...currentShopData, discount_min_pages: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-500 block mb-0.5">Tier 1: Discount %</label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={currentShopData.discount_percent || 10}
-                          onChange={e => setCurrentShopData({ ...currentShopData, discount_percent: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Shop Address */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Shop Address / Counter Location</label>
-                <input
-                  type="text"
-                  value={currentShopData.address || ''}
-                  onChange={e => setCurrentShopData({ ...currentShopData, address: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Footer Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowSettingsModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingShopSettings}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  {savingShopSettings ? 'Saving...' : '✓ Save Settings & Rates'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Shop Analytics Dashboard Modal (Feature 2) */}
       {showAnalyticsModal && (
@@ -3154,8 +2786,12 @@ export default function ShopDashboard({ shop, onLogout }) {
                   <BarChart3 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-slate-800">Shop Analytics & Revenue Dashboard</h3>
-                  <p className="text-[11px] text-slate-400">Live order metrics, revenue, and popular print modes</p>
+                  <h3 className="font-extrabold text-sm text-slate-800">
+                    {isBn ? 'দোকানের আয় ও বিশ্লেষণ ড্যাশবোর্ড' : 'Shop Analytics & Revenue Dashboard'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {isBn ? 'লাইভ অর্ডার মেট্রিক্স, মোট আয় এবং জনপ্রিয় প্রিন্ট মোডের হিসাব' : 'Live order metrics, revenue, and popular print modes'}
+                  </p>
                 </div>
               </div>
               <button
@@ -3167,7 +2803,9 @@ export default function ShopDashboard({ shop, onLogout }) {
             {loadingAnalytics ? (
               <div className="py-12 text-center">
                 <RefreshCw className="w-6 h-6 animate-spin text-indigo-600 mx-auto mb-2" />
-                <p className="text-xs text-slate-500 font-semibold">Calculating analytics...</p>
+                <p className="text-xs text-slate-500 font-semibold">
+                  {isBn ? 'অ্যানালিটিক্স হিসাব করা হচ্ছে...' : 'Calculating analytics...'}
+                </p>
               </div>
             ) : analyticsData ? (
               <div className="space-y-4 text-xs">
@@ -3175,39 +2813,65 @@ export default function ShopDashboard({ shop, onLogout }) {
                 {/* 4 Summary Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Today's Revenue</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">
+                      {isBn ? 'আজকের আয়' : "Today's Revenue"}
+                    </p>
                     <p className="text-lg font-extrabold text-emerald-600 mt-0.5">৳{parseFloat(analyticsData.today?.today_revenue || 0).toFixed(2)}</p>
-                    <p className="text-[10px] text-slate-500">{analyticsData.today?.today_jobs || 0} orders today</p>
+                    <p className="text-[10px] text-slate-500">
+                      {isBn ? `আজ ${analyticsData.today?.today_jobs || 0} টি অর্ডার` : `${analyticsData.today?.today_jobs || 0} orders today`}
+                    </p>
                   </div>
 
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Revenue</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">
+                      {isBn ? 'সর্বমোট আয়' : 'Total Revenue'}
+                    </p>
                     <p className="text-lg font-extrabold text-indigo-600 mt-0.5">৳{parseFloat(analyticsData.overall?.total_revenue || 0).toFixed(2)}</p>
-                    <p className="text-[10px] text-slate-500">{analyticsData.overall?.total_jobs || 0} all-time jobs</p>
+                    <p className="text-[10px] text-slate-500">
+                      {isBn ? `মোট ${analyticsData.overall?.total_jobs || 0} টি কাজ` : `${analyticsData.overall?.total_jobs || 0} all-time jobs`}
+                    </p>
                   </div>
 
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Pages Printed</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">
+                      {isBn ? 'মুদ্রিত পৃষ্ঠা' : 'Pages Printed'}
+                    </p>
                     <p className="text-lg font-extrabold text-slate-800 mt-0.5">{analyticsData.overall?.total_pages || 0}</p>
-                    <p className="text-[10px] text-slate-500">sheets of paper</p>
+                    <p className="text-[10px] text-slate-500">
+                      {isBn ? 'টি মুদ্রিত কাগজ' : 'sheets of paper'}
+                    </p>
                   </div>
 
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Bulk Discounts</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">
+                      {isBn ? 'বাল্ক ছাড়' : 'Bulk Discounts'}
+                    </p>
                     <p className="text-lg font-extrabold text-amber-600 mt-0.5">৳{parseFloat(analyticsData.overall?.total_discounts || 0).toFixed(2)}</p>
-                    <p className="text-[10px] text-slate-500">saved by customers</p>
+                    <p className="text-[10px] text-slate-500">
+                      {isBn ? 'গ্রাহকদের সাশ্রয়' : 'saved by customers'}
+                    </p>
                   </div>
                 </div>
 
                 {/* Color vs B&W Ratio */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-slate-700 text-xs">Print Mode Breakdown</h4>
+                  <h4 className="font-bold text-slate-700 text-xs">
+                    {isBn ? 'প্রিন্ট মোডের অনুপাত' : 'Print Mode Breakdown'}
+                  </h4>
                   <div className="grid grid-cols-2 gap-3">
                     {analyticsData.modeBreakdown?.map((m, i) => (
                       <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
                         <div>
-                          <p className="font-bold text-xs capitalize text-slate-800">{m.color_mode === 'color' ? '🎨 Color Print' : '⬛ Black & White'}</p>
-                          <p className="text-[10px] text-slate-400">{m.file_count} files ({m.total_pages} pages)</p>
+                          <p className="font-bold text-xs capitalize text-slate-800">
+                            {m.color_mode === 'color' 
+                              ? (isBn ? '🎨 কালার প্রিন্ট' : '🎨 Color Print') 
+                              : (isBn ? '⬛ সাদাকালো প্রিন্ট' : '⬛ Black & White')}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {isBn 
+                              ? `${m.file_count} টি ফাইল (${m.total_pages} পৃষ্ঠা)` 
+                              : `${m.file_count} files (${m.total_pages} pages)`}
+                          </p>
                         </div>
                         <span className="text-sm font-extrabold text-slate-700">{m.total_pages}</span>
                       </div>
@@ -3217,12 +2881,16 @@ export default function ShopDashboard({ shop, onLogout }) {
 
                 {/* Paper Sizes Breakdown */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
-                  <h4 className="font-bold text-slate-700 text-xs">Paper Sizes Distribution</h4>
+                  <h4 className="font-bold text-slate-700 text-xs">
+                    {isBn ? 'কাগজের সাইজ ভিত্তিক ব্যবহার' : 'Paper Sizes Distribution'}
+                  </h4>
                   <div className="flex flex-wrap gap-2">
                     {analyticsData.paperBreakdown?.map((p, i) => (
                       <div key={i} className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center gap-2">
                         <span className="font-bold text-slate-800">{p.paper_size}</span>
-                        <span className="px-1.5 py-0.2 bg-blue-50 text-blue-700 font-extrabold rounded text-[10px]">{p.count} files</span>
+                        <span className="px-1.5 py-0.2 bg-blue-50 text-blue-700 font-extrabold rounded text-[10px]">
+                          {isBn ? `${p.count} টি ফাইল` : `${p.count} files`}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -3231,7 +2899,9 @@ export default function ShopDashboard({ shop, onLogout }) {
                 {/* Peak Hours Distribution */}
                 {analyticsData.hourlyStats && analyticsData.hourlyStats.length > 0 && (
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2">
-                    <h4 className="font-bold text-slate-700 text-xs">Peak Hours (Last 7 Days)</h4>
+                    <h4 className="font-bold text-slate-700 text-xs">
+                      {isBn ? 'ব্যস্ততম সময় (বিগত ৭ দিন)' : 'Peak Hours (Last 7 Days)'}
+                    </h4>
                     <div className="grid grid-cols-6 sm:grid-cols-12 gap-1 text-center">
                       {analyticsData.hourlyStats.map((h, i) => (
                         <div key={i} className="p-1.5 bg-indigo-50/60 rounded-lg border border-indigo-100">
@@ -3251,7 +2921,7 @@ export default function ShopDashboard({ shop, onLogout }) {
                 onClick={() => setShowAnalyticsModal(false)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition"
               >
-                Close
+                {isBn ? 'বন্ধ করুন' : 'Close'}
               </button>
             </div>
 
@@ -3279,9 +2949,10 @@ export default function ShopDashboard({ shop, onLogout }) {
       {showProfileModal && (
         <ShopProfileModal
           shop={currentShopData || shop}
+          initialTab={profileModalTab}
           onSave={(updatedShop) => {
             setCurrentShopData(updatedShop);
-            showToast('✓ Shop profile & trade license saved!', 'success');
+            showToast(isBn ? '✓ দোকান প্রোফাইল ও সেটিংস সংরক্ষিত হয়েছে!' : '✓ Shop profile & rates saved!', 'success');
           }}
           onClose={() => setShowProfileModal(false)}
         />

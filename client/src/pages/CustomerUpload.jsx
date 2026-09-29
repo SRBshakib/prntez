@@ -6,8 +6,10 @@ import {
   AlertTriangle, Phone, BookOpen, Palette, Pencil
 } from 'lucide-react';
 import GoogleAdSense from '../components/GoogleAdSense';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function CustomerUpload({ onJobCreated, initialSlug }) {
+  const { t, isBn } = useLanguage();
   const [shop, setShop] = useState(null);
   const [availableShops, setAvailableShops] = useState([]);
   const [showShopPicker, setShowShopPicker] = useState(false);
@@ -33,6 +35,20 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
   const [customerAd, setCustomerAd] = useState(null);
   const [adsenseConfig, setAdsenseConfig] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Ensure selected serviceType is available in this shop (fallback to 'print' if shop disables it)
+  useEffect(() => {
+    if (serviceType === 'bind' && (shop?.allow_binding === 0 || shop?.allow_binding === false || shop?.allow_binding === '0')) {
+      setServiceType('print');
+      setServiceDetail('');
+    } else if (serviceType === 'photo' && (shop?.allow_photo === 0 || shop?.allow_photo === false || shop?.allow_photo === '0')) {
+      setServiceType('print');
+      setServiceDetail('');
+    } else if (serviceType === 'edit' && (shop?.allow_edit === 0 || shop?.allow_edit === false || shop?.allow_edit === '0')) {
+      setServiceType('print');
+      setServiceDetail('');
+    }
+  }, [shop, serviceType]);
 
   // 1. Initial Load: Restore Returning Customer Info & Recent Orders
   useEffect(() => {
@@ -288,7 +304,8 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
     let discount = 0;
     let discountPercent = 0;
 
-    if (serviceType !== 'photo') {
+    const isDiscountActive = shop.allow_discount !== 0 && shop.allow_discount !== '0' && shop.allow_discount !== false;
+    if (serviceType !== 'photo' && isDiscountActive) {
       const minPages1 = parseInt(shop.discount_min_pages, 10) || 50;
       const pct1 = parseFloat(shop.discount_percent) || 10;
       const minPages2 = parseInt(shop.discount_tier2_pages, 10) || 100;
@@ -468,6 +485,21 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
     );
   }
 
+  const availableServices = [
+    { key: 'print', icon: '🖨️', label: isBn ? 'প্রিন্ট' : 'Print', desc: isBn ? 'শুধু প্রিন্ট' : 'Print only', color: 'blue', enabled: true },
+    { key: 'bind', icon: '📖', label: isBn ? 'বাইন্ডিং' : 'Bind', desc: isBn ? 'প্রিন্ট + বাইন্ডিং' : 'Print + Binding', color: 'purple', enabled: shop?.allow_binding !== 0 && shop?.allow_binding !== false && shop?.allow_binding !== '0' },
+    { key: 'photo', icon: '🖼️', label: isBn ? 'ছবি প্রিন্ট' : 'Photo', desc: isBn ? 'গ্লসি পেপার' : 'Photo print', color: 'pink', enabled: shop?.allow_photo !== 0 && shop?.allow_photo !== false && shop?.allow_photo !== '0' },
+    { key: 'edit', icon: '✏️', label: isBn ? 'এডিট' : 'Edit', desc: isBn ? 'এডিট ও প্রিন্ট' : 'Edit & print', color: 'amber', enabled: shop?.allow_edit !== 0 && shop?.allow_edit !== false && shop?.allow_edit !== '0' },
+  ].filter(s => s.enabled);
+
+  const gridColsClass = availableServices.length === 1 
+    ? 'grid-cols-1' 
+    : availableServices.length === 2 
+      ? 'grid-cols-2' 
+      : availableServices.length === 3 
+        ? 'grid-cols-3' 
+        : 'grid-cols-2 sm:grid-cols-4';
+
   return (
     <div className="min-h-screen bg-slate-50/80 pb-28 sm:pb-36 pt-4 sm:pt-6 px-3 sm:px-6 lg:px-8">
       
@@ -514,16 +546,16 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
         
         {/* Returning Customer Recent Orders Drawer (Feature 5) */}
         {recentOrders.length > 0 && (
-          <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-indigo-600" />
-              <span className="font-bold text-slate-700">Recent Orders ({recentOrders.length})</span>
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 border border-slate-200 shadow-xs flex items-center justify-between text-xs gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <History className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span className="font-bold text-slate-700 truncate">{isBn ? `পূর্ববর্তী অর্ডার (${recentOrders.length})` : `Recent Orders (${recentOrders.length})`}</span>
             </div>
             <button
               onClick={() => setShowRecentOrders(s => !s)}
-              className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"
+              className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 shrink-0 text-[11px] sm:text-xs"
             >
-              <span>{showRecentOrders ? 'Hide Orders' : 'View Past Tokens'}</span>
+              <span>{showRecentOrders ? (isBn ? 'লুকান' : 'Hide') : (isBn ? 'টোকেন দেখুন' : 'Past Tokens')}</span>
               <ChevronDown className={`w-3 h-3 transition ${showRecentOrders ? 'rotate-180' : ''}`} />
             </button>
           </div>
@@ -566,33 +598,33 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
 
         {/* Shop Info Card + Change Shop Modal Trigger */}
         {shop && (
-          <div className="bg-white rounded-2xl p-5 shadow-xs border border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+          <div className="bg-white rounded-2xl p-3.5 sm:p-5 shadow-xs border border-slate-200 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
                 <Store className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Printing at</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 shrink-0">{isBn ? 'কাউন্টার' : 'Printing at'}</span>
                   {availableShops.length > 1 && (
                     <button
                       onClick={() => setShowShopPicker(true)}
                       className="text-[10px] text-slate-500 hover:text-blue-600 font-bold underline flex items-center gap-0.5"
                     >
-                      Change Shop <ChevronDown className="w-2.5 h-2.5" />
+                      {isBn ? 'দোকান বদলান' : 'Change Shop'} <ChevronDown className="w-2.5 h-2.5" />
                     </button>
                   )}
-                  <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold ${!isClosed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                    {!isClosed ? '● Open Now' : '● Closed'}
+                  <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold shrink-0 ${!isClosed ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                    {!isClosed ? (isBn ? '● খোলা' : '● Open Now') : (isBn ? '● বন্ধ' : '● Closed')}
                   </span>
                 </div>
-                <h2 className="text-base font-bold text-slate-800 leading-tight">{shop.name}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">{shop.address || 'Counter Print Service'}</p>
+                <h2 className="text-sm sm:text-base font-bold text-slate-800 leading-tight truncate">{shop.name}</h2>
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">{shop.address || 'Counter Print Service'}</p>
               </div>
             </div>
 
-            <div className="text-right hidden sm:flex flex-col items-end gap-1">
-              <div className="text-xs font-bold text-slate-700">
+            <div className="text-right flex flex-col items-end gap-1 shrink-0">
+              <div className="text-[11px] sm:text-xs font-bold text-slate-700 whitespace-nowrap">
                 B&W: ৳{shop.price_bw} · Color: ৳{shop.price_color}
               </div>
               {shop.phone && (
@@ -600,10 +632,10 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                   href={`https://wa.me/${shop.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${shop.name}, I have a question about printing at your counter.`)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700"
+                  className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-emerald-600 hover:text-emerald-700"
                 >
                   <MessageCircle className="w-3 h-3" />
-                  <span>WhatsApp Shop</span>
+                  <span className="hidden sm:inline">WhatsApp</span>
                 </a>
               )}
             </div>
@@ -654,12 +686,12 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
 
         {/* Ad / Promo / Counter Notice Space */}
         {(customerAd?.text || shop?.counter_notice) && (
-          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border border-amber-300/60 rounded-2xl p-3.5 flex items-start sm:items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-              <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white font-extrabold text-[10px] tracking-wider uppercase shrink-0 shadow-xs">
-                {customerAd?.badge || '📢 NOTICE'}
+          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border border-amber-300/60 rounded-2xl p-3 sm:p-3.5 flex items-start sm:items-center justify-between gap-2.5 sm:gap-3 shadow-xs">
+            <div className="flex items-start sm:items-center gap-2 min-w-0">
+              <span className="px-2 py-0.5 rounded-md bg-amber-500 text-white font-extrabold text-[9px] sm:text-[10px] tracking-wider uppercase shrink-0 shadow-xs">
+                {customerAd?.badge || (isBn ? '📢 নোটিশ' : '📢 NOTICE')}
               </span>
-              <p className="text-xs font-medium text-slate-800 leading-snug">
+              <p className="text-xs font-medium text-slate-800 leading-snug break-words">
                 {customerAd?.text || shop?.counter_notice}
               </p>
             </div>
@@ -668,9 +700,9 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                 href={customerAd.link}
                 target="_blank"
                 rel="noreferrer"
-                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] shrink-0 transition"
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[10px] sm:text-[11px] shrink-0 transition"
               >
-                View Offer →
+                {isBn ? 'অফার দেখুন →' : 'View Offer →'}
               </a>
             )}
           </div>
@@ -700,42 +732,37 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
             className="hidden"
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
           />
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition duration-200">
-            <UploadCloud className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition duration-200">
+            <UploadCloud className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <h3 className="font-bold text-sm text-slate-800">Tap to browse or Drop files here</h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Supports PDF, DOCX, JPG, PNG up to 50MB · <span className="text-blue-600 font-semibold">Ctrl+V to paste screenshot</span>
+          <h3 className="font-bold text-xs sm:text-sm text-slate-800">{t('customerUpload.dropzoneText', 'Tap to browse or Drop files here')}</h3>
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-1 break-words">
+            {t('customerUpload.dropzoneSub', 'Supports PDF, DOCX, JPG, PNG up to 50MB · Ctrl+V to paste screenshot')}
           </p>
         </div>
 
         {/* Service Type Selector Chips */}
         {files.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 space-y-3">
-            <h4 className="font-bold text-xs text-slate-700">What do you need?</h4>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { key: 'print', icon: '🖨️', label: 'Print', desc: 'Print only', color: 'blue' },
-                { key: 'bind', icon: '📖', label: 'Bind', desc: 'Print + Binding', color: 'purple' },
-                { key: 'photo', icon: '🖼️', label: 'Photo', desc: 'Photo print', color: 'pink' },
-                { key: 'edit', icon: '✏️', label: 'Edit', desc: 'Edit & print', color: 'amber' },
-              ].map(s => (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => { setServiceType(s.key); setServiceDetail(''); }}
-                  className={`p-2.5 rounded-xl border-2 text-center transition cursor-pointer ${
-                    serviceType === s.key
-                      ? `border-${s.color}-500 bg-${s.color}-50/60 ring-1 ring-${s.color}-400 shadow-sm`
-                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="text-xl mb-0.5">{s.icon}</div>
-                  <div className="text-[11px] font-bold text-slate-800">{s.label}</div>
-                  <div className="text-[9px] text-slate-400 mt-0.5 hidden sm:block">{s.desc}</div>
-                </button>
-              ))}
-            </div>
+              <h4 className="font-bold text-xs text-slate-700">{t('customerUpload.serviceType', 'What do you need?')}</h4>
+              <div className={`grid ${gridColsClass} gap-2`}>
+                {availableServices.map(s => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => { setServiceType(s.key); setServiceDetail(''); }}
+                    className={`p-2.5 rounded-xl border-2 text-center transition cursor-pointer ${
+                      serviceType === s.key
+                        ? `border-${s.color}-500 bg-${s.color}-50/60 ring-1 ring-${s.color}-400 shadow-sm`
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="text-xl mb-0.5">{s.icon}</div>
+                    <div className="text-[11px] font-bold text-slate-800">{s.label}</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5 hidden sm:block">{s.desc}</div>
+                  </button>
+                ))}
+              </div>
 
             {/* Sub-options based on service type */}
             {serviceType === 'bind' && (
@@ -812,7 +839,11 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                 />
                 <p className="text-[10px] text-amber-700 font-semibold mt-1.5 flex items-center gap-1">
                   <Info className="w-3 h-3 text-amber-600" />
-                  <span>Shop editing fee: <strong>৳{shop?.price_edit || '30'}/file</strong> + standard print rates</span>
+                  <span>
+                    {isBn 
+                      ? <>দোকানের এডিটিং ফি: <strong>৳{shop?.price_edit || '30'} / ফাইল</strong> + স্বাভাবিক প্রিন্ট রেট</>
+                      : <>Shop editing fee: <strong>৳{shop?.price_edit || '30'} / file</strong> + standard print rates</>}
+                  </span>
                 </p>
               </div>
             )}
@@ -1035,14 +1066,16 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
         )}
 
         {/* Customer Information & Notes */}
-        {/* Customer Information & Notes */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200 space-y-2.5 sm:space-y-3">
-          <h4 className="font-bold text-xs text-slate-700">Customer Details (Optional)</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-xs text-slate-700">{t('customerUpload.customerDetails', 'Customer Details (Optional)')}</h4>
+            <span className="text-[10px] text-slate-400 font-semibold">{t('common.optional', 'Optional')}</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
             <div>
               <input
                 type="text"
-                placeholder="Your Name (e.g. Shakib)"
+                placeholder={isBn ? "আপনার নাম (যেমন: সাকিব)" : "Your Name (e.g. Shakib)"}
                 value={customerName}
                 onChange={e => setCustomerName(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -1051,7 +1084,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
             <div>
               <input
                 type="tel"
-                placeholder="Phone (For pickup SMS / WhatsApp notification)"
+                placeholder={isBn ? "মোবাইল নম্বর (পিকআপ এসএমএস / নোটিফিকেশনের জন্য)" : "Phone (For pickup SMS / WhatsApp notification)"}
                 value={customerPhone}
                 onChange={e => setCustomerPhone(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -1061,7 +1094,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           <div>
             <input
               type="text"
-              placeholder="Special instructions for shopkeeper (e.g. staple top-left corner, binding)..."
+              placeholder={isBn ? "দোকানদারের জন্য বিশেষ নির্দেশনা (যেমন: স্ট্যাপলার কোণায় দিন, বাইন্ডিং করুন)..." : "Special instructions for shopkeeper (e.g. staple top-left corner, binding)..."}
               value={globalNotes}
               onChange={e => setGlobalNotes(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
@@ -1082,24 +1115,24 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
               </span>
             </div>
 
-            <div className={`grid ${paymentGridClass} gap-2.5 sm:gap-3`}>
+            <div className={`grid ${paymentGridClass} gap-2 sm:gap-3`}>
               {/* Cash at Counter */}
               {allowCash && (
                 <button
                   type="button"
                   onClick={() => { setPaymentMethod('cash'); setPaymentTrxId(''); }}
-                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[110px] ${
+                  className={`p-2.5 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[95px] sm:min-h-[110px] ${
                     paymentMethod === 'cash'
                       ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-400/30 shadow-md shadow-emerald-500/10 scale-[1.01]'
                       : 'border-slate-200/90 bg-slate-50/60 hover:border-slate-300 hover:bg-white'
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shadow-2xs border border-emerald-200/80">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg sm:text-xl shadow-2xs border border-emerald-200/80">
                     💵
                   </div>
-                  <div className="mt-2">
-                    <div className="text-xs font-extrabold text-slate-800">Cash on Pickup</div>
-                    <div className="text-[10px] text-emerald-700 font-semibold mt-0.5 bg-emerald-100/70 px-2 py-0.5 rounded-full inline-block">Pay at Counter</div>
+                  <div className="mt-1 sm:mt-2">
+                    <div className="text-[11px] sm:text-xs font-extrabold text-slate-800 leading-tight">{isBn ? 'ক্যাশ' : 'Cash'}</div>
+                    <div className="text-[9px] sm:text-[10px] text-emerald-700 font-semibold mt-0.5 bg-emerald-100/70 px-1.5 sm:px-2 py-0.5 rounded-full inline-block truncate max-w-full">{isBn ? 'কাউন্টারে দিন' : 'Pay at Counter'}</div>
                   </div>
                 </button>
               )}
@@ -1109,18 +1142,18 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                 <button
                   type="button"
                   onClick={() => { setPaymentMethod('bkash'); setPaymentTrxId(''); }}
-                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[110px] ${
+                  className={`p-2.5 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[95px] sm:min-h-[110px] ${
                     paymentMethod === 'bkash'
                       ? 'border-[#E2136E] bg-pink-50/80 ring-2 ring-pink-400/30 shadow-md shadow-pink-500/10 scale-[1.01]'
                       : 'border-slate-200/90 bg-slate-50/60 hover:border-slate-300 hover:bg-white'
                   }`}
                 >
-                  <div className="h-10 w-full max-w-[130px] rounded-xl bg-white border border-pink-200/80 flex items-center justify-center px-2 py-1 shadow-2xs">
-                    <img src="/bkash-logo.png" alt="bKash" className="h-6 max-h-7 w-auto max-w-full object-contain" />
+                  <div className="h-8 sm:h-10 w-full max-w-[110px] sm:max-w-[130px] rounded-xl bg-white border border-pink-200/80 flex items-center justify-center px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-2xs">
+                    <img src="/bkash-logo.png" alt="bKash" className="h-5 sm:h-6 max-h-7 w-auto max-w-full object-contain" />
                   </div>
-                  <div className="mt-2">
-                    <div className="text-xs font-extrabold text-slate-800">bKash</div>
-                    <div className="text-[10px] text-pink-700 font-semibold mt-0.5 bg-pink-100/70 px-2 py-0.5 rounded-full inline-block">Gateway · App</div>
+                  <div className="mt-1 sm:mt-2">
+                    <div className="text-[11px] sm:text-xs font-extrabold text-slate-800 leading-tight">bKash</div>
+                    <div className="text-[9px] sm:text-[10px] text-pink-700 font-semibold mt-0.5 bg-pink-100/70 px-1.5 sm:px-2 py-0.5 rounded-full inline-block truncate max-w-full">{isBn ? 'গেটওয়ে · অ্যাপ' : 'Gateway · App'}</div>
                   </div>
                 </button>
               )}
@@ -1130,18 +1163,18 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
                 <button
                   type="button"
                   onClick={() => { setPaymentMethod('nagad'); setPaymentTrxId(''); }}
-                  className={`p-3 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[110px] ${
+                  className={`p-2.5 sm:p-3.5 rounded-2xl border-2 text-center transition-all cursor-pointer flex flex-col items-center justify-between min-h-[95px] sm:min-h-[110px] ${
                     paymentMethod === 'nagad'
                       ? 'border-[#F7941D] bg-orange-50/80 ring-2 ring-orange-400/30 shadow-md shadow-orange-500/10 scale-[1.01]'
                       : 'border-slate-200/90 bg-slate-50/60 hover:border-slate-300 hover:bg-white'
                   }`}
                 >
-                  <div className="h-10 w-full max-w-[130px] rounded-xl bg-white border border-orange-200/80 flex items-center justify-center px-2 py-1 shadow-2xs">
-                    <img src="/nagad-logo.png" alt="Nagad" className="h-6 max-h-7 w-auto max-w-full object-contain" />
+                  <div className="h-8 sm:h-10 w-full max-w-[110px] sm:max-w-[130px] rounded-xl bg-white border border-orange-200/80 flex items-center justify-center px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-2xs">
+                    <img src="/nagad-logo.png" alt="Nagad" className="h-5 sm:h-6 max-h-7 w-auto max-w-full object-contain" />
                   </div>
-                  <div className="mt-2">
-                    <div className="text-xs font-extrabold text-slate-800">Nagad</div>
-                    <div className="text-[10px] text-orange-700 font-semibold mt-0.5 bg-orange-100/70 px-2 py-0.5 rounded-full inline-block">Gateway · App</div>
+                  <div className="mt-1 sm:mt-2">
+                    <div className="text-[11px] sm:text-xs font-extrabold text-slate-800 leading-tight">Nagad</div>
+                    <div className="text-[9px] sm:text-[10px] text-orange-700 font-semibold mt-0.5 bg-orange-100/70 px-1.5 sm:px-2 py-0.5 rounded-full inline-block truncate max-w-full">{isBn ? 'গেটওয়ে · অ্যাপ' : 'Gateway · App'}</div>
                   </div>
                 </button>
               )}
@@ -1325,39 +1358,39 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
       )}
 
         {/* Sticky Floating Bottom Checkout Bar (Clean Mobile Optimized) */}
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl p-3 sm:p-4 shadow-xl border border-slate-200/90 flex flex-row items-center justify-between gap-3 sticky bottom-3 sm:bottom-4 z-20">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl p-2.5 sm:p-4 shadow-xl border border-slate-200/90 flex flex-row items-center justify-between gap-2 sm:gap-3 sticky bottom-3 sm:bottom-4 z-20">
           <div className="min-w-0">
             {serviceType === 'edit' ? (
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-600 uppercase tracking-wider block truncate">Print + Edit Total</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-600 uppercase tracking-wider block truncate">{isBn ? 'মোট মূল্য' : 'Print + Edit Total'}</span>
                   {discount > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 truncate">
                       -{discountPercent}%
                     </span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-base sm:text-xl font-extrabold text-slate-900 leading-tight">
                     ৳{total.toFixed(2)}
                   </span>
-                  <span className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 truncate">
-                    (Print: ৳{Math.max(0, subtotal - (parseFloat(shop?.price_edit || 30) * (files.length || 1))).toFixed(0)} + Edit: ৳{(parseFloat(shop?.price_edit || 30) * (files.length || 1)).toFixed(0)})
+                  <span className="text-[9px] sm:text-[10px] text-amber-700 font-semibold bg-amber-50 px-1 sm:px-1.5 py-0.2 rounded border border-amber-200 truncate hidden xs:inline">
+                    ({isBn ? 'প্রিন্ট' : 'Print'}: ৳{Math.max(0, subtotal - (parseFloat(shop?.price_edit || 30) * (files.length || 1))).toFixed(0)} + {isBn ? 'এডিট' : 'Edit'}: ৳{(parseFloat(shop?.price_edit || 30) * (files.length || 1)).toFixed(0)})
                   </span>
                 </div>
               </div>
             ) : (
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">Estimated Total</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">{t('customerUpload.estimatedTotal', 'Estimated Total')}</span>
                   {discount > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 truncate">
                       -{discountPercent}%
                     </span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight">
+                <div className="flex items-baseline gap-1 sm:gap-1.5 mt-0.5">
+                  <span className="text-base sm:text-xl font-extrabold text-slate-900 leading-tight">
                     ৳{total.toFixed(2)}
                   </span>
                   {discount > 0 && (
@@ -1373,7 +1406,7 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
           <button
             onClick={handleSubmit}
             disabled={uploading || files.length === 0}
-            className={`py-2.5 sm:py-3 px-4 sm:px-6 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md flex items-center justify-center gap-1.5 sm:gap-2 active:scale-98 shrink-0 cursor-pointer ${
+            className={`py-2 sm:py-3 px-3 sm:px-6 disabled:opacity-40 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md flex items-center justify-center gap-1 sm:gap-2 active:scale-98 shrink-0 cursor-pointer ${
               serviceType === 'edit'
                 ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/25'
                 : paymentMethod !== 'cash' && onlinePayMode === 'gateway'
@@ -1386,16 +1419,16 @@ export default function CustomerUpload({ onJobCreated, initialSlug }) {
             {uploading ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Processing ({uploadProgress}%)...</span>
+                <span>{isBn ? `আপলোড (${uploadProgress}%)...` : `Processing (${uploadProgress}%)...`}</span>
               </>
             ) : (
               <>
                 <span>
                   {serviceType === 'edit'
-                    ? 'Send for Edit & Print'
+                    ? (isBn ? 'এডিটে পাঠান' : 'Send for Edit')
                     : paymentMethod !== 'cash' && onlinePayMode === 'gateway'
-                    ? `Pay with ${paymentMethod === 'bkash' ? '🌸 bKash' : '🟠 Nagad'}`
-                    : 'Send to Print Counter'}
+                    ? (paymentMethod === 'bkash' ? (isBn ? 'বিকাশ পে' : 'Pay bKash') : (isBn ? 'নগদ পে' : 'Pay Nagad'))
+                    : (isBn ? 'প্রিন্টে পাঠান' : t('customerUpload.sendToCounter', 'Send to Print Counter'))}
                 </span>
                 <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </>

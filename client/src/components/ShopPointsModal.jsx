@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   X, Star, Sparkles, Award, Clock, Gift, RefreshCw, Zap, ShieldCheck
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
+  const { isBn } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [pointsData, setPointsData] = useState({
     points_balance: currentPoints,
@@ -50,19 +52,21 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-black tracking-tight">Shop Reward Points</h2>
+                <h2 className="text-xl font-black tracking-tight">
+                  {isBn ? 'দোকান রিওয়ার্ড পয়েন্টস' : 'Shop Reward Points'}
+                </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/25 text-white border border-white/30">
-                  PrntEZ Club
+                  {isBn ? 'প্রিন্টইজি ক্লাব' : 'PrntEZ Club'}
                 </span>
               </div>
               <p className="text-xs text-amber-100/90 font-medium">
-                Earn points with every print job completed at your shop
+                {isBn ? 'আপনার দোকানে প্রতিটি প্রিন্ট অর্ডার সম্পন্ন করার সাথে পয়েন্ট অর্জন করুন' : 'Earn points with every print job completed at your shop'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition"
+            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -76,34 +80,42 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
             {/* Current Balance */}
             <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-amber-50 to-orange-50/70 border border-amber-200/80 shadow-xs">
               <div className="flex items-center justify-between text-amber-900">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Available Balance</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                  {isBn ? 'বর্তমান ব্যালেন্স' : 'Available Balance'}
+                </span>
                 <Sparkles className="w-4 h-4 text-amber-500" />
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-4xl font-black text-amber-950 tracking-tight">
                   {balance.toLocaleString()}
                 </span>
-                <span className="text-sm font-bold text-amber-700">pts</span>
+                <span className="text-sm font-bold text-amber-700">
+                  {isBn ? 'পয়েন্ট' : 'pts'}
+                </span>
               </div>
               <p className="mt-1 text-[11px] text-amber-800/80">
-                Ready to accumulate for future partner offers & discounts
+                {isBn ? 'ভবিষ্যতের পার্টনার অফার ও ছাড়ের জন্য জমা হচ্ছে' : 'Ready to accumulate for future partner offers & discounts'}
               </p>
             </div>
 
             {/* Lifetime Earned */}
             <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-br from-slate-50 to-blue-50/50 border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between text-slate-700">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">Lifetime Earned</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  {isBn ? 'সর্বমোট অর্জিত পয়েন্ট' : 'Lifetime Earned'}
+                </span>
                 <Award className="w-4 h-4 text-indigo-500" />
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-4xl font-black text-slate-900 tracking-tight">
                   {lifetime.toLocaleString()}
                 </span>
-                <span className="text-sm font-bold text-slate-500">pts</span>
+                <span className="text-sm font-bold text-slate-500">
+                  {isBn ? 'পয়েন্ট' : 'pts'}
+                </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-500">
-                Total points awarded since opening on PrntEZ
+                {isBn ? 'প্রিন্টইজিতে দোকান খোলার পর থেকে মোট প্রাপ্ত পয়েন্ট' : 'Total points awarded since opening on PrntEZ'}
               </p>
             </div>
           </div>
@@ -112,7 +124,7 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
           <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/80">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5 text-amber-500" />
-              How You Earn Points
+              {isBn ? 'যেভাবে পয়েন্ট অর্জন করবেন' : 'How You Earn Points'}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="flex items-start gap-2.5 bg-white p-3 rounded-xl border border-slate-200/70">
@@ -120,9 +132,11 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
                   +10
                 </div>
                 <div>
-                  <p className="font-bold text-slate-800">Per Completed Job</p>
+                  <p className="font-bold text-slate-800">
+                    {isBn ? 'প্রতিটি সম্পন্ন অর্ডারে' : 'Per Completed Job'}
+                  </p>
                   <p className="text-slate-500 text-[11px] mt-0.5">
-                    Awarded automatically every time you click "Done" on an order.
+                    {isBn ? 'অর্ডারে "সম্পন্ন" বাটনে ক্লিক করার সাথে সাথে স্বয়ংক্রিয়ভাবে যোগ হবে।' : 'Awarded automatically every time you click "Done" on an order.'}
                   </p>
                 </div>
               </div>
@@ -132,9 +146,11 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
                   +1
                 </div>
                 <div>
-                  <p className="font-bold text-slate-800">Bulk Print Bonus</p>
+                  <p className="font-bold text-slate-800">
+                    {isBn ? 'বাল্ক প্রিন্ট বোনাস' : 'Bulk Print Bonus'}
+                  </p>
                   <p className="text-slate-500 text-[11px] mt-0.5">
-                    +1 bonus point for every 5 pages in multi-page documents.
+                    {isBn ? 'একাধিক পৃষ্ঠার ডকুমেন্টে প্রতি ৫ পৃষ্ঠার জন্য +১ বোনাস পয়েন্ট।' : '+1 bonus point for every 5 pages in multi-page documents.'}
                   </p>
                 </div>
               </div>
@@ -149,13 +165,15 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
               </div>
               <div className="space-y-1">
                 <h4 className="text-sm font-bold flex items-center gap-2">
-                  Future Offers & Rewards
+                  {isBn ? 'ভবিষ্যতের অফার ও পুরস্কার' : 'Future Offers & Rewards'}
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950">
-                    Coming Soon
+                    {isBn ? 'শীঘ্রই আসছে' : 'Coming Soon'}
                   </span>
                 </h4>
                 <p className="text-xs text-blue-100 leading-relaxed">
-                  Keep accumulating your points! In upcoming updates, your points will be redeemable for wholesale paper & toner discounts, priority "Top Shop" platform placement, free customer SMS alerts, and partner cashback offers.
+                  {isBn 
+                    ? 'পয়েন্ট জমাতে থাকুন! আসন্ন আপডেটে আপনার পয়েন্ট দিয়ে পাইকারি কাগজ ও টোনারে বিশেষ ছাড়, প্ল্যাটফর্মে "টপ শপ" অগ্রাধিকার প্রদর্শন, কাস্টমারদের ফ্রি এসএমএস অ্যালার্ট এবং পার্টনার ক্যাশব্যাক অফার উপভোগ করতে পারবেন।' 
+                    : 'Keep accumulating your points! In upcoming updates, your points will be redeemable for wholesale paper & toner discounts, priority "Top Shop" platform placement, free customer SMS alerts, and partner cashback offers.'}
                 </p>
               </div>
             </div>
@@ -166,31 +184,33 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
             <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-slate-500" />
-                Recent Points Activity
+                {isBn ? 'সাম্প্রতিক পয়েন্ট লেনদেন' : 'Recent Points Activity'}
               </h3>
               <button
                 onClick={fetchPointsData}
                 disabled={loading}
-                className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1 font-semibold transition"
+                className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1 font-semibold transition cursor-pointer"
               >
                 <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
+                <span>{isBn ? 'রিফ্রেশ' : 'Refresh'}</span>
               </button>
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
               {loading && pointsData.ledger.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
-                  Loading activity...
+                  {isBn ? 'পয়েন্ট লোড হচ্ছে...' : 'Loading activity...'}
                 </div>
               ) : pointsData.ledger.length === 0 ? (
                 <div className="p-8 text-center space-y-2">
                   <div className="w-10 h-10 mx-auto rounded-full bg-amber-50 text-amber-500 flex items-center justify-center">
                     <Star className="w-5 h-5" />
                   </div>
-                  <p className="text-xs font-bold text-slate-700">No points activity yet</p>
+                  <p className="text-xs font-bold text-slate-700">
+                    {isBn ? 'এখনো কোনো পয়েন্ট লেনদেন হয়নি' : 'No points activity yet'}
+                  </p>
                   <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                    When you fulfill customer print orders and mark them as "Done", your points will be credited and logged here automatically!
+                    {isBn ? 'কাস্টমারের প্রিন্ট কাজ সম্পন্ন করে "সম্পন্ন" মার্ক করলে স্বয়ংক্রিয়ভাবে এখানে পয়েন্ট যুক্ত ও রেকর্ড হবে!' : 'When you fulfill customer print orders and mark them as "Done", your points will be credited and logged here automatically!'}
                   </p>
                 </div>
               ) : (
@@ -204,6 +224,15 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
                           minute: '2-digit'
                         })
                       : '';
+                    const localizedDesc = item.description
+                      ? (isBn 
+                          ? item.description
+                              .replace(/Completed Order/g, 'সম্পন্ন অর্ডার')
+                              .replace(/pages/g, 'পৃষ্ঠা')
+                              .replace(/page/g, 'পৃষ্ঠা')
+                          : item.description)
+                      : (isBn ? 'অর্ডার সম্পন্ন' : 'Job Completed');
+
                     return (
                       <div
                         key={item.id}
@@ -215,13 +244,13 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
                           </div>
                           <div>
                             <p className="font-semibold text-slate-800">
-                              {item.description || 'Job Completed'}
+                              {localizedDesc}
                             </p>
                             <p className="text-[10px] text-slate-400">{dateStr}</p>
                           </div>
                         </div>
                         <span className="font-black text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          +{item.points} pts
+                          +{item.points} {isBn ? 'পয়েন্ট' : 'pts'}
                         </span>
                       </div>
                     );
@@ -237,13 +266,13 @@ export default function ShopPointsModal({ shop, currentPoints = 0, onClose }) {
         <div className="bg-slate-50 border-t border-slate-200 px-6 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Points are safely secured to your shop account</span>
+            <span>{isBn ? 'পয়েন্টগুলো আপনার দোকান অ্যাকাউন্টে নিরাপদে সংরক্ষিত রয়েছে' : 'Points are safely secured to your shop account'}</span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
+            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
-            Close
+            {isBn ? 'বন্ধ করুন' : 'Close'}
           </button>
         </div>
 
