@@ -41,21 +41,9 @@ export default function GoogleAdSense({
     }
   }, [client, slot]);
 
-  // If no AdSense publisher ID is configured yet, render a clean styled placeholder
+  // If no AdSense publisher ID is configured yet or ads are disabled, do not render anything
   if (!client || !slot) {
-    return (
-      <div className={`w-full overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-slate-100/70 p-4 text-center ${className}`}>
-        <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">
-          <span>Google AdSense Space</span>
-        </div>
-        <div className="h-16 sm:h-20 flex flex-col items-center justify-center rounded-xl bg-white/70 border border-slate-200/60 p-2 shadow-2xs">
-          <p className="text-xs font-bold text-slate-700">Responsive Display Ad Space</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">
-            Add Client ID & Slot ID in <span className="font-semibold text-indigo-600">Admin Central → Ad Manager</span>
-          </p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

@@ -231,7 +231,6 @@ function isShopOpen(shop) {
 // ─── Main Landing Page Component ───────────────────────────
 export default function LandingPage({ onNavigate }) {
   const { t, isBn } = useLanguage();
-  const [trackCode, setTrackCode] = useState('');
   const [recentOrders, setRecentOrders] = useState([]);
   const [stats, setStats] = useState({ shops: 0, customers: 0, jobsCompleted: 0, pagesPrinted: 0 });
   const [statsLoaded, setStatsLoaded] = useState(false);
@@ -250,7 +249,6 @@ export default function LandingPage({ onNavigate }) {
   const demoRef = useScrollReveal();
   const shopsRef = useScrollReveal();
   const statsRef = useScrollReveal();
-  const trackRef = useScrollReveal();
   const shopOwnerRef = useScrollReveal();
 
   // Load recent orders from localStorage
@@ -309,12 +307,7 @@ export default function LandingPage({ onNavigate }) {
     }
   }, [qrModalShop]);
 
-  const handleTrack = (e) => {
-    e.preventDefault();
-    if (trackCode.trim()) {
-      onNavigate('track', trackCode.trim());
-    }
-  };
+
 
   // Filtered shops list
   const filteredShops = shops.filter((shop) => {
@@ -797,59 +790,7 @@ export default function LandingPage({ onNavigate }) {
         </div>
       </section>
 
-      {/* ═══════════ 6. TRACK ORDER SECTION ═══════════ */}
-      <section id="track-section" className="py-14 bg-slate-50/50 bg-grid-pattern" ref={trackRef}>
-        <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="scroll-reveal bg-white rounded-3xl p-8 shadow-sm border border-slate-200 text-center space-y-5">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-violet-500/25">
-              <Search className="w-7 h-7" />
-            </div>
-            <div>
-              <h2 className="text-xl font-extrabold text-slate-900">{t('landing.trackYourOrder', 'Track Your Order')}</h2>
-              <p className="text-sm text-slate-500 mt-1">
-                {t('landing.trackSub', 'Enter the job code you received after uploading')}
-              </p>
-            </div>
 
-            <form onSubmit={handleTrack} className="flex gap-2">
-              <input
-                type="text"
-                value={trackCode}
-                onChange={(e) => setTrackCode(e.target.value.toUpperCase())}
-                placeholder="e.g. 0001"
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-mono font-bold text-center tracking-wider focus:ring-2 focus:ring-indigo-500 focus:bg-white transition placeholder:text-slate-400 placeholder:font-normal placeholder:tracking-normal"
-              />
-              <button
-                type="submit"
-                disabled={!trackCode.trim()}
-                className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition shadow-md shadow-indigo-500/25 flex items-center gap-1.5 active:scale-[0.97]"
-              >
-                <Search className="w-4 h-4" />
-                <span>{t('landing.track', 'Track')}</span>
-              </button>
-            </form>
-
-            {/* Recent Orders List */}
-            {recentOrders.length > 0 && (
-              <div className="pt-2 text-left border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('landing.yourRecentOrders', 'Your Recent Orders')}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {recentOrders.map((o, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onNavigate('track', o.jobCode)}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded-lg text-xs font-mono font-bold text-slate-700 transition flex items-center gap-1"
-                    >
-                      <span>#{o.jobCode}</span>
-                      <span className="text-[10px] text-slate-400 font-sans">({o.shopName})</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
 
       {/* ═══════════ 7. FOR PRINT SHOP OWNERS CTA ═══════════ */}
       <section className="py-20 bg-white" ref={shopOwnerRef}>

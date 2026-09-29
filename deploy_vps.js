@@ -30,7 +30,7 @@ conn.on('ready', () => {
                 'unzip -o deploy.zip -d /var/www/prntez',
                 'cd /var/www/prntez',
                 'npm --prefix server install --production',
-                `mysql -u prntez_user -p'Prntez@2026!Secure' prntez -e "ALTER TABLE print_jobs ADD COLUMN auth_code VARCHAR(20) DEFAULT NULL; CREATE INDEX idx_print_jobs_auth_code ON print_jobs (auth_code); UPDATE print_jobs SET auth_code = CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(id, '-', job_code, '-prntez')), 1, 4))) WHERE auth_code IS NULL OR auth_code = '' OR auth_code = 'N/A'; INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('google_auth_enabled', '1'), ('google_client_id', '');" || true`,
+                `mysql -u prntez_user -p'Prntez@2026!Secure' prntez -e "ALTER TABLE print_files MODIFY COLUMN stored_path VARCHAR(500) NULL DEFAULT NULL; ALTER TABLE print_jobs ADD COLUMN auth_code VARCHAR(20) DEFAULT NULL; ALTER TABLE print_jobs ADD COLUMN service_type VARCHAR(20) DEFAULT 'print'; ALTER TABLE print_jobs ADD COLUMN service_detail VARCHAR(100) DEFAULT NULL; ALTER TABLE print_jobs ADD COLUMN reprint_count INT DEFAULT 0; CREATE INDEX idx_print_jobs_auth_code ON print_jobs (auth_code); UPDATE print_jobs SET auth_code = CONCAT('PZ-', UPPER(SUBSTRING(MD5(CONCAT(id, '-', job_code, '-prntez')), 1, 4))) WHERE auth_code IS NULL OR auth_code = '' OR auth_code = 'N/A'; INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('google_auth_enabled', '1'), ('google_client_id', '');" || true`,
                 'pm2 restart prntez',
                 'pm2 status'
             ].join(' && ');

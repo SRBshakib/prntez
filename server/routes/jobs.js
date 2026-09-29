@@ -248,7 +248,9 @@ router.post('/status', async (req, res) => {
                 if (jobDir && fs.existsSync(jobDir)) {
                     try { fs.rmSync(jobDir, { recursive: true, force: true }); } catch (_) {}
                 }
-                await query('UPDATE print_files SET stored_path = NULL WHERE job_id = ?', [job_id]);
+                try {
+                    await query("UPDATE print_files SET stored_path = '' WHERE job_id = ?", [job_id]);
+                } catch (_) {}
                 filesDeleted = 1;
             }
         }
@@ -388,7 +390,9 @@ router.delete('/:id/files', async (req, res) => {
             try { fs.rmSync(jobDir, { recursive: true, force: true }); } catch (_) {}
         }
 
-        await query('UPDATE print_files SET stored_path = NULL WHERE job_id = ?', [jobId]);
+        try {
+            await query("UPDATE print_files SET stored_path = '' WHERE job_id = ?", [jobId]);
+        } catch (_) {}
         await query('UPDATE print_jobs SET files_deleted = 1, updated_at = NOW() WHERE id = ?', [jobId]);
 
         const io = req.app.get('io');

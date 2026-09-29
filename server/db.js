@@ -112,6 +112,8 @@ async function migrate() {
     await ensureColumn('print_jobs', 'completed_at', 'DATETIME DEFAULT NULL');
     await ensureColumn('print_jobs', 'download_count', 'INT DEFAULT 0');
     await ensureColumn('print_jobs', 'reprint_count', 'INT DEFAULT 0');
+    await ensureColumn('print_jobs', 'service_type', "VARCHAR(20) DEFAULT 'print'");
+    await ensureColumn('print_jobs', 'service_detail', "VARCHAR(100) DEFAULT NULL");
 
     // Direct guarantee: Ensure auth_code column exists on print_jobs
     try {
@@ -133,6 +135,9 @@ async function migrate() {
     }
 
     // 3. Ensure columns on print_files
+    try {
+        await pool.query("ALTER TABLE `print_files` MODIFY COLUMN `stored_path` VARCHAR(500) NULL DEFAULT NULL");
+    } catch (_) {}
     await ensureColumn('print_files', 'file_price', 'DECIMAL(10,2) DEFAULT 0.00');
     await ensureColumn('print_files', 'page_count', 'INT DEFAULT 1');
     await ensureColumn('print_files', 'notes', 'TEXT DEFAULT NULL');

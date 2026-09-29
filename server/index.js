@@ -46,13 +46,21 @@ app.get('/api/public-stats', async (req, res) => {
     try {
         const { query } = require('./db');
         const [shopsRow] = await query("SELECT COUNT(*) as total FROM shops WHERE status = 'active'");
-        const [customersRow] = await query("SELECT COUNT(*) as total FROM customers");
+        // Count total unique customers/people served + registered customers
+        const [usersRow] = await query(`
+            SELECT GREATEST(
+                (SELECT COUNT(DISTINCT COALESCE(NULLIF(customer_phone, ''), NULLIF(customer_ip, ''), CONCAT('job_', id))) FROM print_jobs),
+                (SELECT COUNT(*) FROM print_jobs),
+                (SELECT COUNT(*) FROM customers),
+                1
+            ) as total
+        `);
         const [jobsRow] = await query("SELECT COUNT(*) as total, COALESCE(SUM(total_pages), 0) as pages FROM print_jobs WHERE status = 'done'");
         res.json({
             success: true,
             stats: {
                 shops: shopsRow?.total || 0,
-                customers: customersRow?.total || 0,
+                customers: usersRow?.total || 0,
                 jobsCompleted: jobsRow?.total || 0,
                 pagesPrinted: parseInt(jobsRow?.pages || 0)
             }

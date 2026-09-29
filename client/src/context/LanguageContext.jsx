@@ -4,10 +4,19 @@ import { translations } from '../locales/translations';
 const LanguageContext = createContext();
 
 export function LanguageProvider({ children }) {
-  // Default to Bengali ('bn') if not previously set, or restore user preference
+  // Default to Bengali ('bn') or restore user preference from localStorage / URL
   const [lang, setLangState] = useState(() => {
     try {
-      const saved = localStorage.getItem('prntez_lang');
+      if (typeof window !== 'undefined' && window.location) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlLang = urlParams.get('lang');
+        if (urlLang === 'en' || urlLang === 'bn') {
+          localStorage.setItem('prntez_lang', urlLang);
+          localStorage.setItem('prntez_customer_lang', urlLang);
+          return urlLang;
+        }
+      }
+      const saved = localStorage.getItem('prntez_lang') || localStorage.getItem('prntez_customer_lang');
       return saved === 'en' ? 'en' : 'bn';
     } catch (_) {
       return 'bn';
@@ -19,12 +28,29 @@ export function LanguageProvider({ children }) {
     setLangState(validLang);
     try {
       localStorage.setItem('prntez_lang', validLang);
+      localStorage.setItem('prntez_customer_lang', validLang);
+      window.dispatchEvent(new Event('storage'));
     } catch (_) {}
   };
 
   const toggleLang = () => {
     setLang(lang === 'bn' ? 'en' : 'bn');
   };
+
+  // Sync across tabs & storage updates
+  useEffect(() => {
+    const handleStorage = () => {
+      try {
+        const saved = localStorage.getItem('prntez_lang') || localStorage.getItem('prntez_customer_lang');
+        if (saved && (saved === 'en' || saved === 'bn') && saved !== lang) {
+          setLangState(saved);
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [lang]);
 
   // Helper function to fetch nested translation or fallback
   const t = (path, fallback = '') => {

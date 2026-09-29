@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS `print_files` (
   `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `job_id` INT UNSIGNED,
   `original_name` VARCHAR(255) NOT NULL,
-  `stored_path` VARCHAR(500) NOT NULL,
+  `stored_path` VARCHAR(500) DEFAULT NULL,
   `file_type` VARCHAR(20) NOT NULL,
   `file_size` BIGINT NOT NULL,
   `copies` TINYINT UNSIGNED DEFAULT 1,

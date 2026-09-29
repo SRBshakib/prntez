@@ -28,7 +28,9 @@ async function purgeJobFiles(jobId) {
             }
         }
 
-        await query('UPDATE print_files SET stored_path = NULL WHERE job_id = ?', [jobId]);
+        try {
+            await query("UPDATE print_files SET stored_path = '' WHERE job_id = ?", [jobId]);
+        } catch (_) {}
         await query('UPDATE print_jobs SET files_deleted = 1 WHERE id = ?', [jobId]);
         return true;
     } catch (err) {

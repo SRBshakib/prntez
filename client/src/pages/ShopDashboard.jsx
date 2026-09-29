@@ -2734,14 +2734,16 @@ export default function ShopDashboard({ shop, onLogout }) {
           </div>
 
           {/* Google AdSense Space (Directly Under Freshly Printed Box) */}
-          <div className="pt-0.5">
-            <GoogleAdSense
-              client={adsenseConfig?.clientId}
-              slot={adsenseConfig?.slotShopSide || adsenseConfig?.slotShopTop}
-              format="rectangle"
-              className="my-0"
-            />
-          </div>
+          {adsenseConfig?.enabled && (
+            <div className="pt-0.5">
+              <GoogleAdSense
+                client={adsenseConfig?.clientId}
+                slot={adsenseConfig?.slotShopSide || adsenseConfig?.slotShopTop}
+                format="rectangle"
+                className="my-0"
+              />
+            </div>
+          )}
 
         </aside>
 
